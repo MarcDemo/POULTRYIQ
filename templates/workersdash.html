@@ -1,0 +1,38 @@
+{% extends "wbase.html" %}
+{% block content %}
+
+<div class="container mt-4">
+
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+            <h4>User: Shanitah</h4>  <!-- /* Replace with dynamic worker name */ -->
+             <p><strong>Assigned House:</strong> House A</p> <!-- /* Replace with dynamic house name */ -->
+            <p><strong>Total Birds:</strong> 300</p> <!-- /* Replace with dynamic bird count */ -->
+        </div>
+    </div>
+
+    <div class="row g-4">
+
+        <div class="col-md-4">
+            <a href="{% url 'record_egg' %}" class="btn btn-primary w-100 p-4">
+                🥚 Record Eggs
+            </a>
+        </div>
+
+        <div class="col-md-4">
+            <a href="{% url 'record_feed' %}" class="btn btn-warning w-100 p-4">
+                🌾 Record Feed
+            </a>
+        </div>
+
+        <div class="col-md-4">
+            <a href="{% url 'record_cleaning' %}" class="btn btn-success w-100 p-4">
+                🧹 Record Cleaning
+            </a>
+        </div>
+
+    </div>
+
+</div>
+
+{% endblock %}

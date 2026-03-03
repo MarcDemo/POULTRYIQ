@@ -1,0 +1,31 @@
+{% extends "supbase.html" %}
+{% block content %}
+
+<h3>Pending Approvals</h3>
+
+<table class="table table-striped mt-3">
+    <thead>
+        <tr>
+            <th>Type</th>
+            <th>House</th>
+            <th>Date</th>
+            <th>Action</th>
+        </tr>
+    </thead>
+
+    <tbody>
+        <!-- {% for record in records %} -->
+        <tr>
+            <td>Eggs collected</td>
+            <td>House A</td>
+            <td>2024-01-15</td>
+            <td>
+                <a href="#" class="btn btn-success btn-sm">Approve</a>
+                <a href="#" class="btn btn-danger btn-sm">Reject</a>
+            </td>
+        </tr>
+        <!-- {% endfor %} -->
+    </tbody>
+</table>
+
+{% endblock %}

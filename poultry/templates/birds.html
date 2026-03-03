@@ -1,0 +1,45 @@
+{% extends 'base.html' %}
+{% block content %}
+
+<div class="container-fluid">
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>Birds Inventory</h2>
+        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addBirdModal">
+            + Add Batch
+        </button>
+    </div>
+
+    <div class="card">
+        <div class="card-body">
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>House</th>
+                        <th>Type</th>
+                        <th>Quantity</th>
+                        <th>Age (weeks)</th>
+                        <th>Status</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>House A</td>
+                        <td>Layers</td>
+                        <td>1,800</td>
+                        <td>24</td>
+                        <td><span class="badge bg-success">Healthy</span></td>
+                        <td>
+                            <button class="btn btn-sm btn-warning">Edit</button>
+                            <button class="btn btn-sm btn-danger">Delete</button>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</div>
+
+{% endblock %}

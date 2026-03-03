@@ -1,0 +1,42 @@
+{% extends "wbase.html" %}
+{% block content %}
+
+<div class="container mt-4">
+
+    <div class="card shadow-sm">
+        <div class="card-header bg-primary text-white">
+            Record Eggs - House A <!-- /* Replace with dynamic house name */ -->
+        </div>
+
+        <div class="card-body">
+
+            <form method="POST">
+                {% csrf_token %}
+
+                <div class="mb-3">
+                    <label>Total Eggs Collected</label>
+                    <input type="number" name="total_eggs" class="form-control" required>
+                </div>
+
+                <div class="mb-3">
+                    <label>Broken Eggs</label>
+                    <input type="number" name="broken_eggs" class="form-control">
+                </div>
+
+                <div class="mb-3">
+                    <label>Comments</label>
+                    <textarea name="notes" class="form-control"></textarea>
+                </div>
+
+                <button type="submit" class="btn btn-primary w-100">
+                    Save Record
+                </button>
+
+            </form>
+
+        </div>
+    </div>
+
+</div>
+
+{% endblock %}

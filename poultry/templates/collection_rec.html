@@ -1,0 +1,46 @@
+{% extends 'base.html' %}
+{% block content %}
+
+<div class="container-fluid">
+    <h2 class="mb-4">Egg Collection</h2>
+
+    <div class="row">
+
+        <!-- Form -->
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header">Record Collection</div>
+                <div class="card-body">
+                    <form method="POST">
+                        {% csrf_token %}
+
+                        <div class="mb-3">
+                            <label>Date</label>
+                            <input type="date" class="form-control">
+                        </div>
+
+                        <div class="mb-3">
+                            <label>House</label>
+                            <select class="form-control">
+                                <option>House A</option>
+                                <option>House B</option>
+                            </select>
+                        </div>
+
+                        <div class="mb-3">
+                            <label>Number of Eggs</label>
+                            <input type="number" class="form-control">
+                        </div>
+
+                        <button class="btn btn-primary w-100">Save</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        
+
+    </div>
+</div>
+
+{% endblock %}

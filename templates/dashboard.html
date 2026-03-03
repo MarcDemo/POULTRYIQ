@@ -1,0 +1,93 @@
+{% extends 'base.html' %}
+{% block content %}
+
+<div class="container-fluid">
+
+    <h2 class="mb-4">Dashboard Overview</h2>
+
+    <!-- Summary Cards -->
+    <div class="row g-4">
+
+        <div class="col-md-3">
+            <div class="card dashboard-card">
+                <div class="card-body">
+                    <h6>Total Birds</h6>
+                    <h3>5,200</h3>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card dashboard-card">
+                <div class="card-body">
+                    <h6>Eggs Today</h6>
+                    <h3>1,750</h3>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card dashboard-card">
+                <div class="card-body">
+                    <h6>Feed in Stock</h6>
+                    <h3>3,200 kg</h3>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card dashboard-card">
+                <div class="card-body">
+                    <h6>Mortality (Today)</h6>
+                    <h3>12</h3>
+                </div>
+            </div>
+        </div>
+
+        
+
+    </div>
+
+    <!-- Charts -->
+    <div class="row mt-5 g-3">
+
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    Egg Production (Last 7 Days)
+                </div>
+                <div class="card-body">
+                    <canvas id="eggChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    Average egg weight(last 7 weighs)
+                </div>
+                <div class="card-body">
+                    <canvas id="weightChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    Feed Consumption
+                </div>
+                <div class="card-body">
+                    <canvas id="feedChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+
+
+    </div>
+
+</div>
+
+{% endblock %}

@@ -1,0 +1,37 @@
+{% extends "supbase.html" %}
+{% block content %}
+
+<h3 class="mb-4">Operational Overview</h3>
+
+<div class="row g-4">
+
+    <div class="col-md-3">
+        <div class="card text-white bg-warning">
+            <div class="card-body">
+                <h6>Pending Approvals</h6>
+                <h4>5</h4> <!-- /* Replace with dynamic count of pending approvals */ -->
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3">
+        <div class="card text-white bg-danger">
+            <div class="card-body">
+                <h6>Deaths Today</h6>
+                <h4>20</h4> <!-- /* Replace with dynamic count of deaths today */ -->
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3">
+        <div class="card text-white bg-success">
+            <div class="card-body">
+                <h6>Total Eggs Today</h6>
+                <h4>200</h4> <!-- /* Replace with dynamic count of eggs collected today */ -->
+            </div>
+        </div>
+    </div>
+
+</div>
+
+{% endblock %}

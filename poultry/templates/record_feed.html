@@ -1,0 +1,46 @@
+{% extends "wbase.html" %}
+{% block content %}
+
+<div class="container mt-4">
+
+    <div class="card shadow-sm">
+        <div class="card-header bg-warning">
+            Record Feed - House A <!-- /* Replace with dynamic house name */ -->
+        </div>
+
+        <div class="card-body">
+
+            <form method="POST">
+                {% csrf_token %}
+
+                <div class="mb-3">
+                    <label>Feed Type</label>
+                    <select name="feed_type" class="form-control">
+                        <option>Starter</option>
+                        <option>Grower</option>
+                        <option>Layer Mash</option>
+                    </select>
+                </div>
+
+                <div class="mb-3">
+                    <label>Quantity Given (kg)</label>
+                    <input type="number" step="0.1" name="quantity" class="form-control" required>
+                </div>
+
+                <div class="mb-3">
+                    <label>Time Given</label> <!-- consider making this an auto filled field-->
+                    <input type="time" name="time_given" class="form-control">
+                </div>
+
+                <button type="submit" class="btn btn-warning w-100">
+                    Save Feed Record
+                </button>
+
+            </form>
+
+        </div>
+    </div>
+
+</div>
+
+{% endblock %}

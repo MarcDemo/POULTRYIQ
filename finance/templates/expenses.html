@@ -1,0 +1,31 @@
+{% extends 'base.html' %}
+{% block content %}
+
+<div class="container-fluid">
+    <h2 class="mb-4">Expense Records</h2>
+
+    <div class="card">
+        <div class="card-body">
+            <table class="table table-bordered">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Description</th>
+                        <th>Cost</th>
+                        <th>Approved by</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>23 Feb 2026</td>
+                        <td>Feed Purchase</td>
+                        <td>$600</td>
+                        <td>shanitah(manager)</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

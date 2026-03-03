@@ -1,0 +1,36 @@
+{% extends 'base.html' %}
+{% block content %}
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between mb-4">
+        <h2>Feed Management</h2>
+        <button class="btn btn-success">+ Add Feed</button>
+    </div>
+
+    <div class="card">
+        <div class="card-body">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>Feed Type</th>
+                        <th>Stock (kg)</th>
+                        <th>Last Refilled</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Layer Mash</td>
+                        <td>1,800 kg</td>
+                        <td>20 Feb 2026</td>
+                        <td>
+                            <button class="btn btn-sm btn-warning">Update</button>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

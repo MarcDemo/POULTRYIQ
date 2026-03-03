@@ -1,0 +1,31 @@
+{% extends "supbase.html" %}
+{% block content %}
+
+<h3>Mortality Records</h3>
+
+<form method="POST" class="card p-4 shadow-sm">
+    {% csrf_token %}
+
+    <div class="mb-3">
+        <label>House</label>
+        <select name="house" class="form-control">
+            <!-- {% for house in houses %} -->
+                <option value="">House A</option>
+            <!-- {% endfor %} -->
+        </select>
+    </div>
+
+    <div class="mb-3">
+        <label>Number of Deaths</label>
+        <input type="number" name="count" class="form-control">
+    </div>
+
+    <div class="mb-3">
+        <label>Cause</label>
+        <textarea name="cause" class="form-control"></textarea>
+    </div>
+
+    <button class="btn btn-danger">Save</button>
+</form>
+
+{% endblock %}

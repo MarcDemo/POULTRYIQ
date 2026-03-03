@@ -1,0 +1,116 @@
+{% extends 'base.html' %}
+{% block content %}
+
+<div class="container-fluid">
+    <h2 class="mb-4">Health & Mortality Report</h2>
+
+    <div class="card mb-4">
+        <div class="card-header">Record Mortality</div>
+        <div class="card-body">
+            <form>
+                <div class="row">
+                    <div class="col-md-3">
+                        <input type="date" class="form-control">
+                    </div>
+                    <div class="col-md-3">
+                        <select class="form-control">
+                            <option>House A</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <input type="number" class="form-control" placeholder="Number of deaths">
+                    </div>
+                    <div class="col-md-3">
+                        <button class="btn btn-danger w-100">Save</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+
+    <div class="card mb-4">
+        <div class="card-header">Record Vaccination</div>
+        <div class="card-body">
+            <form>
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <input type="date" class="form-control">
+                    </div>
+                    <div class="col-md-3">
+                        <select class="form-control">
+                            <option>House A</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <input type="number" class="form-control" placeholder="Number of birds vaccinated">
+                    </div>
+
+                      <div class="col-md-3">
+                        <input type="text" class="form-control" placeholder="administration type">
+                    </div>
+
+                      <div class="col-md-3">
+                        <input type="text" class="form-control" placeholder="Vaccine name">
+                    </div>
+
+                      <div class="col-md-3">
+                        <input type="text" class="form-control" placeholder="sickness">
+                    </div>
+                      <div class="col-md-3">
+                        <input type="text" class="form-control" placeholder="Administered by">
+                    </div>
+
+
+                    <div class="col-md-3">
+                        <button class="btn btn-danger w-100">Save</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+     <div class="card mb-4">
+        <div class="card-header">Record Treatment</div>
+        <div class="card-body">
+            <form>
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <input type="date" class="form-control">
+                    </div>
+                    <div class="col-md-3">
+                        <select class="form-control">
+                            <option>House A</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <input type="number" class="form-control" placeholder="Number of birds treated">
+                    </div>
+
+                      <div class="col-md-3">
+                        <input type="text" class="form-control" placeholder="Treatment type">
+                    </div>
+
+                      <div class="col-md-3">
+                        <input type="text" class="form-control" placeholder="Meicine name">
+                    </div>
+
+                      <div class="col-md-3">
+                        <input type="text" class="form-control" placeholder="sickness">
+                    </div>
+                      <div class="col-md-3">
+                        <input type="text" class="form-control" placeholder="Treated by">
+                    </div>
+
+
+                    <div class="col-md-3">
+                        <button class="btn btn-danger w-100">Save</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+</div>
+
+{% endblock %}
