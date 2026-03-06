@@ -1,0 +1,127 @@
+{% extends 'supbase.html' %}
+{% load static %}
+
+{% block content %}
+
+<div class="container-fluid">
+
+<h2 class="mb-4">Make Sale</h2>
+
+<div class="card">
+<div class="card-body">
+
+<form method="POST">
+{% csrf_token %}
+
+<div class="row">
+
+<!-- CUSTOMER INFO -->
+
+<div class="col-md-6 mb-3">
+<label>Customer Name</label>
+<input type="text" class="form-control" name="customer" required>
+</div>
+
+<div class="col-md-6 mb-3">
+<label>Phone</label>
+<input type="text" class="form-control" name="phone">
+</div>
+
+
+<!-- PRODUCT -->
+
+<div class="col-md-4 mb-3">
+<label>Product</label>
+<select class="form-control" name="product" id="product">
+<option value="">Select Product</option>
+<option value="eggs">Eggs</option>
+<option value="birds">Off Layer Birds</option>
+<option value="manure">Manure</option>
+</select>
+</div>
+
+
+<div class="col-md-4 mb-3">
+<label>Quantity</label>
+<input type="number" class="form-control" id="quantity" name="quantity">
+</div>
+
+
+<div class="col-md-4 mb-3">
+<label>Price per Unit</label>
+<input type="number" class="form-control" id="price" name="price">
+</div>
+
+
+<!-- CALCULATIONS -->
+
+<div class="col-md-4 mb-3">
+<label>Total Amount</label>
+<input type="number" class="form-control" id="total" name="total" readonly>
+</div>
+
+
+<div class="col-md-4 mb-3">
+<label>Deposit Paid</label>
+<input type="number" class="form-control" id="deposit" name="deposit" value="0">
+</div>
+
+
+<div class="col-md-4 mb-3">
+<label>Balance</label>
+<input type="number" class="form-control" id="balance" name="balance" readonly>
+</div>
+
+
+<!-- PAYMENT TYPE -->
+
+<div class="col-md-6 mb-3">
+<label>Payment Method</label>
+<select class="form-control" name="payment_method">
+<option>Cash</option>
+<option>Mobile Money</option>
+<option>Bank</option>
+</select>
+</div>
+
+
+<div class="col-md-6 mb-3">
+<label>Sale Type</label>
+<select class="form-control" name="sale_type">
+<option value="instant">Instant Sale</option>
+<!-- <option value="credit">Credit Sale</option>  this right shall be given to the manager only-->
+<option value="booking">Booking (Future Delivery)</option>
+</select>
+</div>
+
+
+<!-- BOOKING DATE -->
+
+<div class="col-md-6 mb-3">
+<label>Delivery Date (For Bookings)</label>
+<input type="date" class="form-control" name="delivery_date">
+</div>
+
+
+<div class="col-md-12 mb-3">
+<label>Notes</label>
+<textarea class="form-control" name="notes"></textarea>
+</div>
+
+
+</div>
+
+<button class="btn btn-success w-100">
+Complete Sale
+</button>
+
+</form>
+
+</div>
+</div>
+
+</div>
+
+
+{% endblock %}
+

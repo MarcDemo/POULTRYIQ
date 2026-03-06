@@ -1,0 +1,67 @@
+{% extends 'supbase.html' %}
+{% block content %}
+
+<div class="container-fluid">
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+<h2>Farm Orders</h2>
+<!-- <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#saleModal">
++ New Order
+</button> -->
+<a href="{% url 'sales' %}" class="btn btn-primary">
++ New Order
+</a>
+</div>
+
+<div class="card">
+<div class="card-header">
+Pending orders
+</div>
+
+<div class="card-body">
+
+<table class="table table-striped table-hover">
+
+<thead>
+<tr>
+<th>Date of order</th>
+<th>Date of pickup</th>
+<th>Customer name</th>
+<th>Product</th>
+<th>Quantity</th>
+<th>Total</th>
+<th>Paid</th>
+<th>Balance</th>
+<th>order taken by</th>
+</tr>
+</thead>
+
+<tbody>
+
+<tr>
+<td>12 Mar 2026</td>
+<td>30th june 2026</td>
+<td>mukubwa</td>
+<td>Eggs</td>
+<td>20 trays</td>
+<td>240,000</td>
+<td>200,000</td>
+<td>40,000</td>
+<td>Mark</td>
+</tr>
+
+
+
+
+</tbody>
+
+</table>
+
+</div>
+</div>
+
+</div>
+
+
+
+{% endblock %}
