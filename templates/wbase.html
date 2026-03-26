@@ -88,6 +88,9 @@
            class="{% if request.resolver_match.url_name == 'record_cleaning' %}active{% endif %}">
             🧹 Cleaning Routine
         </a>
+         <a href="{% url 'mortality' %}"
+          class="{% if request.resolver_match.url_name == 'mortality' %}active{% endif %}">
+         🐔 Mortality Log</a>
 
         <hr class="text-white mx-3">
 

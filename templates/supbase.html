@@ -1,3 +1,4 @@
+{% load static %}
 <!DOCTYPE html>
 <html>
 <head>
@@ -52,12 +53,11 @@
 
     <a href="{% url 'supdash' %}">🏠 Dashboard</a>
     <a href="{% url 'supapproval' %}">📋 Approvals</a>
-    <a href="{% url 'mortality' %}">🐔 Mortality Log</a>
-    <a href="#">💉 Health & Vaccination</a>
-    <a href="#">📊 House Performance</a>
-    <a href="#">📦 Feed Monitoring</a>
+   
+    <a href="{% url 'sales' %}">📊 Make a sale</a>
+    <a href="{% url 'orders' %}">📦Orders</a>
     <a href="#">⚠ Incident Reports</a>
-    <a href="#">👷 Worker Monitoring</a>
+    <!-- <a href="#">👷 Worker Monitoring</a> -->
 
     <div class="text-center mt-4" >
         <a href="#" class="btn btn-light btn-sm" style="color: #0d6efd;">Logout</a>
@@ -68,6 +68,6 @@
     {% block content %}
     {% endblock %}
 </div>
-
+<script src="{% static 'sales/js/sales.js' %}"></script>
 </body>
 </html>

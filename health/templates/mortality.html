@@ -1,4 +1,4 @@
-{% extends "supbase.html" %}
+{% extends "wbase.html" %}
 {% block content %}
 
 <h3>Mortality Records</h3>
@@ -21,8 +21,15 @@
     </div>
 
     <div class="mb-3">
-        <label>Cause</label>
-        <textarea name="cause" class="form-control"></textarea>
+        <label >Cause of death</label>
+        <select name="Cause" class="form-control">
+            
+                <option value="">sickness</option>
+                 <option value="">Over crowding</option>
+                  <option value="">I dont know</option>
+
+           
+        </select>
     </div>
 
     <button class="btn btn-danger">Save</button>
