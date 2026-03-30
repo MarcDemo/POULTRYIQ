@@ -1,0 +1,77 @@
+{% extends 'base.html' %}
+{% block content %}
+
+<div class="container-fluid">
+
+<h3 class="mb-4">Salary Management</h3>
+
+<div class="row">
+
+<!-- FORM -->
+<div class="col-md-4">
+<div class="card">
+<div class="card-header">Pay Salary</div>
+
+<div class="card-body">
+<form method="POST">
+{% csrf_token %}
+
+<input class="form-control mb-2" name="employee" placeholder="Employee Name">
+
+<input type="month" class="form-control mb-2" name="month">
+
+<input class="form-control mb-2" name="amount" placeholder="Amount">
+
+<select class="form-control mb-2" name="status">
+<option>Paid</option>
+<option>Pending</option>
+</select>
+
+<button class="btn btn-primary w-100">Save</button>
+
+</form>
+</div>
+</div>
+</div>
+
+<!-- TABLE -->
+<div class="col-md-8">
+<div class="card">
+<div class="card-body">
+
+<table class="table table-striped">
+<thead>
+<tr>
+<th>Employee</th>
+<th>Month</th>
+<th>Amount</th>
+<th>Status</th>
+</tr>
+</thead>
+
+<tbody>
+
+<tr>
+<td>shanitah</td>
+<td>February 2026</td>
+<td>1,000,000</td>
+<td>
+<span class="badge bg-success">
+paid
+</span>
+</td>
+</tr>
+
+</tbody>
+
+</table>
+
+</div>
+</div>
+</div>
+
+</div>
+
+</div>
+
+{% endblock %}

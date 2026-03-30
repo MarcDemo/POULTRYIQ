@@ -1,0 +1,72 @@
+{% extends 'base.html' %}
+{% block content %}
+
+<div class="container-fluid">
+
+<h3 class="mb-4">Inventory Management</h3>
+
+<div class="row">
+
+<!-- ADD ITEM -->
+<div class="col-md-4">
+<div class="card">
+<div class="card-header">Add Item</div>
+
+<div class="card-body">
+<form method="POST">
+{% csrf_token %}
+
+<input class="form-control mb-2" name="item" placeholder="Item Name">
+<input class="form-control mb-2" name="quantity" placeholder="Quantity">
+<input class="form-control mb-2" name="unit" placeholder="Unit (kg, trays, etc)">
+
+<button class="btn btn-success w-100">Save</button>
+
+</form>
+</div>
+</div>
+</div>
+
+<!-- STOCK LIST -->
+<div class="col-md-8">
+<div class="card">
+<div class="card-body">
+
+<table class="table table-bordered">
+<thead>
+<tr>
+<th>Item</th>
+<th>Quantity</th>
+<th>Unit</th>
+<th>Status</th>
+</tr>
+</thead>
+
+<tbody>
+{% for i in inventory %}
+<tr>
+<td>{{ i.item }}</td>
+<td>{{ i.quantity }}</td>
+<td>{{ i.unit }}</td>
+<td>
+{% if i.quantity < 50 %}
+<span class="badge bg-danger">Low</span>
+{% else %}
+<span class="badge bg-success">OK</span>
+{% endif %}
+</td>
+</tr>
+{% endfor %}
+</tbody>
+
+</table>
+
+</div>
+</div>
+</div>
+
+</div>
+
+</div>
+
+{% endblock %}

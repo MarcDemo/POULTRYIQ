@@ -1,0 +1,92 @@
+{% extends 'base.html' %}
+{% block content %}
+
+<div class="container-fluid">
+
+<h3 class="mb-4">End of Day Summary</h3>
+
+<!-- DATE -->
+<div class="card mb-3">
+<div class="card-body">
+
+<form method="GET" class="row g-3">
+
+<div class="col-md-4">
+<input type="date" name="date" class="form-control">
+</div>
+
+<div class="col-md-4">
+<button class="btn btn-primary">Load Summary</button>
+</div>
+
+</form>
+
+</div>
+</div>
+
+<!-- SUMMARY CARDS -->
+<div class="row g-4 mb-4">
+
+<div class="col-md-3">
+<div class="card text-center">
+<div class="card-body">
+<h6>Eggs Collected</h6>
+<h3>{{ eggs }}</h3>
+</div>
+</div>
+</div>
+
+<div class="col-md-3">
+<div class="card text-center">
+<div class="card-body">
+<h6>Total Sales</h6>
+<h3>{{ sales }}</h3>
+</div>
+</div>
+</div>
+
+<div class="col-md-3">
+<div class="card text-center">
+<div class="card-body">
+<h6>Expenses</h6>
+<h3>{{ expenses }}</h3>
+</div>
+</div>
+</div>
+
+<div class="col-md-3">
+<div class="card text-center">
+<div class="card-body">
+<h6>Deaths</h6>
+<h3>{{ deaths }}</h3>
+</div>
+</div>
+</div>
+
+</div>
+
+<!-- PROFIT -->
+<div class="card mb-3">
+<div class="card-body text-center">
+<h5>cash at hand</h5>
+<h2>{{ profit }}</h2>
+</div>
+</div>
+
+<!-- NOTES -->
+<div class="card">
+<div class="card-header">Manager Notes</div>
+
+<div class="card-body">
+<form method="POST">
+{% csrf_token %}
+<textarea class="form-control mb-2" name="notes" placeholder="Enter daily remarks..."></textarea>
+<button class="btn btn-success">Save Notes</button>
+</form>
+</div>
+
+</div>
+
+</div>
+
+{% endblock %}

@@ -8,9 +8,15 @@
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h3>User Management</h3>
 
+   
+
     <a href="{% url 'add_user' %}" class="btn btn-primary">
     + Add User
 </a>
+
+ <a href="{% url 'salaries' %}" class="btn btn-info">
+         Salaries
+    </a>
 </div>
 
 <!-- USERS TABLE -->
@@ -25,6 +31,7 @@
 <th>Full Name</th>
 <th>Date Enrolled</th>
 <th>Enrollment Number</th>
+<th>Salary</th>
 <th>Role</th>
 <th>Status</th>
 <th>Actions</th>
@@ -39,6 +46,7 @@
 <td>Shanitah isa</td>
 <td>25th may 2025</td>
 <td>EN001</td>
+<td>1,000,000</td>
 
 <td>
 <span class="badge bg-info">worker</span>

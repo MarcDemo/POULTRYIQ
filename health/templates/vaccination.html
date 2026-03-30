@@ -1,0 +1,94 @@
+{% extends 'supbase.html' %}
+{% block content %}
+
+<div class="container-fluid">
+
+<h3 class="mb-4">Vaccination Scheduler</h3>
+
+<div class="row">
+
+<!-- FORM -->
+<div class="col-md-4">
+<div class="card">
+<div class="card-header">Schedule Vaccination</div>
+
+<div class="card-body">
+<form method="POST">
+{% csrf_token %}
+
+<input type="date" name="date" class="form-control mb-2" required>
+
+<select name="house" class="form-control mb-2">
+<option>House A</option>
+<option>House B</option>
+</select>
+
+<input type="text" name="vaccine" class="form-control mb-2" placeholder="Vaccine Name">
+
+<input type="text" name="dosage" class="form-control mb-2" placeholder="Dosage">
+
+<!-- <select name="status" class="form-control mb-2"> -->
+<!-- <option value="scheduled">Scheduled</option> -->
+
+
+
+<!-- <option value="done">Done</option> -->
+<!-- </select> -->
+
+<button class="btn btn-success w-100">Save</button>
+
+</form>
+</div>
+</div>
+</div>
+
+<!-- TABLE -->
+<div class="col-md-8">
+<div class="card">
+<div class="card-body">
+
+<div class="table-responsive">
+<table class="table table-bordered">
+
+<thead>
+<tr>
+<th>Date</th>
+<th>House</th>
+<th>Vaccine</th>
+<th>Dosage</th>
+<th>mode of vaccination</th>
+<th>vet</th>
+<th>Status</th>
+</tr>
+</thead>
+
+<tbody>
+
+<tr>
+<td>4th april 2026</td>
+<td>house B</td>
+<td>newcastle vaccine</td>
+<td></td>
+<td>eye drop</td>
+<td>Dr. Smith</td>
+<td>
+<span class="badge bg-warning">
+scheduled
+</span>
+</td>
+</tr>
+
+</tbody>
+
+</table>
+</div>
+
+</div>
+</div>
+</div>
+
+</div>
+
+</div>
+
+{% endblock %}

@@ -1,0 +1,73 @@
+{% extends 'base.html' %}
+{% block content %}
+
+<div class="container-fluid">
+
+<div class="d-flex justify-content-between mb-4">
+<h3>Suppliers</h3>
+</div>
+
+<div class="row">
+
+<!-- FORM -->
+<div class="col-md-4">
+<div class="card">
+<div class="card-header">Add Supplier</div>
+
+<div class="card-body">
+<form method="POST">
+{% csrf_token %}
+
+<input class="form-control mb-2" name="name" placeholder="Supplier Name">
+<input class="form-control mb-2" name="phone" placeholder="Phone">
+<input class="form-control mb-2" name="location" placeholder="Location">
+<input class="form-control mb-2" name="product" placeholder="Product Supplied">
+
+
+
+<button class="btn btn-primary w-100">Save</button>
+
+</form>
+</div>
+</div>
+</div>
+
+<!-- LIST -->
+<div class="col-md-8">
+<div class="card">
+<div class="card-body">
+
+<table class="table table-striped">
+<thead>
+<tr>
+<th>Name</th>
+<th>Phone</th>
+<th>location</th>
+<th>Product</th>
+
+</tr>
+</thead>
+
+<tbody>
+
+<tr>
+<td>Biyinzika</td>
+<td>0700123456</td>
+<td>Kampala</td>
+<td>Chicken Feed</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
+</div>
+</div>
+</div>
+
+</div>
+
+</div>
+
+{% endblock %}
