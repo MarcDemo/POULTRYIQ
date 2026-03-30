@@ -1,0 +1,70 @@
+{% extends 'investorbase.html' %}
+{% block content %}
+
+<div class="container-fluid">
+
+<h3 class="mb-4">Financial Overview</h3>
+
+<div class="row g-4">
+
+<div class="col-12 col-md-4">
+<div class="card text-center p-3">
+<h6>Total Invested</h6>
+<h3>{{ invested }}</h3>
+</div>
+</div>
+
+<div class="col-12 col-md-4">
+<div class="card text-center p-3">
+<h6>Withdrawn</h6>
+<h3>{{ withdrawn }}</h3>
+</div>
+</div>
+
+<div class="col-12 col-md-4">
+<div class="card text-center p-3">
+<h6>Profit</h6>
+<h3>{{ profit }}</h3>
+</div>
+</div>
+
+<div class="col-12 col-md-4">
+<div class="card text-center p-3">
+<h6>Assets</h6>
+<h3>{{ assets }}</h3>
+</div>
+</div>
+
+<div class="col-12 col-md-4">
+<div class="card text-center p-3">
+<h6>Liabilities</h6>
+<h3>{{ liabilities }}</h3>
+</div>
+</div>
+
+<div class="col-12 col-md-4">
+<div class="card text-center p-3 bg-dark text-white">
+<h6>Business Value</h6>
+<h3>{{ business_value }}</h3>
+</div>
+</div>
+
+<div class="col-12 col-md-6">
+<div class="card text-center p-3 bg-success text-white">
+<h6>Your Share</h6>
+<h2>{{ share }}</h2>
+</div>
+</div>
+
+<div class="col-12 col-md-6">
+<div class="card text-center p-3 bg-primary text-white">
+<h6>ROI (%)</h6>
+<h2>{{ roi|floatformat:2 }}%</h2>
+</div>
+</div>
+
+</div>
+
+</div>
+
+{% endblock %}

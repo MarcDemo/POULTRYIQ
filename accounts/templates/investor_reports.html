@@ -1,0 +1,125 @@
+{% extends 'investorbase.html' %}
+{% block content %}
+
+<style>.report-card {
+    cursor: pointer;
+    transition: 0.3s;
+    border-radius: 12px;
+}
+
+.report-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+}
+</style>
+<div class="container-fluid">
+
+<h3 class="mb-4">Reports Center</h3>
+
+<div class="row g-4">
+
+    <!-- Egg Production -->
+    <div class="col-md-3">
+        <a href="#" class="text-decoration-none text-dark">
+            <div class="card border-success report-card text-center p-4">
+                <h5>Egg Production</h5>
+                <p class="text-muted">Daily, house & trends</p>
+            </div>
+        </a>
+    </div>
+
+    <!-- Sales Report -->
+    <div class="col-md-3">
+        <a href="#" class="text-decoration-none text-dark">
+            <div class="card border-primary report-card text-center p-4">
+                <h5>Sales Report</h5>
+                <p class="text-muted">Revenue & transactions</p>
+            </div>
+        </a>
+    </div>
+
+    <!-- Expenses -->
+    <div class="col-md-3">
+        <a href="#" class="text-decoration-none text-dark">
+            <div class="card border-danger report-card text-center p-4">
+                <h5>Expense Report</h5>
+                <p class="text-muted">Spending analysis</p>
+            </div>
+        </a>
+    </div>
+
+    <!-- Profit -->
+    <div class="col-md-3">
+        <a href="#" class="text-decoration-none text-dark">
+            <div class="card border-dark report-card text-center p-4">
+                <h5>Profit & Loss</h5>
+                <p class="text-muted">Revenue vs Expenses</p>
+            </div>
+        </a>
+    </div>
+
+    <!-- Mortality -->
+    <div class="col-md-3">
+        <a href="#" class="text-decoration-none text-dark">
+            <div class="card border-warning report-card text-center p-4">
+                <h5>Mortality Report</h5>
+                <p class="text-muted">Deaths & trends</p>
+            </div>
+        </a>
+    </div>
+
+    <!-- Feed -->
+    <div class="col-md-3">
+        <a href="#" class="text-decoration-none text-dark">
+            <div class="card border-info report-card text-center p-4">
+                <h5>Feed Usage</h5>
+                <p class="text-muted">Consumption tracking</p>
+            </div>
+        </a>
+    </div>
+
+    <!-- Stock -->
+    <div class="col-md-3">
+        <a href="#" class="text-decoration-none text-dark">
+            <div class="card border-secondary report-card text-center p-4">
+                <h5>Stock Report</h5>
+                <p class="text-muted">Eggs, birds, feed</p>
+            </div>
+        </a>
+    </div>
+
+    <!-- Creditors -->
+    <div class="col-md-3">
+        <a href="#" class="text-decoration-none text-dark">
+            <div class="card border-danger report-card text-center p-4">
+                <h5>Creditors</h5>
+                <p class="text-muted">Outstanding balances</p>
+            </div>
+        </a>
+    </div>
+
+    <!-- Bookings -->
+    <div class="col-md-3">
+        <a href="#" class="text-decoration-none text-dark">
+            <div class="card border-primary report-card text-center p-4">
+                <h5>Bookings</h5>
+                <p class="text-muted">Future orders</p>
+            </div>
+        </a>
+    </div>
+
+    <!-- Staff Activity -->
+    <div class="col-md-3">
+        <a href="#" class="text-decoration-none text-dark">
+            <div class="card border-dark report-card text-center p-4">
+                <h5>Staff Activity</h5>
+                <p class="text-muted">User actions</p>
+            </div>
+        </a>
+    </div>
+
+</div>
+
+</div>
+
+{% endblock %}
