@@ -1,0 +1,144 @@
+{% extends 'investorbase.html' %}
+{% load static %}
+
+{% block content %}
+
+<div class="container-fluid">
+
+<h3 class="mb-4">Investor Dashboard</h3>
+
+<!-- FILTER PANEL -->
+<div class="card mb-4">
+<div class="card-body">
+
+<form id="filterForm" class="row g-3">
+
+<div class="col-md-3">
+<label>Start Date</label>
+<input type="date" class="form-control" id="start_date">
+</div>
+
+<div class="col-md-3">
+<label>End Date</label>
+<input type="date" class="form-control" id="end_date">
+</div>
+
+<div class="col-md-3">
+<label>Report Type</label>
+<select class="form-control" id="report_type">
+<option value="profit">Profit & Loss</option>
+<option value="eggs">Egg Production</option>
+<option value="sales">Sales</option>
+<option value="expenses">Expenses</option>
+</select>
+</div>
+
+<div class="col-md-3">
+<label>Group By</label>
+<select class="form-control" id="group_by">
+<option value="day">Daily</option>
+<option value="week">Weekly</option>
+<option value="month">Monthly</option>
+</select>
+</div>
+
+<div class="col-md-3">
+<label>Chart Type</label>
+<select class="form-control" id="chart_type">
+<option value="line">Line</option>
+<option value="bar">Bar</option>
+<option value="pie">Pie</option>
+</select>
+</div>
+
+<div class="col-md-3 d-flex align-items-end">
+<button type="button" class="btn btn-primary w-100" onclick="loadReport()">
+Generate Report
+</button>
+</div>
+
+</form>
+
+</div>
+</div>
+
+<!-- SUMMARY CARDS -->
+
+<div class="row g-4 mb-4">
+
+<div class="col-12 col-md-4">
+<div class="card text-center">
+<div class="card-body">
+<h6>Total Revenue For 2026</h6>
+<h3 id="total_revenue">0</h3>
+</div>
+</div>
+</div>
+
+<div class="col-12 col-md-4">
+<div class="card text-center">
+<div class="card-body">
+<h6>Total Expenses For 2026</h6>
+<h3 id="total_expenses">0</h3>
+</div>
+</div>
+</div>
+
+<div class="col-12 col-md-4">
+<div class="card text-center">
+<div class="card-body">
+<h6>Profit So far </h6>
+<h3 id="profit">0</h3>
+</div>
+</div>
+</div>
+
+</div>
+
+<!-- CHART -->
+
+<div class="card mb-4">
+<div class="card-header">
+Report Visualization
+</div>
+
+<div class="card-body">
+<canvas id="reportChart"></canvas>
+</div>
+</div>
+
+<!-- TABLE -->
+
+<div class="card">
+<div class="card-header">
+Detailed Data
+</div>
+
+<div class="card-body">
+
+<div class="table-responsive">
+<table class="table table-bordered">
+
+<thead>
+<tr>
+<th>Date</th>
+<th>Value</th>
+</tr>
+</thead>
+
+<tbody id="reportTable">
+<tr><td colspan="2">No data loaded</td></tr>
+</tbody>
+
+</table>
+</div>
+
+</div>
+</div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="{% static 'js/investor.js' %}"></script>
+
+{% endblock %}

@@ -1,0 +1,139 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block content %}
+
+<div class="container-fluid">
+
+<h3 class="mb-4">Feed Records</h3>
+
+<!-- FILTERS -->
+<div class="card mb-4">
+<div class="card-body">
+
+<form class="row g-3">
+
+<div class="col-md-3">
+<label>Date</label>
+<input type="date" class="form-control" name="date">
+</div>
+
+<div class="col-md-3">
+<label>House</label>
+<select class="form-control" name="house">
+<option value="">All Houses</option>
+<option>House A</option>
+<option>House B</option>
+</select>
+</div>
+
+<div class="col-md-3">
+<label>Hour</label>
+<select class="form-control" name="hour">
+<option value="">All</option>
+<option>Morning</option>
+<option>Midday</option>
+<option>Evening</option>
+</select>
+</div>
+
+<div class="col-md-3 d-flex align-items-end">
+<button class="btn btn-primary w-100">Filter</button>
+</div>
+
+</form>
+
+</div>
+</div>
+
+<!-- TABLE -->
+<div class="card">
+<div class="card-body">
+
+<table class="table table-bordered table-hover">
+
+<thead class="table-light">
+<tr>
+<th>Date</th>
+<th>House</th>
+<th>Feeding Time</th>
+<th>Feeding Amount</th>
+<th>Feed Type</th>
+<th>Fed By</th>
+<th>Action</th>
+</tr>
+</thead>
+
+<tbody>
+
+
+<tr>
+<td>27th march 2026</td>
+<td>House A</td>
+<td>11:30am</td>
+<td>20kgs </td>
+<td>layer mash</td>
+<td>shanitah</td>
+
+<td>
+<button 
+class="btn btn-sm btn-warning edit-btn">
+Edit
+</button>
+</td>
+
+</tr>
+
+
+</tbody>
+
+</table>
+
+</div>
+</div>
+
+</div>
+
+
+<!-- EDIT MODAL -->
+
+<div class="modal fade" id="editModal">
+<div class="modal-dialog">
+<div class="modal-content">
+
+<div class="modal-header">
+<h5 class="modal-title">Edit Feed Record</h5>
+</div>
+
+<div class="modal-body">
+
+<form method="POST">
+{% csrf_token %}
+
+<input type="hidden" name="record_id" id="record_id">
+
+<div class="mb-3">
+<label>Feeding Amount</label>
+<input type="number" class="form-control" name="feeding_amount" id="edit_feeding_amount">
+</div>
+
+<div class="mb-3">
+<label>Reason for Edit</label>
+<textarea class="form-control" name="reason" required></textarea>
+</div>
+
+<button class="btn btn-danger w-100">
+Save Changes
+</button>
+
+</form>
+
+</div>
+
+</div>
+</div>
+</div>
+
+<script src="{% static 'js/feedrec.js' %}"></script>
+
+{% endblock %}

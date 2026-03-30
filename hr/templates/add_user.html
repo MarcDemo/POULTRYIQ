@@ -1,0 +1,78 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block content %}
+
+<div class="container-fluid">
+
+<div class="row justify-content-center">
+<div class="col-md-6">
+
+<div class="card">
+<div class="card-header">
+    <h4>Add New User</h4>
+</div>
+
+<div class="card-body">
+
+<form method="POST">
+{% csrf_token %}
+
+<div class="mb-3">
+<label>Username</label>
+<input type="text" class="form-control" name="username" required>
+</div>
+
+<div class="mb-3">
+<label>Full Name</label>
+<input type="text" class="form-control" name="full_name">
+</div>
+
+<div class="mb-3">
+<label>Password</label>
+<input type="password" class="form-control" name="password" required>
+<small class="text-muted">Use at least 8 characters</small>
+</div>
+
+<div class="mb-3">
+<label>Confirm Password</label>
+<input type="password" class="form-control" name="confirm_password" required>
+<small class="text-muted">Passwords must match</small>
+</div>
+
+<div class="mb-3">
+<label>Role</label>
+<select class="form-control" name="role">
+<option value="manager">Manager</option>
+<option value="supervisor">Supervisor</option>
+<option value="worker">Worker</option>
+</select>
+</div>
+
+<div class="mb-3">
+<label>Status</label>
+<select class="form-control" name="is_active">
+<option value="True">Active</option>
+<option value="False">Inactive</option>
+</select>
+</div>
+
+<button class="btn btn-success w-100">
+Create User
+</button>
+
+<a href="{% url 'manage_users' %}" class="btn btn-secondary w-100 mt-2">
+Cancel
+</a>
+
+</form>
+
+</div>
+</div>
+
+</div>
+</div>
+
+</div>
+
+{% endblock %}

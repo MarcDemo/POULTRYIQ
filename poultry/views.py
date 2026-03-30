@@ -24,3 +24,16 @@ def supdash(request):
 
 def supapproval(request):
     return render(request, 'supapproval.html')
+
+def login(request):
+    return render(request, 'login.html')
+
+def eggrec(request):
+    return render(request, 'eggrec.html')
+
+def feedrec(request):
+    return render(request, 'feed_rec.html')
+
+
+def investor(request):
+    return render(request, 'investor.html')

@@ -1,53 +1,93 @@
 {% extends "supbase.html" %}
 {% block content %}
 
+<style>
+    .dashboard-link {
+    cursor: pointer;
+    transition: 0.3s;
+}
+
+.dashboard-link:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+}
+</style>
+
+
 <h3 class="mb-4">Operational Overview</h3>
 
 <div class="row g-4">
 
+    <!-- Pending Approvals -->
     <div class="col-md-3">
-        <div class="card  border-warning">
-            <div class="card-body">
-                <h6>Pending Approvals</h6>
-                <h4>5</h4> <!-- /* Replace with dynamic count of pending approvals */ -->
+        <a href="{% url 'supapproval' %}" class="text-decoration-none text-dark">
+            <div class="card border-warning dashboard-link">
+                <div class="card-body">
+                    <h6>Pending Approvals</h6>
+                    <h4>5</h4>
+                </div>
             </div>
-        </div>
+        </a>
     </div>
 
+    <!-- Deaths -->
     <div class="col-md-3">
-        <div class="card  border-danger">
-            <div class="card-body">
-                <h6>Deaths Today</h6>
-                <h4>20</h4> <!-- /* Replace with dynamic count of deaths today */ -->
+        <a href="#" class="text-decoration-none text-dark">
+            <div class="card border-danger dashboard-link">
+                <div class="card-body">
+                    <h6>Deaths Today</h6>
+                    <h4>20</h4>
+                </div>
             </div>
-        </div>
+        </a>
     </div>
 
+    <!-- Eggs -->
     <div class="col-md-3">
-        <div class="card  border-success">
-            <div class="card-body">
-                <h6>Total Eggs In stock </h6>
-                <h4>200</h4> <!-- /* Replace with dynamic count of eggs available*/ -->
+        <a href="{% url 'record_egg' %}" class="text-decoration-none text-dark">
+            <div class="card border-success dashboard-link">
+                <div class="card-body">
+                    <h6>Total Eggs In Stock</h6>
+                    <h4>200</h4>
+                </div>
             </div>
-        </div>
+        </a>
     </div>
 
+    <!-- Cleaning -->
     <div class="col-md-3">
-        <div class="card  border-primary">
-            <div class="card-body">
-                <h6>Total Houses Cleaned Today</h6>
-                <h4>2</h4> <!-- /* Replace with dynamic count cleaned houses*/ -->
+        <a href="{% url 'record_cleaning' %}" class="text-decoration-none text-dark">
+            <div class="card border-primary dashboard-link">
+                <div class="card-body">
+                    <h6>Total Houses Cleaned Today</h6>
+                    <h4>2</h4>
+                </div>
             </div>
-        </div>
+        </a>
     </div>
 
+    <!-- Vaccination -->
     <div class="col-md-3">
-        <div class="card  border-warning">
-            <div class="card-body">
-                <h6>Last vaccination</h6>
-                <h4>22th March, 2026</h4> <!-- /* Replace with dynamic Date of last vaccine */ -->
+        <a href="#" class="text-decoration-none text-dark">
+            <div class="card border-warning dashboard-link">
+                <div class="card-body">
+                    <h6>Last Vaccination</h6>
+                    <h4>22nd March, 2026</h4>
+                </div>
             </div>
-        </div>
+        </a>
+    </div>
+
+    <!-- Orders -->
+    <div class="col-md-3">
+        <a href="{% url 'orders' %}" class="text-decoration-none text-dark">
+            <div class="card border-danger dashboard-link">
+                <div class="card-body">
+                    <h6>Orders for Today</h6>
+                    <h4>6</h4>
+                </div>
+            </div>
+        </a>
     </div>
 
 </div>

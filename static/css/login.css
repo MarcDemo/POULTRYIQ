@@ -1,0 +1,36 @@
+body {
+    margin: 0;
+    padding: 0;
+    font-family: 'Segoe UI', sans-serif;
+
+    background: linear-gradient(135deg, #1f3c88, #4b6cb7);
+    height: 100vh;
+}
+
+.login-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100%;
+}
+
+.login-card {
+    background: white;
+    padding: 40px;
+    width: 350px;
+    border-radius: 15px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+}
+
+.login-card h3 {
+    font-weight: bold;
+}
+
+.login-card input {
+    border-radius: 8px;
+}
+
+.login-card button {
+    border-radius: 8px;
+    padding: 10px;
+}
