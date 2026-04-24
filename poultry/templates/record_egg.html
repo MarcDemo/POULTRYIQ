@@ -3,37 +3,52 @@
 
 <div class="container mt-4">
 
-    <div class="card shadow-sm">
-        <div class="card-header bg-primary text-white">
-            Record Eggs - House A <!-- /* Replace with dynamic house name */ -->
-        </div>
-
-        <div class="card-body">
-
-            <form method="POST">
-                {% csrf_token %}
-
-                <div class="mb-3">
-                    <label>Total Eggs Collected</label>
-                    <input type="number" name="total_eggs" class="form-control" required>
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card shadow">
+                <div class="card-header">
+                    <i class="bi bi-basket me-2"></i>Record Eggs
                 </div>
 
-                <div class="mb-3">
-                    <label>Broken Eggs</label>
-                    <input type="number" name="broken_eggs" class="form-control">
+                <div class="card-body">
+
+                    <form method="POST" novalidate>
+                        {% csrf_token %}
+
+                        <div class="mb-3">
+                            <label for="total_eggs" class="form-label">
+                                <i class="bi bi-egg me-2"></i>Total Eggs Collected
+                            </label>
+                            <input type="number" id="total_eggs" name="total_eggs" class="form-control" placeholder="Enter total eggs" required min="0">
+                            <small class="form-text text-muted">Total eggs collected today</small>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="broken_eggs" class="form-label">
+                                <i class="bi bi-x-circle me-2"></i>Broken Eggs
+                            </label>
+                            <input type="number" id="broken_eggs" name="broken_eggs" class="form-control" placeholder="Enter broken eggs" min="0" value="0">
+                            <small class="form-text text-muted">Number of eggs broken</small>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="notes" class="form-label">
+                                <i class="bi bi-chat-left-text me-2"></i>Comments
+                            </label>
+                            <textarea id="notes" name="notes" class="form-control" placeholder="Add any comments..." rows="4"></textarea>
+                            <small class="form-text text-muted">Optional notes about the collection</small>
+                        </div>
+
+                        <div class="d-grid gap-2 mt-4">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-check-circle me-2"></i>Save Record
+                            </button>
+                        </div>
+
+                    </form>
+
                 </div>
-
-                <div class="mb-3">
-                    <label>Comments</label>
-                    <textarea name="notes" class="form-control"></textarea>
-                </div>
-
-                <button type="submit" class="btn btn-primary w-100">
-                    Save Record
-                </button>
-
-            </form>
-
+            </div>
         </div>
     </div>
 

@@ -1,0 +1,359 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Sign Up | PoultryIQ</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{% static 'css/auth.css' %}">
+</head>
+<body>
+
+<div class="auth-container">
+    <div class="auth-wrapper">
+        <!-- Left Side - Branding -->
+        <div class="auth-branding">
+            <div class="branding-content">
+                <div class="logo-circle">
+                    <i class="bi bi-graph-up-arrow"></i>
+                </div>
+                <h1>PoultryIQ</h1>
+                <p>Professional Poultry Farm Management</p>
+                <div class="features">
+                    <div class="feature-item">
+                        <i class="bi bi-check-circle-fill"></i>
+                        <span>Real-time Analytics</span>
+                    </div>
+                    <div class="feature-item">
+                        <i class="bi bi-check-circle-fill"></i>
+                        <span>Farm Management</span>
+                    </div>
+                    <div class="feature-item">
+                        <i class="bi bi-check-circle-fill"></i>
+                        <span>Financial Insights</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Side - Signup Form -->
+        <div class="auth-form-wrapper">
+            <div class="auth-form-container">
+                <h2 class="auth-title">
+                    <i class="bi bi-person-plus-fill"></i> Create Account
+                </h2>
+                <p class="auth-subtitle">Join PoultryIQ today and manage your farm</p>
+
+                <!-- Messages -->
+                {% if messages %}
+                    {% for message in messages %}
+                        <div class="alert alert-{% if message.tags %}{{ message.tags }}{% else %}info{% endif %} alert-dismissible fade show" role="alert">
+                            <i class="bi bi-info-circle me-2"></i>
+                            {{ message }}
+                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                        </div>
+                    {% endfor %}
+                {% endif %}
+
+                <form method="POST" class="auth-form" id="signupForm">
+                    {% csrf_token %}
+
+                    <!-- Name Row -->
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="first_name" class="form-label">
+                                    <i class="bi bi-person"></i> First Name
+                                </label>
+                                <input 
+                                    type="text" 
+                                    class="form-control form-control-lg" 
+                                    id="first_name" 
+                                    name="first_name" 
+                                    value="{{ form_data.first_name|default:'' }}"
+                                    placeholder="First name"
+                                    required>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="last_name" class="form-label">
+                                    <i class="bi bi-person"></i> Last Name
+                                </label>
+                                <input 
+                                    type="text" 
+                                    class="form-control form-control-lg" 
+                                    id="last_name" 
+                                    name="last_name" 
+                                    value="{{ form_data.last_name|default:'' }}"
+                                    placeholder="Last name">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Username Field -->
+                    <div class="form-group">
+                        <label for="username" class="form-label">
+                            <i class="bi bi-person-circle"></i> Username
+                        </label>
+                        <input 
+                            type="text" 
+                            class="form-control form-control-lg" 
+                            id="username" 
+                            name="username" 
+                            value="{{ form_data.username|default:'' }}"
+                            placeholder="Choose a username (min. 4 characters)"
+                            required>
+                        <small class="form-text text-muted">
+                            <i class="bi bi-info-circle"></i> Minimum 4 characters, unique username
+                        </small>
+                    </div>
+
+                    <!-- Email Field -->
+                    <div class="form-group">
+                        <label for="email" class="form-label">
+                            <i class="bi bi-envelope-fill"></i> Email Address
+                        </label>
+                        <input 
+                            type="email" 
+                            class="form-control form-control-lg" 
+                            id="email" 
+                            name="email" 
+                            value="{{ form_data.email|default:'' }}"
+                            placeholder="your.email@example.com"
+                            required>
+                    </div>
+
+                    <!-- Phone Number Field -->
+                    <div class="form-group">
+                        <label for="phone_number" class="form-label">
+                            <i class="bi bi-telephone-fill"></i> Phone Number
+                        </label>
+                        <input 
+                            type="tel" 
+                            class="form-control form-control-lg" 
+                            id="phone_number" 
+                            name="phone_number" 
+                            value="{{ form_data.phone_number|default:'' }}"
+                            placeholder="+1 (555) 000-0000">
+                        <small class="form-text text-muted">
+                            <i class="bi bi-info-circle"></i> Optional - for notifications and alerts
+                        </small>
+                    </div>
+
+                    <!-- Role Selection -->
+                    <div class="form-group">
+                        <label for="role" class="form-label">
+                            <i class="bi bi-briefcase-fill"></i> Your Role
+                        </label>
+                        <select class="form-select form-select-lg" id="role" name="role" required>
+                            <option value="">Select your role...</option>
+                            {% for role in roles %}
+                                <option
+                                    value="{{ role.id }}"
+                                    data-role-code="{{ role.code }}"
+                                    {% if form_data.role == role.id|stringformat:'s' %}selected{% endif %}
+                                >
+                                    {{ role.name }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                        <small class="form-text text-muted">
+                            <i class="bi bi-info-circle"></i> Select the role that matches your position
+                        </small>
+                    </div>
+
+                    <div class="form-group" id="houses-group">
+                        <label for="houses" class="form-label">
+                            <i class="bi bi-house-door-fill"></i> Assigned Poultry House
+                        </label>
+                        <select class="form-select form-select-lg" id="houses" name="houses" multiple size="4">
+                            {% for house in houses %}
+                                <option
+                                    value="{{ house.pk }}"
+                                    {% if house.pk|stringformat:'s' in selected_house_ids %}selected{% endif %}
+                                >
+                                    {{ house.house_code }}{% if house.name %} - {{ house.name }}{% endif %}
+                                </option>
+                            {% empty %}
+                                <option value="" disabled>No active poultry houses available</option>
+                            {% endfor %}
+                        </select>
+                        <small class="form-text text-muted">
+                            <i class="bi bi-info-circle"></i> Required for worker and supervisor accounts. Hold Ctrl (or Command) to select more than one house.
+                        </small>
+                    </div>
+
+                    <!-- Password Field -->
+                    <div class="form-group">
+                        <label for="password" class="form-label">
+                            <i class="bi bi-lock-fill"></i> Password
+                        </label>
+                        <div class="password-input-wrapper">
+                            <input 
+                                type="password" 
+                                class="form-control form-control-lg" 
+                                id="password" 
+                                name="password" 
+                                placeholder="Create a strong password"
+                                required>
+                            <button type="button" class="btn-toggle-password" onclick="togglePassword('password', 'toggle-icon-1')" title="Toggle password visibility">
+                                <i class="bi bi-eye-fill" id="toggle-icon-1"></i>
+                            </button>
+                        </div>
+                        <div class="password-requirements">
+                            <small class="form-text text-muted">
+                                <i class="bi bi-info-circle"></i> Password must contain:
+                            </small>
+                            <ul class="password-checklist">
+                                <li id="req-length"><i class="bi bi-x-circle"></i> At least 8 characters</li>
+                                <li id="req-uppercase"><i class="bi bi-x-circle"></i> One uppercase letter</li>
+                                <li id="req-digit"><i class="bi bi-x-circle"></i> One number</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <!-- Confirm Password Field -->
+                    <div class="form-group">
+                        <label for="password_confirm" class="form-label">
+                            <i class="bi bi-lock-fill"></i> Confirm Password
+                        </label>
+                        <div class="password-input-wrapper">
+                            <input 
+                                type="password" 
+                                class="form-control form-control-lg" 
+                                id="password_confirm" 
+                                name="password_confirm" 
+                                placeholder="Re-enter your password"
+                                required>
+                            <button type="button" class="btn-toggle-password" onclick="togglePassword('password_confirm', 'toggle-icon-2')" title="Toggle password visibility">
+                                <i class="bi bi-eye-fill" id="toggle-icon-2"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Terms & Conditions -->
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" id="terms" name="terms" required>
+                        <label class="form-check-label" for="terms">
+                            I agree to the <a href="#" class="text-primary text-decoration-none">Terms & Conditions</a>
+                        </label>
+                    </div>
+
+                    <!-- Sign Up Button -->
+                    <button type="submit" class="btn btn-primary btn-lg w-100 mb-3">
+                        <i class="bi bi-person-plus-fill"></i> Create Account
+                    </button>
+
+                    <!-- Divider -->
+                    <div class="divider">
+                        <span>Already have an account?</span>
+                    </div>
+
+                    <!-- Login Link -->
+                    <a href="{% url 'login' %}" class="btn btn-outline-primary btn-lg w-100">
+                        <i class="bi bi-box-arrow-in-right"></i> Sign In
+                    </a>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    function togglePassword(fieldId, iconId) {
+        const passwordInput = document.getElementById(fieldId);
+        const toggleIcon = document.getElementById(iconId);
+        
+        if (passwordInput.type === 'password') {
+            passwordInput.type = 'text';
+            toggleIcon.classList.remove('bi-eye-fill');
+            toggleIcon.classList.add('bi-eye-slash-fill');
+        } else {
+            passwordInput.type = 'password';
+            toggleIcon.classList.remove('bi-eye-slash-fill');
+            toggleIcon.classList.add('bi-eye-fill');
+        }
+    }
+
+    function roleRequiresHouse() {
+        const roleSelect = document.getElementById('role');
+        const selectedOption = roleSelect.options[roleSelect.selectedIndex];
+
+        if (!selectedOption) {
+            return false;
+        }
+
+        const roleCode = (selectedOption.dataset.roleCode || '').toUpperCase();
+        const roleName = (selectedOption.textContent || '').toLowerCase();
+
+        return ['WORKER', 'SUPERVISOR'].includes(roleCode)
+            || roleName.includes('worker')
+            || roleName.includes('supervisor');
+    }
+
+    function toggleHouseAssignmentField() {
+        const housesGroup = document.getElementById('houses-group');
+        const housesSelect = document.getElementById('houses');
+        const requiresHouse = roleRequiresHouse();
+
+        housesGroup.style.display = requiresHouse ? 'block' : 'none';
+        housesSelect.required = requiresHouse;
+    }
+
+    document.getElementById('role').addEventListener('change', toggleHouseAssignmentField);
+    toggleHouseAssignmentField();
+
+    // Real-time password validation
+    document.getElementById('password').addEventListener('input', function() {
+        const password = this.value;
+        
+        // Check length
+        const lengthCheck = document.getElementById('req-length');
+        if (password.length >= 8) {
+            lengthCheck.classList.add('valid');
+            lengthCheck.querySelector('i').classList.remove('bi-x-circle');
+            lengthCheck.querySelector('i').classList.add('bi-check-circle-fill');
+        } else {
+            lengthCheck.classList.remove('valid');
+            lengthCheck.querySelector('i').classList.remove('bi-check-circle-fill');
+            lengthCheck.querySelector('i').classList.add('bi-x-circle');
+        }
+        
+        // Check uppercase
+        const uppercaseCheck = document.getElementById('req-uppercase');
+        if (/[A-Z]/.test(password)) {
+            uppercaseCheck.classList.add('valid');
+            uppercaseCheck.querySelector('i').classList.remove('bi-x-circle');
+            uppercaseCheck.querySelector('i').classList.add('bi-check-circle-fill');
+        } else {
+            uppercaseCheck.classList.remove('valid');
+            uppercaseCheck.querySelector('i').classList.remove('bi-check-circle-fill');
+            uppercaseCheck.querySelector('i').classList.add('bi-x-circle');
+        }
+        
+        // Check digit
+        const digitCheck = document.getElementById('req-digit');
+        if (/[0-9]/.test(password)) {
+            digitCheck.classList.add('valid');
+            digitCheck.querySelector('i').classList.remove('bi-x-circle');
+            digitCheck.querySelector('i').classList.add('bi-check-circle-fill');
+        } else {
+            digitCheck.classList.remove('valid');
+            digitCheck.querySelector('i').classList.remove('bi-check-circle-fill');
+            digitCheck.querySelector('i').classList.add('bi-x-circle');
+        }
+    });
+</script>
+
+<!-- Bootstrap JS -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+</body>
+</html>

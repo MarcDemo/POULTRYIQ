@@ -3,24 +3,49 @@
 
 <div class="container-fluid">
 
-<h3 class="mb-4">Inventory Management</h3>
+<h3 class="mb-4">
+    <i class="bi bi-boxes me-2"></i>Inventory Management
+</h3>
 
-<div class="row">
+<div class="row g-4">
 
 <!-- ADD ITEM -->
-<div class="col-md-4">
+<div class="col-lg-4">
 <div class="card">
-<div class="card-header">Add Item</div>
+<div class="card-header">
+    <i class="bi bi-plus-circle me-2"></i>Add Item
+</div>
 
 <div class="card-body">
-<form method="POST">
+<form method="POST" novalidate>
 {% csrf_token %}
 
-<input class="form-control mb-2" name="item" placeholder="Item Name">
-<input class="form-control mb-2" name="quantity" placeholder="Quantity">
-<input class="form-control mb-2" name="unit" placeholder="Unit (kg, trays, etc)">
+<div class="mb-3">
+    <label for="item" class="form-label">
+        <i class="bi bi-box me-1"></i>Item Name
+    </label>
+    <input class="form-control" id="item" name="item" placeholder="e.g., Layer Feed" required>
+</div>
 
-<button class="btn btn-success w-100">Save</button>
+<div class="mb-3">
+    <label for="quantity" class="form-label">
+        <i class="bi bi-collection me-1"></i>Quantity
+    </label>
+    <input class="form-control" id="quantity" name="quantity" placeholder="0" type="number" required min="0">
+</div>
+
+<div class="mb-3">
+    <label for="unit" class="form-label">
+        <i class="bi bi-rulers me-1"></i>Unit
+    </label>
+    <input class="form-control" id="unit" name="unit" placeholder="kg, trays, liters, etc">
+</div>
+
+<div class="d-grid">
+    <button class="btn btn-success" type="submit">
+        <i class="bi bi-check-circle me-2"></i>Save
+    </button>
+</div>
 
 </form>
 </div>
@@ -28,11 +53,15 @@
 </div>
 
 <!-- STOCK LIST -->
-<div class="col-md-8">
+<div class="col-lg-8">
 <div class="card">
+<div class="card-header">
+    <i class="bi bi-table me-2"></i>Current Stock
+</div>
 <div class="card-body">
 
-<table class="table table-bordered">
+<div class="table-responsive">
+<table class="table table-hover">
 <thead>
 <tr>
 <th>Item</th>
@@ -45,8 +74,10 @@
 <tbody>
 {% for i in inventory %}
 <tr>
-<td>{{ i.item }}</td>
-<td>{{ i.quantity }}</td>
+<td>
+    <i class="bi bi-box-seam me-2"></i>{{ i.item }}
+</td>
+<td><strong>{{ i.quantity }}</strong></td>
 <td>{{ i.unit }}</td>
 <td>
 {% if i.quantity < 50 %}

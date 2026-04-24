@@ -3,48 +3,67 @@
 
 <div class="container-fluid">
 
-<h3 class="mb-4">Treatment Records</h3>
+<h3 class="mb-4">
+    <i class="bi bi-heart-pulse me-2"></i>Treatment Records
+</h3>
 
-<div class="row">
+<div class="row g-4">
 
 <!-- FORM -->
-<div class="col-md-4">
+<div class="col-lg-4">
 <div class="card">
-<div class="card-header">Record Treatment</div>
+<div class="card-header">
+    <i class="bi bi-plus-circle me-2"></i>Record Treatment
+</div>
 
 <div class="card-body">
-<form method="POST">
+<form method="POST" novalidate>
 {% csrf_token %}
 
 <div class="mb-3">
-<label>Date</label>
-<input type="date" name="date" class="form-control">
+<label for="date" class="form-label">
+    <i class="bi bi-calendar me-1"></i>Date
+</label>
+<input type="date" id="date" name="date" class="form-control" required>
 </div>
 
 <div class="mb-3">
-<label>House</label>
-<select name="house" class="form-control">
+<label for="house" class="form-label">
+    <i class="bi bi-building me-1"></i>House
+</label>
+<select id="house" name="house" class="form-select">
 <option>House A</option>
 <option>House B</option>
+<option>House C</option>
 </select>
 </div>
 
 <div class="mb-3">
-<label>Disease</label>
-<input type="text" name="disease" class="form-control">
+<label for="disease" class="form-label">
+    <i class="bi bi-exclamation-circle me-1"></i>Disease
+</label>
+<input type="text" id="disease" name="disease" class="form-control" placeholder="e.g., Coccidiosis" required>
 </div>
 
 <div class="mb-3">
-<label>Medication</label>
-<input type="text" name="medication" class="form-control">
+<label for="medication" class="form-label">
+    <i class="bi bi-capsule me-1"></i>Medication
+</label>
+<input type="text" id="medication" name="medication" class="form-control" placeholder="Medication name" required>
 </div>
 
 <div class="mb-3">
-<label>Dosage</label>
-<input type="text" name="dosage" class="form-control">
+<label for="dosage" class="form-label">
+    <i class="bi bi-eyedropper me-1"></i>Dosage
+</label>
+<input type="text" id="dosage" name="dosage" class="form-control" placeholder="Dosage info" required>
 </div>
 
-<button class="btn btn-success w-100">Save</button>
+<div class="d-grid">
+<button class="btn btn-success" type="submit">
+    <i class="bi bi-check-circle me-2"></i>Save
+</button>
+</div>
 
 </form>
 </div>
@@ -52,12 +71,15 @@
 </div>
 
 <!-- TABLE -->
-<div class="col-md-8">
+<div class="col-lg-8">
 <div class="card">
+<div class="card-header">
+    <i class="bi bi-table me-2"></i>Treatment History
+</div>
 <div class="card-body">
 
 <div class="table-responsive">
-<table class="table table-bordered">
+<table class="table table-hover">
 
 <thead>
 <tr>
@@ -66,18 +88,18 @@
 <th>Disease</th>
 <th>Medication</th>
 <th>Dosage</th>
-<th>Mode of Administration</th>
-<th>vet name</th>
+<th>Mode</th>
+<th>Vet</th>
 </tr>
 </thead>
 
 <tbody>
 
 <tr>
-<td>31st march 2026</td>
-<td>house A</td>
+<td>31 March 2026</td>
+<td><span class="badge bg-info">House A</span></td>
 <td>Coccidiosis</td>
-<td>sulfadimethoxine</td>
+<td>Sulfadimethoxine</td>
 <td>500mg</td>
 <td>eye drop</td>
 <td>shakirah</td>

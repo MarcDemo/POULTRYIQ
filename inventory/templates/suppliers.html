@@ -3,29 +3,58 @@
 
 <div class="container-fluid">
 
-<div class="d-flex justify-content-between mb-4">
-<h3>Suppliers</h3>
+<div class="d-flex justify-content-between align-items-center mb-4">
+<h3>
+    <i class="bi bi-shop me-2"></i>Suppliers
+</h3>
 </div>
 
-<div class="row">
+<div class="row g-4">
 
 <!-- FORM -->
-<div class="col-md-4">
+<div class="col-lg-4">
 <div class="card">
-<div class="card-header">Add Supplier</div>
+<div class="card-header">
+    <i class="bi bi-plus-circle me-2"></i>Add Supplier
+</div>
 
 <div class="card-body">
-<form method="POST">
+<form method="POST" novalidate>
 {% csrf_token %}
 
-<input class="form-control mb-2" name="name" placeholder="Supplier Name">
-<input class="form-control mb-2" name="phone" placeholder="Phone">
-<input class="form-control mb-2" name="location" placeholder="Location">
-<input class="form-control mb-2" name="product" placeholder="Product Supplied">
+<div class="mb-3">
+    <label for="name" class="form-label">
+        <i class="bi bi-person me-1"></i>Supplier Name
+    </label>
+    <input class="form-control" id="name" name="name" placeholder="Company name" required>
+</div>
 
+<div class="mb-3">
+    <label for="phone" class="form-label">
+        <i class="bi bi-telephone me-1"></i>Phone
+    </label>
+    <input class="form-control" id="phone" name="phone" placeholder="+256..." required>
+</div>
 
+<div class="mb-3">
+    <label for="location" class="form-label">
+        <i class="bi bi-geo-alt me-1"></i>Location
+    </label>
+    <input class="form-control" id="location" name="location" placeholder="City or address">
+</div>
 
-<button class="btn btn-primary w-100">Save</button>
+<div class="mb-3">
+    <label for="product" class="form-label">
+        <i class="bi bi-box me-1"></i>Product Supplied
+    </label>
+    <input class="form-control" id="product" name="product" placeholder="e.g., Feed, Medication">
+</div>
+
+<div class="d-grid">
+    <button class="btn btn-primary" type="submit">
+        <i class="bi bi-check-circle me-2"></i>Save
+    </button>
+</div>
 
 </form>
 </div>
@@ -33,18 +62,22 @@
 </div>
 
 <!-- LIST -->
-<div class="col-md-8">
+<div class="col-lg-8">
 <div class="card">
+<div class="card-header">
+    <i class="bi bi-table me-2"></i>Supplier List
+</div>
 <div class="card-body">
 
-<table class="table table-striped">
+<div class="table-responsive">
+<table class="table table-hover">
 <thead>
 <tr>
 <th>Name</th>
 <th>Phone</th>
-<th>location</th>
+<th>Location</th>
 <th>Product</th>
-
+<th>Actions</th>
 </tr>
 </thead>
 

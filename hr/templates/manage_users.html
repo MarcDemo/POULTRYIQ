@@ -5,32 +5,33 @@
 
 <div class="container-fluid">
 
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h3>User Management</h3>
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+    <h3>
+        <i class="bi bi-people-fill me-2"></i>User Management
+    </h3>
 
-   
-
-    <a href="{% url 'add_user' %}" class="btn btn-primary">
-    + Add User
-</a>
-
- <a href="{% url 'salaries' %}" class="btn btn-info">
-         Salaries
-    </a>
+    <div class="btn-group" role="group">
+        <a href="{% url 'add_user' %}" class="btn btn-primary">
+            <i class="bi bi-person-plus me-2"></i>Add User
+        </a>
+        <a href="{% url 'salaries' %}" class="btn btn-info">
+            <i class="bi bi-cash-coin me-2"></i>Salaries
+        </a>
+    </div>
 </div>
 
 <!-- USERS TABLE -->
-
 <div class="card">
 <div class="card-body">
 
-<table class="table table-hover table-bordered">
+<div class="table-responsive">
+<table class="table table-hover">
 
-<thead class="table-light">
+<thead>
 <tr>
 <th>Full Name</th>
-<th>Date Enrolled</th>
-<th>Enrollment Number</th>
+<th>Enrollment Date</th>
+<th>Enrollment #</th>
 <th>Salary</th>
 <th>Role</th>
 <th>Status</th>
@@ -40,23 +41,30 @@
 
 <tbody>
 
-
 <tr>
-
-<td>Shanitah isa</td>
-<td>25th may 2025</td>
-<td>EN001</td>
-<td>1,000,000</td>
+<td>
+    <strong>Shanitah Isa</strong>
+</td>
+<td>25 May 2025</td>
+<td><code>EN001</code></td>
+<td>1,000,000 UGX</td>
 
 <td>
-<span class="badge bg-info">worker</span>
+    <span class="badge bg-info">Worker</span>
 </td>
 
 <td>
-
-<span class="badge bg-success">Active</span>
-
-<!-- <span class="badge bg-danger">Inactive</span> -->
+    <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Active</span>
+</td>
+<td>
+    <button class="btn btn-sm btn-outline-warning" title="Edit">
+        <i class="bi bi-pencil"></i>
+    </button>
+    <button class="btn btn-sm btn-outline-danger" title="Delete">
+        <i class="bi bi-trash"></i>
+    </button>
+</td>
+</tr>
 
 </td>
 

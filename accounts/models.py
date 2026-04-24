@@ -1,12 +1,45 @@
 from django.db import models
 from django.contrib.auth.models import AbstractUser
+from django.core.exceptions import ValidationError
 
-# Create your models here.
+
+HOUSE_REQUIRED_ROLE_CODES = {"WORKER", "SUPERVISOR"}
+
+
+def role_requires_house_assignment(role) -> bool:
+    if not role:
+        return False
+
+    role_code = (getattr(role, "code", "") or "").upper()
+    role_name = (getattr(role, "name", "") or "").strip().lower()
+
+    return (
+        role_code in HOUSE_REQUIRED_ROLE_CODES
+        or "worker" in role_name
+        or "supervisor" in role_name
+    )
+
+
+def validate_house_assignment(role, houses) -> None:
+    if not role_requires_house_assignment(role):
+        return
+
+    try:
+        house_count = houses.count()
+    except (AttributeError, TypeError):
+        house_count = len(list(houses or []))
+
+    if house_count == 0:
+        raise ValidationError(
+            "Workers and supervisors must be assigned to at least one poultry house."
+        )
+
 
 class Role(models.Model):
-    
+
     class RoleCode(models.TextChoices):
         WORKER = "WORKER", "Farm Worker"
+        SUPERVISOR = "SUPERVISOR", "Farm Supervisor"
         MANAGER = "MANAGER", "Farm Manager"
         OWNER = "OWNER", "Business Owner"
 
@@ -20,15 +53,39 @@ class Role(models.Model):
 
 
 class User(AbstractUser):
-    """
-    Custom User model using username/password login.
-    Phone is optional (future OTP, WhatsApp alerts, etc.).
-    """
+
     role = models.ForeignKey(Role, on_delete=models.PROTECT, null=True, blank=True)
     phone_number = models.CharField(max_length=20, blank=True)
-
-    
     is_locked = models.BooleanField(default=False)
 
+    houses = models.ManyToManyField(
+        'poultry.PoultryHouse',
+        blank=True,
+        related_name='assigned_users'
+    )
+
     def __str__(self) -> str:
-        return self.username
+        return self.display_name
+
+    @property
+    def display_name(self) -> str:
+        full_name = self.get_full_name().strip()
+        return full_name or self.username
+
+    @property
+    def role_code(self) -> str:
+        return self.role.code if self.role else ""
+
+    @property
+    def can_authenticate(self) -> bool:
+        return self.is_active and not self.is_locked
+
+    @property
+    def requires_house_assignment(self) -> bool:
+        return role_requires_house_assignment(self.role)
+
+    def clean(self) -> None:
+        super().clean()
+
+        if self.pk and self.requires_house_assignment:
+            validate_house_assignment(self.role, self.houses.all())

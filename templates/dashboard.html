@@ -3,7 +3,12 @@
 
 <div class="container-fluid">
 
-    <h2 class="mb-4">Dashboard Overview</h2>
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>
+            <i class="bi bi-speedometer2 me-2"></i>Dashboard Overview
+        </h2>
+        <small class="text-muted">Last updated: Today</small>
+    </div>
 
     <!-- Summary Cards -->
     <div class="row g-4">
@@ -11,8 +16,16 @@
         <div class="col-md-3">
             <div class="card dashboard-card">
                 <div class="card-body">
-                    <h6>Total Birds</h6>
-                    <h3>5,200</h3>
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <h6>Total Birds</h6>
+                            <h3>5,200</h3>
+                        </div>
+                        <div class="text-primary" style="font-size: 28px;">
+                            <i class="bi bi-egg"></i>
+                        </div>
+                    </div>
+                    <small class="text-muted">+2.5% from last week</small>
                 </div>
             </div>
         </div>
@@ -20,8 +33,16 @@
         <div class="col-md-3">
             <div class="card dashboard-card">
                 <div class="card-body">
-                    <h6>Eggs Today</h6>
-                    <h3>1,750</h3>
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <h6>Eggs Today</h6>
+                            <h3>1,750</h3>
+                        </div>
+                        <div class="text-success" style="font-size: 28px;">
+                            <i class="bi bi-basket"></i>
+                        </div>
+                    </div>
+                    <small class="text-muted">+5.2% from yesterday</small>
                 </div>
             </div>
         </div>
@@ -29,8 +50,16 @@
         <div class="col-md-3">
             <div class="card dashboard-card">
                 <div class="card-body">
-                    <h6>Feed in Stock</h6>
-                    <h3>3,200 kg</h3>
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <h6>Feed in Stock</h6>
+                            <h3>3,200 kg</h3>
+                        </div>
+                        <div class="text-info" style="font-size: 28px;">
+                            <i class="bi bi-bag-fill"></i>
+                        </div>
+                    </div>
+                    <small class="text-muted">-12% from last month</small>
                 </div>
             </div>
         </div>
@@ -38,23 +67,29 @@
         <div class="col-md-3">
             <div class="card dashboard-card">
                 <div class="card-body">
-                    <h6>Mortality (Today)</h6>
-                    <h3>12</h3>
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <h6>Mortality (Today)</h6>
+                            <h3>12</h3>
+                        </div>
+                        <div class="text-danger" style="font-size: 28px;">
+                            <i class="bi bi-exclamation-triangle"></i>
+                        </div>
+                    </div>
+                    <small class="text-muted">2.3 per 1000</small>
                 </div>
             </div>
         </div>
-
-        
 
     </div>
 
     <!-- Charts -->
-    <div class="row mt-5 g-3">
+    <div class="row mt-5 g-4">
 
         <div class="col-md-6">
             <div class="card">
                 <div class="card-header">
-                    Egg Production (Last 7 Days)
+                    <i class="bi bi-graph-up me-2"></i>Egg Production (Last 7 Days)
                 </div>
                 <div class="card-body">
                     <canvas id="eggChart"></canvas>
@@ -65,7 +100,7 @@
         <div class="col-md-6">
             <div class="card">
                 <div class="card-header">
-                    Average egg weight(last 7 weighs)
+                    <i class="bi bi-speedometer me-2"></i>Average Egg Weight (Last 7 Weighs)
                 </div>
                 <div class="card-body">
                     <canvas id="weightChart"></canvas>
@@ -76,15 +111,13 @@
         <div class="col-md-6">
             <div class="card">
                 <div class="card-header">
-                    Feed Consumption
+                    <i class="bi bi-bag-fill me-2"></i>Feed Consumption
                 </div>
                 <div class="card-body">
                     <canvas id="feedChart"></canvas>
                 </div>
             </div>
         </div>
-
-
 
     </div>
 

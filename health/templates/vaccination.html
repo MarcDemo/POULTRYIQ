@@ -3,39 +3,60 @@
 
 <div class="container-fluid">
 
-<h3 class="mb-4">Vaccination Scheduler</h3>
+<h3 class="mb-4">
+    <i class="bi bi-capsule me-2"></i>Vaccination Scheduler
+</h3>
 
-<div class="row">
+<div class="row g-4">
 
 <!-- FORM -->
-<div class="col-md-4">
+<div class="col-lg-4">
 <div class="card">
-<div class="card-header">Schedule Vaccination</div>
+<div class="card-header">
+    <i class="bi bi-plus-circle me-2"></i>Schedule Vaccination
+</div>
 
 <div class="card-body">
-<form method="POST">
+<form method="POST" novalidate>
 {% csrf_token %}
 
-<input type="date" name="date" class="form-control mb-2" required>
+<div class="mb-3">
+<label for="date" class="form-label">
+    <i class="bi bi-calendar me-1"></i>Date
+</label>
+<input type="date" id="date" name="date" class="form-control" required>
+</div>
 
-<select name="house" class="form-control mb-2">
+<div class="mb-3">
+<label for="house" class="form-label">
+    <i class="bi bi-building me-1"></i>House
+</label>
+<select id="house" name="house" class="form-select">
 <option>House A</option>
 <option>House B</option>
+<option>House C</option>
 </select>
+</div>
 
-<input type="text" name="vaccine" class="form-control mb-2" placeholder="Vaccine Name">
+<div class="mb-3">
+<label for="vaccine" class="form-label">
+    <i class="bi bi-capsule me-1"></i>Vaccine Name
+</label>
+<input type="text" id="vaccine" name="vaccine" class="form-control" placeholder="e.g., Newcastle vaccine" required>
+</div>
 
-<input type="text" name="dosage" class="form-control mb-2" placeholder="Dosage">
+<div class="mb-3">
+<label for="dosage" class="form-label">
+    <i class="bi bi-eyedropper me-1"></i>Dosage
+</label>
+<input type="text" id="dosage" name="dosage" class="form-control" placeholder="e.g., 1 drop per bird">
+</div>
 
-<!-- <select name="status" class="form-control mb-2"> -->
-<!-- <option value="scheduled">Scheduled</option> -->
-
-
-
-<!-- <option value="done">Done</option> -->
-<!-- </select> -->
-
-<button class="btn btn-success w-100">Save</button>
+<div class="d-grid">
+<button class="btn btn-success" type="submit">
+    <i class="bi bi-check-circle me-2"></i>Save
+</button>
+</div>
 
 </form>
 </div>
@@ -43,12 +64,15 @@
 </div>
 
 <!-- TABLE -->
-<div class="col-md-8">
+<div class="col-lg-8">
 <div class="card">
+<div class="card-header">
+    <i class="bi bi-table me-2"></i>Vaccination Records
+</div>
 <div class="card-body">
 
 <div class="table-responsive">
-<table class="table table-bordered">
+<table class="table table-hover">
 
 <thead>
 <tr>
@@ -56,8 +80,8 @@
 <th>House</th>
 <th>Vaccine</th>
 <th>Dosage</th>
-<th>mode of vaccination</th>
-<th>vet</th>
+<th>Method</th>
+<th>Vet</th>
 <th>Status</th>
 </tr>
 </thead>
@@ -65,16 +89,14 @@
 <tbody>
 
 <tr>
-<td>4th april 2026</td>
-<td>house B</td>
-<td>newcastle vaccine</td>
-<td></td>
-<td>eye drop</td>
+<td>4 April 2026</td>
+<td><span class="badge bg-info">House B</span></td>
+<td>Newcastle vaccine</td>
+<td>1 drop/bird</td>
+<td>Eye drop</td>
 <td>Dr. Smith</td>
 <td>
-<span class="badge bg-warning">
-scheduled
-</span>
+<span class="badge bg-warning">Scheduled</span>
 </td>
 </tr>
 

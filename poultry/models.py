@@ -7,15 +7,20 @@ from django.db import models
 
 
 class PoultryBatch(models.Model):
-    """
-    Core anchor entity for traceability and profitability.
-    """
+
     class Status(models.TextChoices):
         ACTIVE = "ACTIVE", "Active"
         CLOSED = "CLOSED", "Closed"
 
     batch_id = models.BigAutoField(primary_key=True)
-    batch_code = models.CharField(max_length=50, unique=True, db_index=True)  # e.g., LAY-2026-001
+    batch_code = models.CharField(max_length=50, unique=True, db_index=True)
+
+    house = models.ForeignKey(
+        'poultry.PoultryHouse',
+        on_delete=models.PROTECT,
+        related_name='batches'
+    )
+
     breed = models.CharField(max_length=100, blank=True)
     supplier_name = models.CharField(max_length=150, blank=True)
 
@@ -23,20 +28,20 @@ class PoultryBatch(models.Model):
     initial_quantity = models.PositiveIntegerField(validators=[MinValueValidator(1)])
 
     expected_lay_start = models.DateField(null=True, blank=True)
-    status = models.CharField(max_length=10, choices=Status.choices, default=Status.ACTIVE, db_index=True)
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.ACTIVE)
 
     notes = models.TextField(blank=True)
 
     created_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="batches_created"
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="batches_created"
     )
+
     created_at = models.DateTimeField(auto_now_add=True)
 
-    class Meta:
-        ordering = ["-date_stocked", "-batch_id"]
-
-    def __str__(self) -> str:
-        return self.batch_code
+    def __str__(self):
+        return f"{self.batch_code} ({self.house.house_code})"
 
 
 class DailyProduction(models.Model):
@@ -111,3 +116,24 @@ class MortalityRecord(models.Model):
 
     def __str__(self) -> str:
         return f"{self.batch.batch_code} mortality {self.record_date}: {self.number_dead}"
+
+class PoultryHouse(models.Model):
+    """
+    Represents a physical poultry house/unit.
+    """
+
+    house_id = models.BigAutoField(primary_key=True)
+    house_code = models.CharField(max_length=50, unique=True)  # e.g. HSE-01
+    name = models.CharField(max_length=100, blank=True)
+
+    capacity = models.PositiveIntegerField(
+        validators=[MinValueValidator(1)],
+        help_text="Maximum number of birds this house can hold"
+    )
+
+    is_active = models.BooleanField(default=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.house_code
