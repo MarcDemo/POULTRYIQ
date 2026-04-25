@@ -102,9 +102,9 @@ def add_batch(request):
         form = PoultryBatchForm(request.POST)
         if form.is_valid():
             batch = form.save(commit=False)
-            batch.created_by = request.user  # 👈 assign logged-in user
+            batch.created_by = request.user  #  assign logged-in user
             batch.save()
-            return redirect("batch_list")  # change to your URL name
+            return redirect("birds")  
     else:
         form = PoultryBatchForm()
 
