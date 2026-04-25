@@ -15,4 +15,5 @@ urlpatterns = [
     path('eggrec/', views.eggrec, name='eggrec'),
     path('feedrec/', views.feedrec, name='feedrec'),
     path('investor/', views.investor, name='investor'),
+    path('add_batch/', views.add_batch, name='add_batch'),
 ]

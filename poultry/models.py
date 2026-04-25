@@ -3,8 +3,14 @@ from decimal import Decimal
 from django.conf import settings
 from django.core.validators import MinValueValidator
 from django.db import models
+from django.shortcuts import render, redirect
+from django.utils.timezone import now
+from datetime import date,timedelta
+
 # Create your models here.
 
+
+from datetime import date  # 👈 make sure this is at the top
 
 class PoultryBatch(models.Model):
 
@@ -27,6 +33,8 @@ class PoultryBatch(models.Model):
     date_stocked = models.DateField(db_index=True)
     initial_quantity = models.PositiveIntegerField(validators=[MinValueValidator(1)])
 
+    initial_age_days = models.PositiveIntegerField()  # 👈 make sure this exists
+
     expected_lay_start = models.DateField(null=True, blank=True)
     status = models.CharField(max_length=10, choices=Status.choices, default=Status.ACTIVE)
 
@@ -42,6 +50,65 @@ class PoultryBatch(models.Model):
 
     def __str__(self):
         return f"{self.batch_code} ({self.house.house_code})"
+
+    # 👇👇 PUT IT HERE (inside the class)
+    @property
+    def current_age_days(self):
+        if not self.date_stocked:
+            return self.initial_age_days
+
+        days_passed = (date.today() - self.date_stocked).days
+
+        return self.initial_age_days + days_passed
+    
+    @property
+    def expected_lay_date(self):
+        """
+        Estimate when birds will start laying based on age.
+        Assumes laying starts at 20 weeks.
+        """
+
+        LAY_START_WEEK = 140
+
+        if not self.date_stocked:
+            return None
+
+        # current age
+        days_passed = (date.today() - self.date_stocked).days
+        current_age = self.initial_age_days + (days_passed )
+
+        weeks_to_lay = LAY_START_WEEK - current_age
+
+        if weeks_to_lay <= 0:
+            return "Already laying / expected soon"
+
+        return self.date_stocked + timedelta(days=weeks_to_lay)
+
+    def save(self, *args, **kwargs):
+        if not self.batch_code:
+            date_part = now().strftime("%Y%m%d")
+
+            # count existing batches today
+            count_today = PoultryBatch.objects.filter(
+                created_at__date=now().date()
+            ).count() + 1
+
+            self.batch_code = f"BT-{date_part}-{count_today:03d}"
+
+        super().save(*args, **kwargs)
+
+def add_batch(request):
+    if request.method == "POST":
+        form = PoultryBatchForm(request.POST)
+        if form.is_valid():
+            batch = form.save(commit=False)
+            batch.created_by = request.user  # 👈 assign logged-in user
+            batch.save()
+            return redirect("batch_list")  # change to your URL name
+    else:
+        form = PoultryBatchForm()
+
+    return render(request, "poultry/add_batch.html", {"form": form})
 
 
 class DailyProduction(models.Model):
@@ -136,4 +203,30 @@ class PoultryHouse(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return self.house_code
+        return self.name
+    
+
+
+class egg_collection(models.Model):
+    collection_id = models.BigAutoField(primary_key=True)
+    batch = models.ForeignKey(PoultryBatch, on_delete=models.PROTECT, related_name="egg_collections")
+    collection_date = models.DateField(db_index=True)
+
+    eggs_collected = models.PositiveIntegerField(validators=[MinValueValidator(0)])
+    eggs_rejected = models.PositiveIntegerField(default=0, validators=[MinValueValidator(0)])
+
+    notes = models.TextField(blank=True)
+
+    collected_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="egg_collections"
+    )
+    collected_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-collection_date", "-collection_id"]
+        indexes = [
+            models.Index(fields=["batch", "collection_date"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.batch.batch_code} egg collection {self.collection_date}: {self.eggs_collected}"

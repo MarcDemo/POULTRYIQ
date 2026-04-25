@@ -3,14 +3,45 @@
 
 <div class="container-fluid">
 
-    <div class="d-flex justify-content-between align-items-center mb-4">
+    <div class="page-header-row mb-4">
         <h2>
             <i class="bi bi-egg me-2"></i>Birds Inventory
         </h2>
-        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addBirdModal">
-            <i class="bi bi-plus-circle me-2"></i>Add Batch
-        </button>
+      <a href="{% url 'add_batch' %}" class="btn btn-primary">
+    <i class="bi bi-plus-circle me-2"></i>Add Batch
+</a>
     </div>
+    <form method="GET" class="row g-2 mb-3">
+
+    <div class="col-md-3">
+        <input type="text" name="search" value="{{ search_query }}" 
+               class="form-control" placeholder="Search batch code...">
+    </div>
+
+    <div class="col-md-3">
+        <select name="status" class="form-select">
+            <option value="">All Status</option>
+            <option value="ACTIVE" {% if selected_status == "ACTIVE" %}selected{% endif %}>Active</option>
+            <option value="CLOSED" {% if selected_status == "CLOSED" %}selected{% endif %}>Closed</option>
+        </select>
+    </div>
+
+    <div class="col-md-3">
+        <select name="house" class="form-select">
+            <option value="">All Houses</option>
+            {% for h in houses %}
+                <option value="{{ h.id }}" {% if selected_house == h.id|stringformat:"s" %}selected{% endif %}>
+                    {{ h.house_code }}
+                </option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <div class="col-md-3">
+        <button class="btn btn-dark w-100">Filter</button>
+    </div>
+
+</form>
 
     <div class="card">
         <div class="card-body">
@@ -19,32 +50,62 @@
                     <thead>
                         <tr>
                             <th>House</th>
-                            <th>Type</th>
-                            <th>Quantity</th>
-                            <th>Age (weeks)</th>
-                            <th>Status</th>
-                            <th>Actions</th>
+<th>Breed</th>
+<th>Birds Alive</th>
+<th>Age</th>
+<th>Health</th>
+<th>First lay on</th>
+<th>Total Eggs</th>
                         </tr>
                     </thead>
-                    <tbody>
-                        <tr>
-                            <td><span class="badge bg-info">House A</span></td>
-                            <td>
-                                <i class="bi bi-egg me-2"></i>Layers
-                            </td>
-                            <td><strong>1,800</strong></td>
-                            <td>24</td>
-                            <td><span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Healthy</span></td>
-                            <td>
-                                <button class="btn btn-sm btn-outline-warning" title="Edit">
-                                    <i class="bi bi-pencil"></i>
-                                </button>
-                                <button class="btn btn-sm btn-outline-danger" title="Delete">
-                                    <i class="bi bi-trash"></i>
-                                </button>
-                            </td>
-                        </tr>
-                    </tbody>
+  <tbody>
+{% for item in batch_data %}
+<tr>
+
+    <td>
+        <span class="badge bg-info">
+            {{ item.batch.house.name }}
+        </span>
+    </td>
+
+    <td>
+        {{ item.batch.breed|default:"-" }}
+    </td>
+
+    <td>
+        <strong>{{ item.current_birds }}</strong>
+    </td>
+
+    <td>
+        {{ item.batch.current_age_days }} days
+    </td>
+
+    <td>
+        {% if item.health_status == "excellent" %}
+            <span class="badge bg-success">Excellent</span>
+        {% elif item.health_status == "warning" %}
+            <span class="badge bg-warning text-dark">Warning</span>
+        {% else %}
+            <span class="badge bg-danger">Critical</span>
+        {% endif %}
+    </td>
+    <td>
+     {% if item.batch.expected_lay_date %}
+        <span class="badge bg-primary">
+            {{ item.batch.expected_lay_date }}
+        </span>
+    {% else %}
+        <span class="badge bg-secondary">N/A</span>
+    {% endif %}
+    </td>
+
+    <td>
+        {{ item.total_eggs }}
+    </td>
+
+</tr>
+{% endfor %}
+</tbody>
                 </table>
             </div>
         </div>

@@ -29,7 +29,7 @@ class PoultryHouseAdmin(admin.ModelAdmin):
 @admin.register(PoultryBatch)
 class PoultryBatchAdmin(admin.ModelAdmin):
     list_display = (
-        "batch_code",
+        
         "house",
         "breed",
         "date_stocked",
@@ -74,3 +74,5 @@ class PoultryBatchAdmin(admin.ModelAdmin):
         if not obj.created_by_id:
             obj.created_by = request.user
         super().save_model(request, obj, form, change)
+
+

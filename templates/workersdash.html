@@ -5,9 +5,13 @@
 
     <div class="card shadow-sm mb-4">
         <div class="card-body">
-            <h4>User: Shanitah</h4>  <!-- /* Replace with dynamic worker name */ -->
-             <p><strong>Assigned House:</strong> House A</p> <!-- /* Replace with dynamic house name */ -->
-            <p><strong>Total Birds:</strong> 300</p> <!-- /* Replace with dynamic bird count */ -->
+            <h4>User: {{ request.user.get_full_name|default:request.user.username }}</h4> 
+             <p><strong>Assigned House:</strong>   {% if house %}
+                                                        {{ house.name }}
+                                                    {% else %}
+                                                        Not Assigned
+                                                    {% endif %}</p>
+            <p><strong>Total Birds:</strong> {{ total_birds }}</p> 
         </div>
     </div>
 
