@@ -108,7 +108,7 @@ def add_batch(request):
     else:
         form = PoultryBatchForm()
 
-    return render(request, "poultry/add_batch.html", {"form": form})
+    return render(request, "addbatch.html", {"form": form})
 
 
 class DailyProduction(models.Model):
