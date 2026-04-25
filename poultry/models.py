@@ -51,7 +51,7 @@ class PoultryBatch(models.Model):
     def __str__(self):
         return f"{self.batch_code} ({self.house.house_code})"
 
-    # 👇👇 PUT IT HERE (inside the class)
+    
     @property
     def current_age_days(self):
         if not self.date_stocked:
