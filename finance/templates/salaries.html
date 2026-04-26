@@ -16,16 +16,33 @@
 <form method="POST">
 {% csrf_token %}
 
-<input class="form-control mb-2" name="employee" placeholder="Employee Name">
-
-<input type="month" class="form-control mb-2" name="month">
-
-<input class="form-control mb-2" name="amount" placeholder="Amount">
-
-<select class="form-control mb-2" name="status">
-<option>Paid</option>
-<option>Pending</option>
+<div class="mb-2">
+<label class="form-label">Employee</label>
+<select class="form-control" name="employee" required>
+<option value="">-- Select employee --</option>
+{% for emp in employees %}
+<option value="{{ emp.pk }}">{{ emp.get_full_name|default:emp.username }}</option>
+{% endfor %}
 </select>
+</div>
+
+<div class="mb-2">
+<label class="form-label">Month</label>
+<input type="month" class="form-control" name="month" required>
+</div>
+
+<div class="mb-2">
+<label class="form-label">Amount (UGX)</label>
+<input type="number" class="form-control" name="amount" placeholder="Amount" min="0" step="1000" required>
+</div>
+
+<div class="mb-2">
+<label class="form-label">Status</label>
+<select class="form-control" name="status">
+<option value="PAID">Paid</option>
+<option value="PENDING">Pending</option>
+</select>
+</div>
 
 <button class="btn btn-primary w-100">Save</button>
 
@@ -44,24 +61,30 @@
 <tr>
 <th>Employee</th>
 <th>Month</th>
-<th>Amount</th>
+<th>Amount (UGX)</th>
 <th>Status</th>
 </tr>
 </thead>
 
 <tbody>
-
+{% for record in salary_records %}
 <tr>
-<td>shanitah</td>
-<td>February 2026</td>
-<td>1,000,000</td>
+<td>{{ record.employee.get_full_name|default:record.employee.username }}</td>
+<td>{{ record.period_month }}</td>
+<td>{{ record.amount|floatformat:0 }}</td>
 <td>
-<span class="badge bg-success">
-paid
-</span>
+{% if record.status == "PAID" %}
+    <span class="badge bg-success">Paid</span>
+{% else %}
+    <span class="badge bg-warning text-dark">Pending</span>
+{% endif %}
 </td>
 </tr>
-
+{% empty %}
+<tr>
+    <td colspan="4" class="text-center text-muted">No salary records yet.</td>
+</tr>
+{% endfor %}
 </tbody>
 
 </table>

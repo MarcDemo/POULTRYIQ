@@ -65,6 +65,18 @@ class ExpenseTransaction(models.Model):
     supplier_name = models.CharField(max_length=150, blank=True)
     supplier_contact = models.CharField(max_length=80, blank=True)
 
+    PAYMENT_CASH = "Cash"
+    PAYMENT_MOBILE = "Mobile Money"
+    PAYMENT_BANK = "Bank"
+    PAYMENT_CHECK = "Check"
+    PAYMENT_METHOD_CHOICES = [
+        (PAYMENT_CASH, "Cash"),
+        (PAYMENT_MOBILE, "Mobile Money"),
+        (PAYMENT_BANK, "Bank"),
+        (PAYMENT_CHECK, "Check"),
+    ]
+    payment_method = models.CharField(max_length=30, choices=PAYMENT_METHOD_CHOICES, default=PAYMENT_CASH, blank=True)
+
     # Period (fast monthly reporting)
     period_year = models.PositiveSmallIntegerField(db_index=True)
     period_month = models.PositiveSmallIntegerField(db_index=True)  # 1..12
@@ -142,3 +154,46 @@ class ExpenseAllocation(models.Model):
 
     def __str__(self) -> str:
         return f"{self.expense_id} -> {self.batch_id or 'OVERHEAD'}: {self.amount_allocated}"
+
+
+class SalaryPayment(models.Model):
+    """
+    Records salary payments to employees.
+    """
+
+    class Status(models.TextChoices):
+        PAID = "PAID", "Paid"
+        PENDING = "PENDING", "Pending"
+
+    salary_id = models.BigAutoField(primary_key=True)
+
+    employee = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="salary_payments"
+    )
+    # Stored as "YYYY-MM" matching the HTML <input type="month"> value format
+    period_month = models.CharField(max_length=7, db_index=True)  # e.g. "2026-02"
+
+    amount = models.DecimalField(
+        max_digits=14, decimal_places=2,
+        validators=[MinValueValidator(Decimal("0.00"))]
+    )
+
+    status = models.CharField(
+        max_length=10, choices=Status.choices, default=Status.PENDING, db_index=True
+    )
+
+    recorded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        null=True, blank=True,
+        related_name="salaries_recorded"
+    )
+    recorded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-period_month", "employee__username"]
+
+    def __str__(self) -> str:
+        return f"{self.employee} - {self.period_month}: {self.amount}"

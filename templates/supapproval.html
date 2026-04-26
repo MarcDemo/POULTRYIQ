@@ -1,31 +1,331 @@
 {% extends "supbase.html" %}
 {% block content %}
 
-<h3>Pending Approvals</h3>
+<div class="d-flex align-items-center justify-content-between mb-4">
+    <div>
+        <h4 class="fw-bold mb-1"><i class="bi bi-clipboard-check me-2 text-primary"></i>Pending Approvals</h4>
+        <small class="text-muted">Review and approve worker submissions</small>
+    </div>
+    <a href="{% url 'supdash' %}" class="btn btn-light fw-semibold">
+        <i class="bi bi-arrow-left me-1"></i>Back to Dashboard
+    </a>
+</div>
 
-<table class="table table-striped mt-3">
-    <thead>
-        <tr>
-            <th>Type</th>
-            <th>House</th>
-            <th>Date</th>
-            <th>Action</th>
-        </tr>
-    </thead>
+<!-- Tab Nav -->
+<ul class="nav nav-tabs mb-0" id="approvalTabs">
+    <li class="nav-item">
+        <a class="nav-link {% if tab == 'eggs' %}active{% endif %}" href="{% url 'supapproval' %}?tab=eggs">
+            <i class="bi bi-egg me-1"></i>Eggs
+            {% if pending_eggs_count > 0 %}<span class="badge bg-warning text-dark ms-1">{{ pending_eggs_count }}</span>{% endif %}
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link {% if tab == 'feed' %}active{% endif %}" href="{% url 'supapproval' %}?tab=feed">
+            <i class="bi bi-bag-fill me-1"></i>Feed
+            {% if pending_feed_count > 0 %}<span class="badge bg-warning text-dark ms-1">{{ pending_feed_count }}</span>{% endif %}
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link {% if tab == 'cleaning' %}active{% endif %}" href="{% url 'supapproval' %}?tab=cleaning">
+            <i class="bi bi-broom me-1"></i>Cleaning
+            {% if pending_cleaning_count > 0 %}<span class="badge bg-warning text-dark ms-1">{{ pending_cleaning_count }}</span>{% endif %}
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link {% if tab == 'mortality' %}active{% endif %}" href="{% url 'supapproval' %}?tab=mortality">
+            <i class="bi bi-heartbreak me-1"></i>Mortality
+            {% if pending_mortality_count > 0 %}<span class="badge bg-danger ms-1">{{ pending_mortality_count }}</span>{% endif %}
+        </a>
+    </li>
+</ul>
 
-    <tbody>
-        
-        <tr>
-            <td>Eggs collected</td>
-            <td>House A</td>
-            <td>2024-01-15</td>
-            <td>
-                <a href="#" class="btn btn-success btn-sm">Approve</a>
-                <a href="#" class="btn btn-danger btn-sm">Reject</a>
-            </td>
-        </tr>
-        
-    </tbody>
-</table>
+<div class="card border-0 shadow-sm" style="border-radius: 0 0 12px 12px;">
+    <div class="card-body p-0">
 
+        <!-- EGG TAB -->
+        {% if tab == 'eggs' %}
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>Worker</th>
+                        <th>House / Batch</th>
+                        <th>Date</th>
+                        <th>Eggs</th>
+                        <th>Broken</th>
+                        <th>Notes</th>
+                        <th class="text-center">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for rec in pending_eggs %}
+                    <tr>
+                        <td>
+                            <div class="fw-semibold">{{ rec.collected_by.get_full_name|default:rec.collected_by.username }}</div>
+                            <small class="text-muted">{{ rec.collected_at|date:"d M Y H:i" }}</small>
+                        </td>
+                        <td>
+                            <div>{{ rec.batch.house.name|default:rec.batch.house.house_code }}</div>
+                            <small class="text-muted">{{ rec.batch.batch_code }}</small>
+                        </td>
+                        <td>{{ rec.collection_date }}</td>
+                        <td><span class="badge bg-success fs-6">{{ rec.eggs_collected }}</span></td>
+                        <td>{% if rec.eggs_rejected > 0 %}<span class="badge bg-secondary">{{ rec.eggs_rejected }}</span>{% else %}-{% endif %}</td>
+                        <td><small class="text-muted">{{ rec.notes|default:"-"|truncatechars:40 }}</small></td>
+                        <td>
+                            <div class="d-flex gap-2 justify-content-center">
+                                <button class="btn btn-success btn-sm fw-semibold" data-bs-toggle="modal" data-bs-target="#approveModal" 
+                                    data-action="approve" data-url="{% url 'sup_approve_eggs' rec.pk %}" data-label="egg collection on {{ rec.collection_date }}">
+                                    <i class="bi bi-check-lg"></i> Approve
+                                </button>
+                                <button class="btn btn-outline-danger btn-sm fw-semibold" data-bs-toggle="modal" data-bs-target="#approveModal"
+                                    data-action="reject" data-url="{% url 'sup_approve_eggs' rec.pk %}" data-label="egg collection on {{ rec.collection_date }}">
+                                    <i class="bi bi-x-lg"></i> Reject
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="7" class="text-center text-muted py-5">
+                        <i class="bi bi-check-circle-fill text-success fs-3 d-block mb-2"></i>
+                        No pending egg submissions — all caught up!
+                    </td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+
+        <!-- FEED TAB -->
+        {% if tab == 'feed' %}
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>Worker</th>
+                        <th>House / Batch</th>
+                        <th>Date</th>
+                        <th>Feed Type</th>
+                        <th>Qty (kg)</th>
+                        <th>Time Given</th>
+                        <th>Notes</th>
+                        <th class="text-center">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for rec in pending_feed %}
+                    <tr>
+                        <td>
+                            <div class="fw-semibold">{{ rec.recorded_by.get_full_name|default:rec.recorded_by.username }}</div>
+                            <small class="text-muted">{{ rec.created_at|date:"d M Y H:i" }}</small>
+                        </td>
+                        <td>
+                            <div>{{ rec.batch.house.name|default:rec.batch.house.house_code }}</div>
+                            <small class="text-muted">{{ rec.batch.batch_code }}</small>
+                        </td>
+                        <td>{{ rec.record_date }}</td>
+                        <td><span class="badge bg-warning text-dark">{{ rec.get_feed_type_display }}</span></td>
+                        <td><strong>{{ rec.quantity_kg }}</strong></td>
+                        <td>{{ rec.time_given|default:"-" }}</td>
+                        <td><small class="text-muted">{{ rec.notes|default:"-"|truncatechars:30 }}</small></td>
+                        <td>
+                            <div class="d-flex gap-2 justify-content-center">
+                                <button class="btn btn-success btn-sm fw-semibold" data-bs-toggle="modal" data-bs-target="#approveModal"
+                                    data-action="approve" data-url="{% url 'sup_approve_feed' rec.pk %}" data-label="feed record on {{ rec.record_date }}">
+                                    <i class="bi bi-check-lg"></i> Approve
+                                </button>
+                                <button class="btn btn-outline-danger btn-sm fw-semibold" data-bs-toggle="modal" data-bs-target="#approveModal"
+                                    data-action="reject" data-url="{% url 'sup_approve_feed' rec.pk %}" data-label="feed record on {{ rec.record_date }}">
+                                    <i class="bi bi-x-lg"></i> Reject
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="8" class="text-center text-muted py-5">
+                        <i class="bi bi-check-circle-fill text-success fs-3 d-block mb-2"></i>
+                        No pending feed submissions — all caught up!
+                    </td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+
+        <!-- CLEANING TAB -->
+        {% if tab == 'cleaning' %}
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>Worker</th>
+                        <th>House / Batch</th>
+                        <th>Date</th>
+                        <th>Tasks Completed</th>
+                        <th>Notes</th>
+                        <th class="text-center">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for rec in pending_cleaning %}
+                    <tr>
+                        <td>
+                            <div class="fw-semibold">{{ rec.recorded_by.get_full_name|default:rec.recorded_by.username }}</div>
+                            <small class="text-muted">{{ rec.created_at|date:"d M Y H:i" }}</small>
+                        </td>
+                        <td>
+                            <div>{{ rec.batch.house.name|default:rec.batch.house.house_code }}</div>
+                            <small class="text-muted">{{ rec.batch.batch_code }}</small>
+                        </td>
+                        <td>{{ rec.record_date }}</td>
+                        <td>
+                            {% if rec.house_cleaned %}<span class="badge bg-success me-1"><i class="bi bi-check me-1"></i>Cleaned</span>{% endif %}
+                            {% if rec.disinfection_done %}<span class="badge bg-info me-1"><i class="bi bi-shield-check me-1"></i>Disinfected</span>{% endif %}
+                            {% if rec.water_changed %}<span class="badge bg-primary"><i class="bi bi-droplet me-1"></i>Water Changed</span>{% endif %}
+                        </td>
+                        <td><small class="text-muted">{{ rec.notes|default:"-"|truncatechars:30 }}</small></td>
+                        <td>
+                            <div class="d-flex gap-2 justify-content-center">
+                                <button class="btn btn-success btn-sm fw-semibold" data-bs-toggle="modal" data-bs-target="#approveModal"
+                                    data-action="approve" data-url="{% url 'sup_approve_cleaning' rec.pk %}" data-label="cleaning record on {{ rec.record_date }}">
+                                    <i class="bi bi-check-lg"></i> Approve
+                                </button>
+                                <button class="btn btn-outline-danger btn-sm fw-semibold" data-bs-toggle="modal" data-bs-target="#approveModal"
+                                    data-action="reject" data-url="{% url 'sup_approve_cleaning' rec.pk %}" data-label="cleaning record on {{ rec.record_date }}">
+                                    <i class="bi bi-x-lg"></i> Reject
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="6" class="text-center text-muted py-5">
+                        <i class="bi bi-check-circle-fill text-success fs-3 d-block mb-2"></i>
+                        No pending cleaning submissions — all caught up!
+                    </td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+
+        <!-- MORTALITY TAB -->
+        {% if tab == 'mortality' %}
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>Worker</th>
+                        <th>House / Batch</th>
+                        <th>Date</th>
+                        <th>Deaths</th>
+                        <th>Cause</th>
+                        <th>Notes</th>
+                        <th class="text-center">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for rec in pending_mortality %}
+                    <tr>
+                        <td>
+                            <div class="fw-semibold">{{ rec.reported_by.get_full_name|default:rec.reported_by.username }}</div>
+                            <small class="text-muted">{{ rec.reported_at|date:"d M Y H:i" }}</small>
+                        </td>
+                        <td>
+                            <div>{{ rec.batch.house.name|default:rec.batch.house.house_code }}</div>
+                            <small class="text-muted">{{ rec.batch.batch_code }}</small>
+                        </td>
+                        <td>{{ rec.record_date }}</td>
+                        <td><span class="badge bg-danger fs-6">{{ rec.number_dead }}</span></td>
+                        <td>{{ rec.cause.name|default:"Unknown" }}</td>
+                        <td><small class="text-muted">{{ rec.notes|default:"-"|truncatechars:30 }}</small></td>
+                        <td>
+                            <div class="d-flex gap-2 justify-content-center">
+                                <button class="btn btn-success btn-sm fw-semibold" data-bs-toggle="modal" data-bs-target="#approveModal"
+                                    data-action="approve" data-url="{% url 'sup_approve_mortality' rec.pk %}" data-label="mortality report on {{ rec.record_date }}">
+                                    <i class="bi bi-check-lg"></i> Approve
+                                </button>
+                                <button class="btn btn-outline-danger btn-sm fw-semibold" data-bs-toggle="modal" data-bs-target="#approveModal"
+                                    data-action="reject" data-url="{% url 'sup_approve_mortality' rec.pk %}" data-label="mortality report on {{ rec.record_date }}">
+                                    <i class="bi bi-x-lg"></i> Reject
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="7" class="text-center text-muted py-5">
+                        <i class="bi bi-check-circle-fill text-success fs-3 d-block mb-2"></i>
+                        No pending mortality reports — all caught up!
+                    </td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+
+    </div>
+</div>
+
+<!-- Approve / Reject Modal -->
+<div class="modal fade" id="approveModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <form method="POST" id="approvalForm">
+                {% csrf_token %}
+                <input type="hidden" name="action" id="modalAction">
+                <div class="modal-header" id="modalHeader">
+                    <h5 class="modal-title" id="modalTitle">Confirm Action</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p id="modalBody" class="mb-3"></p>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Review Notes <span class="text-muted fw-normal">(optional)</span></label>
+                        <textarea name="review_notes" class="form-control" rows="3" placeholder="Add a note for the worker..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer border-0">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn fw-semibold" id="modalSubmitBtn">Confirm</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const modal = document.getElementById('approveModal');
+    modal.addEventListener('show.bs.modal', function (event) {
+        const btn = event.relatedTarget;
+        const action = btn.getAttribute('data-action');
+        const url = btn.getAttribute('data-url');
+        const label = btn.getAttribute('data-label');
+
+        document.getElementById('approvalForm').action = url;
+        document.getElementById('modalAction').value = action;
+
+        const header = document.getElementById('modalHeader');
+        const title = document.getElementById('modalTitle');
+        const body = document.getElementById('modalBody');
+        const submitBtn = document.getElementById('modalSubmitBtn');
+
+        if (action === 'approve') {
+            header.className = 'modal-header bg-success text-white';
+            title.textContent = 'Approve Submission';
+            body.innerHTML = '<i class="bi bi-check-circle-fill text-success me-2"></i>You are about to <strong>approve</strong>: ' + label;
+            submitBtn.className = 'btn btn-success fw-semibold';
+            submitBtn.textContent = 'Yes, Approve';
+        } else {
+            header.className = 'modal-header bg-danger text-white';
+            title.textContent = 'Reject Submission';
+            body.innerHTML = '<i class="bi bi-x-circle-fill text-danger me-2"></i>You are about to <strong>reject</strong>: ' + label + '. The worker will see this status.';
+            submitBtn.className = 'btn btn-danger fw-semibold';
+            submitBtn.textContent = 'Yes, Reject';
+        }
+    });
+});
+</script>
+
+{% endblock extra_js %}
 {% endblock %}

@@ -3,8 +3,8 @@
 
 <div class="container mt-4">
 
-    <div class="row justify-content-center">
-        <div class="col-md-6">
+    <div class="row g-4">
+        <div class="col-lg-6">
             <div class="card shadow">
                 <div class="card-header" style="background: linear-gradient(135deg, #ff9800 0%, #fb8c00 100%);">
                     <i class="bi bi-bag-fill me-2"></i>Record Feed
@@ -16,14 +16,32 @@
                         {% csrf_token %}
 
                         <div class="mb-3">
+                            <label for="batch" class="form-label">
+                                <i class="bi bi-house-door me-1"></i>Batch
+                            </label>
+                            <select id="batch" name="batch" class="form-select" required>
+                                <option value="">-- Select batch --</option>
+                                {% for batch in batches %}
+                                <option value="{{ batch.pk }}">{{ batch.house.name|default:batch.house.house_code }} - {{ batch.batch_code }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="record_date" class="form-label">
+                                <i class="bi bi-calendar me-1"></i>Date
+                            </label>
+                            <input type="date" id="record_date" name="record_date" class="form-control" value="{{ today|date:'Y-m-d' }}" required>
+                        </div>
+
+                        <div class="mb-3">
                             <label for="feed_type" class="form-label">
                                 <i class="bi bi-bag me-1"></i>Feed Type
                             </label>
                             <select id="feed_type" name="feed_type" class="form-select">
-                                <option>Starter</option>
-                                <option>Grower</option>
-                                <option>Layer Mash</option>
-                                <option>Other</option>
+                                {% for code, label in feed_types %}
+                                <option value="{{ code }}">{{ label }}</option>
+                                {% endfor %}
                             </select>
                         </div>
 
@@ -42,6 +60,13 @@
                             <small class="form-text text-muted">Leave empty for current time</small>
                         </div>
 
+                        <div class="mb-3">
+                            <label for="notes" class="form-label">
+                                <i class="bi bi-chat-left-text me-1"></i>Notes
+                            </label>
+                            <textarea id="notes" name="notes" class="form-control" rows="3" placeholder="Optional notes..."></textarea>
+                        </div>
+
                         <div class="d-grid gap-2 mt-4">
                             <button type="submit" class="btn btn-warning">
                                 <i class="bi bi-check-circle me-2"></i>Save Feed Record
@@ -52,10 +77,49 @@
         </div>
             </div>
         </div>
-    </div>
 
-</div>
-
+        <div class="col-lg-6">
+            <div class="card shadow">
+                <div class="card-header" style="background: linear-gradient(135deg, #ff9800 0%, #fb8c00 100%);">
+                    <i class="bi bi-clock-history me-2"></i>Recent Feed Records
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>House</th>
+                                    <th>Feed Type</th>
+                                    <th>Qty (kg)</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for rec in recent_feed_records %}
+                                <tr>
+                                    <td>{{ rec.record_date }}</td>
+                                    <td>{{ rec.batch.house.name|default:rec.batch.house.house_code }}</td>
+                                    <td>{{ rec.get_feed_type_display }}</td>
+                                    <td>{{ rec.quantity_kg }}</td>
+                                    <td>
+                                        {% if rec.status == 'APPROVED' %}
+                                            <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Approved</span>
+                                        {% elif rec.status == 'REJECTED' %}
+                                            <span class="badge bg-danger"><i class="bi bi-x-circle me-1"></i>Rejected</span>
+                                        {% else %}
+                                            <span class="badge bg-warning text-dark"><i class="bi bi-hourglass-split me-1"></i>Pending</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr><td colspan="5" class="text-center text-muted">No records yet.</td></tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 

@@ -1,11 +1,23 @@
-from django.shortcuts import render
-from .models import PoultryBatch, DailyProduction,PoultryHouse,egg_collection
-from .forms import PoultryBatchForm
-from django.shortcuts import render, redirect
+from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.db.models import Sum
 from django.utils.timezone import now
 from datetime import date
+from datetime import datetime
+from decimal import Decimal, InvalidOperation
+
+from accounts.decorators import worker_required, supervisor_required
+from .models import (
+    PoultryBatch,
+    DailyProduction,
+    PoultryHouse,
+    egg_collection,
+    FeedRecord,
+    CleaningRecord,
+    MortalityRecord,
+    ApprovalStatus,
+)
+from .forms import PoultryBatchForm
 
 # Create your views here.
 def dashboard(request):
@@ -76,47 +88,448 @@ def birds(request):
     }
     return render(request, 'birds.html', context)
 
+def _get_worker_active_batches(user):
+    return PoultryBatch.objects.filter(
+        house__in=user.houses.all(),
+        status=PoultryBatch.Status.ACTIVE,
+    ).select_related("house").order_by("house__house_code", "batch_code")
+
+
+@worker_required
 def record_feed(request):
-    return render(request, 'record_feed.html')
+    batches = _get_worker_active_batches(request.user)
 
+    if request.method == "POST":
+        batch_id = request.POST.get("batch", "").strip()
+        record_date_raw = request.POST.get("record_date", "").strip()
+        feed_type = request.POST.get("feed_type", FeedRecord.FeedType.OTHER).strip()
+        quantity_raw = request.POST.get("quantity", "").strip()
+        time_given_raw = request.POST.get("time_given", "").strip()
+        notes = request.POST.get("notes", "").strip()
+
+        errors = []
+        selected_batch = batches.filter(pk=batch_id).first() if batch_id else None
+
+        if not selected_batch:
+            errors.append("Please select a valid batch from your assigned houses.")
+
+        try:
+            record_date = date.fromisoformat(record_date_raw)
+        except ValueError:
+            record_date = None
+            errors.append("Please provide a valid date.")
+
+        try:
+            quantity_kg = Decimal(quantity_raw)
+            if quantity_kg <= 0:
+                errors.append("Quantity must be greater than zero.")
+        except (InvalidOperation, ValueError):
+            quantity_kg = None
+            errors.append("Please provide a valid quantity.")
+
+        if feed_type not in dict(FeedRecord.FeedType.choices):
+            errors.append("Please select a valid feed type.")
+
+        parsed_time = None
+        if time_given_raw:
+            try:
+                parsed_time = datetime.strptime(time_given_raw, "%H:%M").time()
+            except ValueError:
+                errors.append("Please provide a valid time.")
+
+        if errors:
+            for error in errors:
+                messages.error(request, error)
+        else:
+            FeedRecord.objects.create(
+                batch=selected_batch,
+                record_date=record_date,
+                feed_type=feed_type,
+                quantity_kg=quantity_kg,
+                time_given=parsed_time,
+                notes=notes,
+                recorded_by=request.user,
+            )
+            messages.success(request, "Feed record saved successfully.")
+            return redirect("record_feed")
+
+    recent_feed_records = FeedRecord.objects.filter(
+        recorded_by=request.user,
+        batch__in=batches,
+    ).select_related("batch__house")[:10]
+
+    return render(
+        request,
+        "record_feed.html",
+        {
+            "batches": batches,
+            "today": date.today(),
+            "recent_feed_records": recent_feed_records,
+            "feed_types": FeedRecord.FeedType.choices,
+        },
+    )
+
+@worker_required
 def record_egg(request):
-    return render(request, 'record_egg.html')
+    batches = _get_worker_active_batches(request.user)
 
+    if request.method == "POST":
+        batch_id = request.POST.get("batch", "").strip()
+        collection_date_raw = request.POST.get("collection_date", "").strip()
+        total_eggs_raw = request.POST.get("total_eggs", "").strip()
+        broken_eggs_raw = request.POST.get("broken_eggs", "0").strip()
+        notes = request.POST.get("notes", "").strip()
+
+        errors = []
+        selected_batch = batches.filter(pk=batch_id).first() if batch_id else None
+
+        if not selected_batch:
+            errors.append("Please select a valid batch from your assigned houses.")
+
+        try:
+            collection_date = date.fromisoformat(collection_date_raw)
+        except ValueError:
+            collection_date = None
+            errors.append("Please provide a valid collection date.")
+
+        try:
+            eggs_collected = int(total_eggs_raw)
+            if eggs_collected < 0:
+                errors.append("Total eggs cannot be negative.")
+        except ValueError:
+            eggs_collected = None
+            errors.append("Please provide a valid total eggs value.")
+
+        try:
+            eggs_rejected = int(broken_eggs_raw or "0")
+            if eggs_rejected < 0:
+                errors.append("Broken eggs cannot be negative.")
+        except ValueError:
+            eggs_rejected = None
+            errors.append("Please provide a valid broken eggs value.")
+
+        if (
+            eggs_collected is not None
+            and eggs_rejected is not None
+            and eggs_rejected > eggs_collected
+        ):
+            errors.append("Broken eggs cannot be more than total eggs.")
+
+        if errors:
+            for error in errors:
+                messages.error(request, error)
+        else:
+            egg_collection.objects.create(
+                batch=selected_batch,
+                collection_date=collection_date,
+                eggs_collected=eggs_collected,
+                eggs_rejected=eggs_rejected,
+                notes=notes,
+                collected_by=request.user,
+            )
+            messages.success(request, "Egg collection record saved successfully.")
+            return redirect("record_egg")
+
+    recent_egg_records = egg_collection.objects.filter(
+        collected_by=request.user,
+        batch__in=batches,
+    ).select_related("batch__house")[:10]
+
+    return render(
+        request,
+        "record_egg.html",
+        {
+            "batches": batches,
+            "today": date.today(),
+            "recent_egg_records": recent_egg_records,
+        },
+    )
+
+@worker_required
 def record_cleaning(request):
-    return render(request, 'record_cleaning.html')
+    batches = _get_worker_active_batches(request.user)
 
+    if request.method == "POST":
+        batch_id = request.POST.get("batch", "").strip()
+        record_date_raw = request.POST.get("record_date", "").strip()
+        house_cleaned = bool(request.POST.get("cleaned"))
+        disinfection_done = bool(request.POST.get("disinfected"))
+        water_changed = bool(request.POST.get("water_changed"))
+        notes = request.POST.get("notes", "").strip()
+
+        errors = []
+        selected_batch = batches.filter(pk=batch_id).first() if batch_id else None
+
+        if not selected_batch:
+            errors.append("Please select a valid batch from your assigned houses.")
+
+        try:
+            record_date = date.fromisoformat(record_date_raw)
+        except ValueError:
+            record_date = None
+            errors.append("Please provide a valid date.")
+
+        if not any([house_cleaned, disinfection_done, water_changed]):
+            errors.append("Please tick at least one cleaning task.")
+
+        if errors:
+            for error in errors:
+                messages.error(request, error)
+        else:
+            CleaningRecord.objects.create(
+                batch=selected_batch,
+                record_date=record_date,
+                house_cleaned=house_cleaned,
+                disinfection_done=disinfection_done,
+                water_changed=water_changed,
+                notes=notes,
+                recorded_by=request.user,
+            )
+            messages.success(request, "Cleaning routine record saved successfully.")
+            return redirect("record_cleaning")
+
+    recent_cleaning_records = CleaningRecord.objects.filter(
+        recorded_by=request.user,
+        batch__in=batches,
+    ).select_related("batch__house")[:10]
+
+    return render(
+        request,
+        "record_cleaning.html",
+        {
+            "batches": batches,
+            "today": date.today(),
+            "recent_cleaning_records": recent_cleaning_records,
+        },
+    )
+
+@worker_required
 def workersdash(request):
     user = request.user
-    house = getattr(user, "house", None)  # ✅ correct
+    today = date.today()
+    assigned_houses = user.houses.all().order_by("house_code", "name")
+    house = assigned_houses.first()
+
+    active_batches = PoultryBatch.objects.filter(
+        house__in=assigned_houses,
+        status="ACTIVE"
+    ).select_related("house").prefetch_related("mortality_records")
 
     total_birds = 0
+    today_deaths = 0
+    house_stats = []
 
-    if house:
-        batches = PoultryBatch.objects.filter(
-            house=house,
-            status="ACTIVE"
-        ).prefetch_related("mortality_records")
+    for batch in active_batches:
+        total_mortality = batch.mortality_records.aggregate(
+            total=Sum("number_dead")
+        )["total"] or 0
 
-        for batch in batches:
-            mortality = batch.mortality_records.aggregate(
-                total=Sum("number_dead")
-            )["total"] or 0
+        batch_today_deaths = batch.mortality_records.filter(
+            record_date=today
+        ).aggregate(total=Sum("number_dead"))["total"] or 0
 
-            total_birds += (batch.initial_quantity - mortality)
+        current_birds = max(batch.initial_quantity - total_mortality, 0)
+        total_birds += current_birds
+        today_deaths += batch_today_deaths
+
+        house_stats.append({
+            "house": batch.house,
+            "current_birds": current_birds,
+            "today_deaths": batch_today_deaths,
+            "age_days": batch.current_age_days,
+        })
+
+    today_eggs = egg_collection.objects.filter(
+        batch__house__in=assigned_houses,
+        collection_date=today
+    ).aggregate(total=Sum("eggs_collected"))["total"] or 0
+
+    recent_activity = egg_collection.objects.filter(
+        collected_by=user
+    ).select_related("batch__house").order_by("-collected_at")[:5]
 
     context = {
-        "house": house,   # ✅ pass correct variable
-        "total_birds": total_birds
+        "house": house,
+        "assigned_houses": assigned_houses,
+        "total_birds": total_birds,
+        "today_deaths": today_deaths,
+        "today_eggs": today_eggs,
+        "house_stats": house_stats,
+        "recent_activity": recent_activity,
+        "today": today,
     }
-
     return render(request, "workersdash.html", context)
    
 
+@supervisor_required
 def supdash(request):
-    return render(request, 'supdash.html')
+    today = date.today()
 
+    # Pending counts
+    pending_eggs = egg_collection.objects.filter(status=ApprovalStatus.PENDING).count()
+    pending_feed = FeedRecord.objects.filter(status=ApprovalStatus.PENDING).count()
+    pending_cleaning = CleaningRecord.objects.filter(status=ApprovalStatus.PENDING).count()
+    pending_mortality = MortalityRecord.objects.filter(status=ApprovalStatus.PENDING).count()
+    total_pending = pending_eggs + pending_feed + pending_cleaning + pending_mortality
+
+    # Today's summary (approved records only)
+    today_eggs = egg_collection.objects.filter(
+        collection_date=today, status=ApprovalStatus.APPROVED
+    ).aggregate(total=Sum("eggs_collected"))["total"] or 0
+
+    today_deaths = MortalityRecord.objects.filter(
+        record_date=today, status=ApprovalStatus.APPROVED
+    ).aggregate(total=Sum("number_dead"))["total"] or 0
+
+    today_feed_kg = FeedRecord.objects.filter(
+        record_date=today, status=ApprovalStatus.APPROVED
+    ).aggregate(total=Sum("quantity_kg"))["total"] or 0
+
+    houses_cleaned_today = CleaningRecord.objects.filter(
+        record_date=today, status=ApprovalStatus.APPROVED, house_cleaned=True
+    ).count()
+
+    # Recent pending items for quick view
+    recent_pending_eggs = egg_collection.objects.filter(
+        status=ApprovalStatus.PENDING
+    ).select_related("batch__house", "collected_by").order_by("-collected_at")[:5]
+
+    recent_pending_mortality = MortalityRecord.objects.filter(
+        status=ApprovalStatus.PENDING
+    ).select_related("batch__house", "reported_by", "cause").order_by("-reported_at")[:5]
+
+    # Active batches / houses overview
+    active_batches = PoultryBatch.objects.filter(status=PoultryBatch.Status.ACTIVE).select_related("house")
+    total_birds = 0
+    for batch in active_batches:
+        mort = batch.mortality_records.filter(status=ApprovalStatus.APPROVED).aggregate(
+            total=Sum("number_dead"))["total"] or 0
+        total_birds += max(batch.initial_quantity - mort, 0)
+
+    context = {
+        "today": today,
+        "pending_eggs": pending_eggs,
+        "pending_feed": pending_feed,
+        "pending_cleaning": pending_cleaning,
+        "pending_mortality": pending_mortality,
+        "total_pending": total_pending,
+        "today_eggs": today_eggs,
+        "today_deaths": today_deaths,
+        "today_feed_kg": today_feed_kg,
+        "houses_cleaned_today": houses_cleaned_today,
+        "recent_pending_eggs": recent_pending_eggs,
+        "recent_pending_mortality": recent_pending_mortality,
+        "total_birds": total_birds,
+        "active_batches_count": active_batches.count(),
+    }
+    return render(request, 'supdash.html', context)
+
+
+@supervisor_required
+def sup_approve_eggs(request, pk):
+    record = get_object_or_404(egg_collection, pk=pk)
+    action = request.POST.get("action")
+    review_notes = request.POST.get("review_notes", "").strip()
+    if action == "approve":
+        record.status = ApprovalStatus.APPROVED
+        messages.success(request, f"Egg collection record approved.")
+    elif action == "reject":
+        record.status = ApprovalStatus.REJECTED
+        messages.warning(request, f"Egg collection record rejected.")
+    record.reviewed_by = request.user
+    record.reviewed_at = now()
+    record.review_notes = review_notes
+    record.save(update_fields=["status", "reviewed_by", "reviewed_at", "review_notes"])
+    return redirect("supapproval")
+
+
+@supervisor_required
+def sup_approve_feed(request, pk):
+    record = get_object_or_404(FeedRecord, pk=pk)
+    action = request.POST.get("action")
+    review_notes = request.POST.get("review_notes", "").strip()
+    if action == "approve":
+        record.status = ApprovalStatus.APPROVED
+        messages.success(request, f"Feed record approved.")
+    elif action == "reject":
+        record.status = ApprovalStatus.REJECTED
+        messages.warning(request, f"Feed record rejected.")
+    record.reviewed_by = request.user
+    record.reviewed_at = now()
+    record.review_notes = review_notes
+    record.save(update_fields=["status", "reviewed_by", "reviewed_at", "review_notes"])
+    return redirect("supapproval")
+
+
+@supervisor_required
+def sup_approve_cleaning(request, pk):
+    record = get_object_or_404(CleaningRecord, pk=pk)
+    action = request.POST.get("action")
+    review_notes = request.POST.get("review_notes", "").strip()
+    if action == "approve":
+        record.status = ApprovalStatus.APPROVED
+        messages.success(request, f"Cleaning record approved.")
+    elif action == "reject":
+        record.status = ApprovalStatus.REJECTED
+        messages.warning(request, f"Cleaning record rejected.")
+    record.reviewed_by = request.user
+    record.reviewed_at = now()
+    record.review_notes = review_notes
+    record.save(update_fields=["status", "reviewed_by", "reviewed_at", "review_notes"])
+    return redirect("supapproval")
+
+
+@supervisor_required
+def sup_approve_mortality(request, pk):
+    record = get_object_or_404(MortalityRecord, pk=pk)
+    action = request.POST.get("action")
+    review_notes = request.POST.get("review_notes", "").strip()
+    if action == "approve":
+        record.status = ApprovalStatus.APPROVED
+        messages.success(request, f"Mortality record approved.")
+    elif action == "reject":
+        record.status = ApprovalStatus.REJECTED
+        messages.warning(request, f"Mortality record rejected.")
+    record.reviewed_by = request.user
+    record.reviewed_at = now()
+    record.review_notes = review_notes
+    record.save(update_fields=["status", "reviewed_by", "reviewed_at", "review_notes"])
+    return redirect("supapproval")
+
+
+@supervisor_required
 def supapproval(request):
-    return render(request, 'supapproval.html')
+    tab = request.GET.get("tab", "eggs")
+
+    pending_eggs = egg_collection.objects.filter(
+        status=ApprovalStatus.PENDING
+    ).select_related("batch__house", "collected_by").order_by("-collected_at")
+
+    pending_feed = FeedRecord.objects.filter(
+        status=ApprovalStatus.PENDING
+    ).select_related("batch__house", "recorded_by").order_by("-created_at")
+
+    pending_cleaning = CleaningRecord.objects.filter(
+        status=ApprovalStatus.PENDING
+    ).select_related("batch__house", "recorded_by").order_by("-created_at")
+
+    pending_mortality = MortalityRecord.objects.filter(
+        status=ApprovalStatus.PENDING
+    ).select_related("batch__house", "reported_by", "cause").order_by("-reported_at")
+
+    context = {
+        "tab": tab,
+        "pending_eggs": pending_eggs,
+        "pending_feed": pending_feed,
+        "pending_cleaning": pending_cleaning,
+        "pending_mortality": pending_mortality,
+        "pending_eggs_count": pending_eggs.count(),
+        "pending_feed_count": pending_feed.count(),
+        "pending_cleaning_count": pending_cleaning.count(),
+        "pending_mortality_count": pending_mortality.count(),
+    }
+    return render(request, 'supapproval.html', context)
+
 
 def login(request):
     return render(request, 'login.html')

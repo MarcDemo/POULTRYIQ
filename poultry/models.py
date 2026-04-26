@@ -145,6 +145,12 @@ class DailyProduction(models.Model):
         return f"{self.batch.batch_code} - {self.record_date}"
 
 
+class ApprovalStatus(models.TextChoices):
+    PENDING = "PENDING", "Pending"
+    APPROVED = "APPROVED", "Approved"
+    REJECTED = "REJECTED", "Rejected"
+
+
 class MortalityCause(models.Model):
     """
     Controlled list of mortality causes, with ability to expand.
@@ -169,6 +175,21 @@ class MortalityRecord(models.Model):
     cause = models.ForeignKey(MortalityCause, on_delete=models.PROTECT, null=True, blank=True)
 
     notes = models.TextField(blank=True)
+
+    status = models.CharField(
+        max_length=10,
+        choices=ApprovalStatus.choices,
+        default=ApprovalStatus.PENDING,
+        db_index=True,
+    )
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name="mortality_reviews"
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    review_notes = models.TextField(blank=True)
 
     reported_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="mortality_reported"
@@ -217,6 +238,21 @@ class egg_collection(models.Model):
 
     notes = models.TextField(blank=True)
 
+    status = models.CharField(
+        max_length=10,
+        choices=ApprovalStatus.choices,
+        default=ApprovalStatus.PENDING,
+        db_index=True,
+    )
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name="egg_reviews"
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    review_notes = models.TextField(blank=True)
+
     collected_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="egg_collections"
     )
@@ -230,3 +266,93 @@ class egg_collection(models.Model):
 
     def __str__(self) -> str:
         return f"{self.batch.batch_code} egg collection {self.collection_date}: {self.eggs_collected}"
+
+
+class FeedRecord(models.Model):
+    class FeedType(models.TextChoices):
+        STARTER = "STARTER", "Starter"
+        GROWER = "GROWER", "Grower"
+        LAYER_MASH = "LAYER_MASH", "Layer Mash"
+        OTHER = "OTHER", "Other"
+
+    feed_id = models.BigAutoField(primary_key=True)
+    batch = models.ForeignKey(PoultryBatch, on_delete=models.PROTECT, related_name="feed_records")
+    record_date = models.DateField(db_index=True)
+    feed_type = models.CharField(max_length=20, choices=FeedType.choices, default=FeedType.OTHER)
+    quantity_kg = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal("0.00"))],
+    )
+    time_given = models.TimeField(null=True, blank=True)
+    notes = models.TextField(blank=True)
+
+    status = models.CharField(
+        max_length=10,
+        choices=ApprovalStatus.choices,
+        default=ApprovalStatus.PENDING,
+        db_index=True,
+    )
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name="feed_reviews"
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    review_notes = models.TextField(blank=True)
+
+    recorded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="feed_records_created"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-record_date", "-feed_id"]
+        indexes = [
+            models.Index(fields=["batch", "record_date"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.batch.batch_code} feed {self.record_date}: {self.quantity_kg}kg"
+
+
+class CleaningRecord(models.Model):
+    cleaning_id = models.BigAutoField(primary_key=True)
+    batch = models.ForeignKey(PoultryBatch, on_delete=models.PROTECT, related_name="cleaning_records")
+    record_date = models.DateField(db_index=True)
+
+    house_cleaned = models.BooleanField(default=False)
+    disinfection_done = models.BooleanField(default=False)
+    water_changed = models.BooleanField(default=False)
+
+    notes = models.TextField(blank=True)
+
+    status = models.CharField(
+        max_length=10,
+        choices=ApprovalStatus.choices,
+        default=ApprovalStatus.PENDING,
+        db_index=True,
+    )
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name="cleaning_reviews"
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    review_notes = models.TextField(blank=True)
+
+    recorded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="cleaning_records_created"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-record_date", "-cleaning_id"]
+        indexes = [
+            models.Index(fields=["batch", "record_date"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.batch.batch_code} cleaning {self.record_date}"

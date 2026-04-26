@@ -1,42 +1,349 @@
 {% extends "wbase.html" %}
+
+{% block extra_css %}
+<style>
+/* ── Action Buttons: uniform height ── */
+.action-btn {
+    min-height: 90px;
+    border-radius: 14px;
+    position: relative;
+    overflow: hidden;
+    border: none !important;
+    text-decoration: none;
+    transition: transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1),
+                box-shadow 0.25s ease;
+}
+.action-btn:hover {
+    transform: translateY(-6px) scale(1.03);
+    text-decoration: none;
+}
+.action-btn:active {
+    transform: translateY(-2px) scale(0.98) !important;
+    transition: transform 0.08s ease !important;
+}
+
+/* ── Particle base ── */
+.particle {
+    position: absolute;
+    pointer-events: none;
+    z-index: 10;
+}
+
+/* ── Egg particles ── */
+.egg-particle {
+    width: 14px;
+    height: 18px;
+    background: radial-gradient(circle at 40% 30%, #fffde7, #fbbf24);
+    border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+    box-shadow: inset -2px -2px 4px rgba(0,0,0,0.12);
+    top: -20px;
+    animation: eggFall linear forwards;
+}
+@keyframes eggFall {
+    0%   { top: -20px; opacity: 1; transform: rotate(var(--rot-s,-10deg)); }
+    55%  { opacity: 1; }
+    100% { top: 115%; opacity: 0; transform: rotate(var(--rot-e, 20deg)) scale(0.55); }
+}
+
+/* ── Grain particles ── */
+.grain-particle {
+    width: 7px;
+    height: 7px;
+    background: radial-gradient(circle at 35% 35%, #d97706, #78350f);
+    border-radius: 50%;
+    bottom: 4px;
+    animation: grainRise ease-out forwards;
+}
+@keyframes grainRise {
+    0%   { bottom: 4px; opacity: 1; transform: translateX(0) scale(1); }
+    100% { bottom: 85px; opacity: 0; transform: translateX(var(--xd,0px)) scale(0.35); }
+}
+
+/* ── Feed shimmer sweep ── */
+.btn-feed::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(110deg, transparent 30%, rgba(255,255,255,0.32) 50%, transparent 70%);
+    transform: translateX(-110%);
+}
+.btn-feed:hover::after {
+    transform: translateX(110%);
+    transition: transform 0.55s ease;
+}
+
+/* ── Sparkle particles ── */
+.sparkle-particle {
+    width: 10px;
+    height: 10px;
+    background: rgba(255,255,255,0.95);
+    clip-path: polygon(50% 0%,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%);
+    top: 50%;
+    left: 50%;
+    animation: sparkleBurst ease-out forwards;
+}
+@keyframes sparkleBurst {
+    0%   { transform: translate(-50%,-50%) rotate(var(--ang)) translateX(0)   scale(1.4); opacity: 1; }
+    100% { transform: translate(-50%,-50%) rotate(var(--ang)) translateX(50px) scale(0.2); opacity: 0; }
+}
+
+/* ── Mortality heartbeat glow ── */
+.btn-mortality:hover {
+    animation: heartbeat 0.75s ease-in-out infinite;
+}
+@keyframes heartbeat {
+    0%   { box-shadow: 0 0 0  0   rgba(220,53,69,0.65), 0 8px 24px rgba(0,0,0,0.18); }
+    50%  { box-shadow: 0 0 0 16px rgba(220,53,69,0),    0 8px 24px rgba(0,0,0,0.18); }
+    100% { box-shadow: 0 0 0  0   rgba(220,53,69,0),    0 8px 24px rgba(0,0,0,0.18); }
+}
+</style>
+{% endblock %}
+
 {% block content %}
 
-<div class="container mt-4">
+<div class="container-fluid">
 
+    <!-- ── Greeting Header ── -->
+    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+        <div>
+            <h3 class="mb-0 fw-bold">
+                <i class="bi bi-person-circle me-2 text-primary"></i>
+                {{ request.user.get_full_name|default:request.user.username }}
+            </h3>
+            <span class="text-muted small">
+                <i class="bi bi-calendar3 me-1"></i>{{ today|date:"l, d F Y" }}
+                &nbsp;·&nbsp;
+                <i class="bi bi-house-door me-1"></i>
+                {% if assigned_houses %}
+                    {% for h in assigned_houses %}<strong>{{ h.name|default:h.house_code }}</strong>{% if not forloop.last %}, {% endif %}{% endfor %}
+                {% else %}
+                    <span class="text-danger">No house assigned</span>
+                {% endif %}
+            </span>
+        </div>
+        <span class="badge bg-primary fs-6 px-3 py-2">
+            <i class="bi bi-person-badge me-1"></i>Farm Worker
+        </span>
+    </div>
+
+    <!-- ── KPI Stat Cards ── -->
+    <div class="row g-3 mb-4">
+
+        <div class="col-6 col-md-3">
+            <div class="card h-100 border-0 shadow-sm">
+                <div class="card-body text-center">
+                    <div class="display-6 fw-bold text-primary">{{ total_birds }}</div>
+                    <div class="text-muted small mt-1">
+                        <i class="bi bi-feather me-1"></i>Live Birds
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-6 col-md-3">
+            <div class="card h-100 border-0 shadow-sm">
+                <div class="card-body text-center">
+                    <div class="display-6 fw-bold text-warning">{{ today_eggs }}</div>
+                    <div class="text-muted small mt-1">
+                        <i class="bi bi-basket me-1"></i>Eggs Today
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-6 col-md-3">
+            <div class="card h-100 border-0 shadow-sm">
+                <div class="card-body text-center">
+                    <div class="display-6 fw-bold {% if today_deaths > 0 %}text-danger{% else %}text-success{% endif %}">
+                        {{ today_deaths }}
+                    </div>
+                    <div class="text-muted small mt-1">
+                        <i class="bi bi-exclamation-triangle me-1"></i>Deaths Today
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-6 col-md-3">
+            <div class="card h-100 border-0 shadow-sm">
+                <div class="card-body text-center">
+                    <div class="display-6 fw-bold text-info">{{ house_stats|length }}</div>
+                    <div class="text-muted small mt-1">
+                        <i class="bi bi-grid me-1"></i>Active Batch{{ house_stats|length|pluralize }}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- ── Quick Actions ── -->
     <div class="card shadow-sm mb-4">
+        <div class="card-header">
+            <i class="bi bi-lightning-charge me-2"></i>Quick Actions
+        </div>
         <div class="card-body">
-            <h4>User: {{ request.user.get_full_name|default:request.user.username }}</h4> 
-             <p><strong>Assigned House:</strong>   {% if house %}
-                                                        {{ house.name }}
-                                                    {% else %}
-                                                        Not Assigned
-                                                    {% endif %}</p>
-            <p><strong>Total Birds:</strong> {{ total_birds }}</p> 
+            <div class="row g-3">
+                <div class="col-6 col-md-3">
+                    <a href="{% url 'record_egg' %}" class="btn btn-primary w-100 action-btn btn-eggs d-flex flex-column align-items-center justify-content-center gap-2">
+                        <i class="bi bi-basket fs-2"></i>
+                        <span class="fw-semibold">Record Eggs</span>
+                    </a>
+                </div>
+                <div class="col-6 col-md-3">
+                    <a href="{% url 'record_feed' %}" class="btn btn-warning w-100 action-btn btn-feed d-flex flex-column align-items-center justify-content-center gap-2">
+                        <i class="bi bi-bag-fill fs-2"></i>
+                        <span class="fw-semibold">Record Feed</span>
+                    </a>
+                </div>
+                <div class="col-6 col-md-3">
+                    <a href="{% url 'record_cleaning' %}" class="btn btn-success w-100 action-btn btn-clean d-flex flex-column align-items-center justify-content-center gap-2">
+                        <i class="bi bi-broom fs-2"></i>
+                        <span class="fw-semibold">Record Cleaning</span>
+                    </a>
+                </div>
+                <div class="col-6 col-md-3">
+                    <a href="{% url 'mortality' %}" class="btn btn-danger w-100 action-btn btn-mortality d-flex flex-column align-items-center justify-content-center gap-2">
+                        <i class="bi bi-exclamation-triangle fs-2"></i>
+                        <span class="fw-semibold">Log Mortality</span>
+                    </a>
+                </div>
+            </div>
         </div>
     </div>
 
-    <div class="row g-4">
-
-        <div class="col-md-4">
-            <a href="{% url 'record_egg' %}" class="btn btn-primary w-100 p-4">
-                🥚 Record Eggs
-            </a>
+    <!-- ── House Status ── -->
+    {% if house_stats %}
+    <div class="card shadow-sm mb-4">
+        <div class="card-header">
+            <i class="bi bi-house-door me-2"></i>My House Status
         </div>
-
-        <div class="col-md-4">
-            <a href="{% url 'record_feed' %}" class="btn btn-warning w-100 p-4">
-                🌾 Record Feed
-            </a>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>House</th>
+                            <th>Age (days)</th>
+                            <th>Live Birds</th>
+                            <th>Deaths Today</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for stat in house_stats %}
+                        <tr>
+                            <td><strong>{{ stat.house.name|default:stat.house.house_code }}</strong></td>
+                            <td>{{ stat.age_days }}</td>
+                            <td>{{ stat.current_birds }}</td>
+                            <td>
+                                {% if stat.today_deaths > 0 %}
+                                    <span class="badge bg-danger">{{ stat.today_deaths }}</span>
+                                {% else %}
+                                    <span class="badge bg-success">0</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
         </div>
+    </div>
+    {% else %}
+    <div class="alert alert-warning">
+        <i class="bi bi-info-circle me-2"></i>
+        No active batches found in your assigned house(s). Contact your supervisor.
+    </div>
+    {% endif %}
 
-        <div class="col-md-4">
-            <a href="{% url 'record_cleaning' %}" class="btn btn-success w-100 p-4">
-                🧹 Record Cleaning
-            </a>
+    <!-- ── Recent Egg Collections ── -->
+    <div class="card shadow-sm">
+        <div class="card-header">
+            <i class="bi bi-clock-history me-2"></i>My Recent Egg Records
         </div>
-
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>House</th>
+                            <th>Collected</th>
+                            <th>Rejected</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for rec in recent_activity %}
+                        <tr>
+                            <td>{{ rec.collection_date }}</td>
+                            <td><strong>{{ rec.batch.house.name|default:rec.batch.house.house_code }}</strong></td>
+                            <td><span class="badge bg-primary">{{ rec.eggs_collected }}</span></td>
+                            <td>
+                                {% if rec.eggs_rejected > 0 %}
+                                    <span class="badge bg-warning text-dark">{{ rec.eggs_rejected }}</span>
+                                {% else %}
+                                    <span class="text-muted">—</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="4" class="text-center text-muted py-3">No egg records yet.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
     </div>
 
 </div>
 
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function spawnEggs(btn) {
+    for (let i = 0; i < 6; i++) {
+        setTimeout(() => {
+            const e = document.createElement('span');
+            e.className = 'particle egg-particle';
+            const rs = ((Math.random() - 0.5) * 30).toFixed(1);
+            const re = ((Math.random() - 0.5) * 40).toFixed(1);
+            e.style.cssText = `left:${10 + Math.random()*75}%;animation-duration:${(0.55+Math.random()*0.4).toFixed(2)}s;--rot-s:${rs}deg;--rot-e:${re}deg;`;
+            btn.appendChild(e);
+            e.addEventListener('animationend', () => e.remove());
+        }, i * 65);
+    }
+}
+
+function spawnGrains(btn) {
+    for (let i = 0; i < 9; i++) {
+        setTimeout(() => {
+            const g = document.createElement('span');
+            g.className = 'particle grain-particle';
+            const xd = ((Math.random() - 0.5) * 50).toFixed(1);
+            g.style.cssText = `left:${10 + Math.random()*75}%;animation-duration:${(0.45+Math.random()*0.4).toFixed(2)}s;--xd:${xd}px;`;
+            btn.appendChild(g);
+            g.addEventListener('animationend', () => g.remove());
+        }, i * 45);
+    }
+}
+
+function spawnSparkles(btn) {
+    const count = 10;
+    for (let i = 0; i < count; i++) {
+        const s = document.createElement('span');
+        s.className = 'particle sparkle-particle';
+        s.style.setProperty('--ang', `${(i / count) * 360}deg`);
+        s.style.animationDuration = `${(0.45 + Math.random()*0.2).toFixed(2)}s`;
+        btn.appendChild(s);
+        s.addEventListener('animationend', () => s.remove());
+    }
+}
+
+document.querySelectorAll('.btn-eggs').forEach(b => b.addEventListener('mouseenter', () => spawnEggs(b)));
+document.querySelectorAll('.btn-feed').forEach(b => b.addEventListener('mouseenter', () => spawnGrains(b)));
+document.querySelectorAll('.btn-clean').forEach(b => b.addEventListener('mouseenter', () => spawnSparkles(b)));
+</script>
 {% endblock %}

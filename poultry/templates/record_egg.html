@@ -3,8 +3,8 @@
 
 <div class="container mt-4">
 
-    <div class="row justify-content-center">
-        <div class="col-md-6">
+    <div class="row g-4">
+        <div class="col-lg-6">
             <div class="card shadow">
                 <div class="card-header">
                     <i class="bi bi-basket me-2"></i>Record Eggs
@@ -14,6 +14,25 @@
 
                     <form method="POST" novalidate>
                         {% csrf_token %}
+
+                        <div class="mb-3">
+                            <label for="batch" class="form-label">
+                                <i class="bi bi-house-door me-2"></i>Batch
+                            </label>
+                            <select id="batch" name="batch" class="form-select" required>
+                                <option value="">-- Select batch --</option>
+                                {% for batch in batches %}
+                                <option value="{{ batch.pk }}">{{ batch.house.name|default:batch.house.house_code }} - {{ batch.batch_code }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="collection_date" class="form-label">
+                                <i class="bi bi-calendar me-2"></i>Date
+                            </label>
+                            <input type="date" id="collection_date" name="collection_date" class="form-control" value="{{ today|date:'Y-m-d' }}" required>
+                        </div>
 
                         <div class="mb-3">
                             <label for="total_eggs" class="form-label">
@@ -47,6 +66,50 @@
 
                     </form>
 
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-6">
+            <div class="card shadow">
+                <div class="card-header">
+                    <i class="bi bi-clock-history me-2"></i>Recent Egg Records
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>House</th>
+                                    <th>Collected</th>
+                                    <th>Broken</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for rec in recent_egg_records %}
+                                <tr>
+                                    <td>{{ rec.collection_date }}</td>
+                                    <td>{{ rec.batch.house.name|default:rec.batch.house.house_code }}</td>
+                                    <td>{{ rec.eggs_collected }}</td>
+                                    <td>{{ rec.eggs_rejected }}</td>
+                                    <td>
+                                        {% if rec.status == 'APPROVED' %}
+                                            <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Approved</span>
+                                        {% elif rec.status == 'REJECTED' %}
+                                            <span class="badge bg-danger"><i class="bi bi-x-circle me-1"></i>Rejected</span>
+                                        {% else %}
+                                            <span class="badge bg-warning text-dark"><i class="bi bi-hourglass-split me-1"></i>Pending</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr><td colspan="5" class="text-center text-muted">No records yet.</td></tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         </div>
