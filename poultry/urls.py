@@ -2,7 +2,7 @@ from django.urls import path
 from accounts import views as account_views
 from . import views
 urlpatterns = [
-    path('', account_views.login_view, name='home'),
+    path('', account_views.login_view, name='login'),
     path('birds/', views.birds, name='birds'),
     path('record_feed/', views.record_feed, name='record_feed'),
     path('record_egg/', views.record_egg, name='record_egg'),
