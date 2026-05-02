@@ -41,12 +41,17 @@ body {
 /* ========== SIDEBAR ========== */
 .sidebar {
     width: 250px;
-    min-height: 100vh;
+    height: 100vh; /* enforce full viewport height */
+    top: 0;
+    left: 0;
+    bottom: 0;
     background: linear-gradient(135deg, var(--primary-color) 0%, #1a2a5e 100%);
     box-shadow: var(--shadow-md);
     position: fixed;
-    overflow-y: auto;
-    z-index: 100;
+    overflow-y: auto; /* allow sidebar scrolling when content overflows */
+    -webkit-overflow-scrolling: touch; /* smooth scrolling on iOS */
+    z-index: 110; /* above main content and overlays */
+    padding-bottom: 24px; /* space for logout button */
 }
 
 .sidebar h4, .sidebar h5 {
@@ -84,6 +89,18 @@ body {
     color: #fff;
     border-left: 4px solid #ffc107;
     padding-left: 20px;
+}
+
+/* Make scrollbar visible and subtle */
+.sidebar::-webkit-scrollbar {
+    width: 10px;
+}
+.sidebar::-webkit-scrollbar-track {
+    background: transparent;
+}
+.sidebar::-webkit-scrollbar-thumb {
+    background-color: rgba(0,0,0,0.12);
+    border-radius: 10px;
 }
 
 /* ========== MAIN CONTENT ========== */
