@@ -1,0 +1,178 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}{{ alert.title }} - Poultry IQ{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <!-- Alert Details -->
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <h4 class="mb-0">{{ alert.title }}</h4>
+                            <small class="text-muted">
+                                <span class="badge 
+                                    {% if alert.priority == 'URGENT' %}badge-danger
+                                    {% elif alert.priority == 'HIGH' %}badge-warning
+                                    {% elif alert.priority == 'MEDIUM' %}badge-info
+                                    {% else %}badge-secondary{% endif %}">
+                                    {{ alert.get_priority_display }}
+                                </span>
+                                
+                                <span class="badge badge-light ms-2">{{ alert.alert_type.name }}</span>
+                                
+                                <span class="badge 
+                                    {% if alert.status == 'UNREAD' %}badge-warning
+                                    {% elif alert.status == 'READ' %}badge-secondary
+                                    {% elif alert.status == 'ACKNOWLEDGED' %}badge-info
+                                    {% else %}badge-success{% endif %} ms-2">
+                                    {{ alert.get_status_display }}
+                                </span>
+                            </small>
+                        </div>
+                        
+                        <a href="{% url 'alerts:inbox' %}" class="btn btn-secondary btn-sm">
+                            <i class="fas fa-arrow-left"></i> Back
+                        </a>
+                    </div>
+                </div>
+                
+                <div class="card-body">
+                    <!-- Sender info -->
+                    <div class="alert alert-light border">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <small class="text-muted">From:</small><br>
+                                {% if alert.sender %}
+                                    <strong>{{ alert.sender.display_name }}</strong>
+                                    <small class="d-block text-muted">{{ alert.sender.email }}</small>
+                                {% else %}
+                                    <strong>System Alert</strong>
+                                    <small class="d-block text-muted">Automated system message</small>
+                                {% endif %}
+                            </div>
+                            <div class="col-md-6">
+                                <small class="text-muted">Sent:</small><br>
+                                <strong>{{ alert.created_at|date:"M d, Y at H:i" }}</strong>
+                                {% if alert.read_at %}
+                                    <small class="d-block text-muted">Read: {{ alert.read_at|date:"M d, Y at H:i" }}</small>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Context info if available -->
+                    {% if alert.related_house or alert.related_batch %}
+                        <div class="alert alert-info">
+                            <strong>Context:</strong>
+                            {% if alert.related_house %}
+                                <br><i class="fas fa-home"></i> House: <strong>{{ alert.related_house.name }}</strong>
+                            {% endif %}
+                            {% if alert.related_batch %}
+                                <br><i class="fas fa-egg"></i> Batch: <strong>{{ alert.related_batch.batch_id }}</strong>
+                            {% endif %}
+                        </div>
+                    {% endif %}
+                    
+                    <!-- Due date if set -->
+                    {% if alert.due_date %}
+                        <div class="alert {% if alert.is_overdue %}alert-danger{% else %}alert-warning{% endif %}">
+                            <i class="fas fa-clock"></i>
+                            {% if alert.is_overdue %}
+                                <strong>OVERDUE!</strong> Action was due on {{ alert.due_date|date:"M d, Y at H:i" }}
+                            {% else %}
+                                <strong>Due:</strong> {{ alert.due_date|date:"M d, Y at H:i" }}
+                            {% endif %}
+                        </div>
+                    {% endif %}
+                    
+                    <!-- Message content -->
+                    <div class="mt-4 mb-4">
+                        <h6>Message:</h6>
+                        <div class="alert alert-light border p-3">
+                            {{ alert.message|linebreaks }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Actions Sidebar -->
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">Actions</h5>
+                </div>
+                
+                <div class="card-body">
+                    {% if alert.status != 'RESOLVED' %}
+                        <form method="post" class="mb-3">
+                            {% csrf_token %}
+                            {{ form.as_p }}
+                            <button type="submit" class="btn btn-primary w-100">
+                                Update Status
+                            </button>
+                        </form>
+                    {% else %}
+                        <div class="alert alert-success">
+                            <i class="fas fa-check-circle"></i> This alert is resolved.
+                        </div>
+                    {% endif %}
+                    
+                    <!-- Quick actions -->
+                    <div class="d-grid gap-2">
+                        {% if alert.status == 'UNREAD' %}
+                            <form method="post" action="{% url 'alerts:mark_as_read' alert.alert_id %}">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-outline-secondary btn-sm w-100">
+                                    <i class="fas fa-envelope-open"></i> Mark as Read
+                                </button>
+                            </form>
+                        {% endif %}
+                        
+                        {% if alert.status not in 'ACKNOWLEDGED,RESOLVED' %}
+                            <form method="post" action="{% url 'alerts:mark_as_acknowledged' alert.alert_id %}">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-outline-info btn-sm w-100">
+                                    <i class="fas fa-check"></i> Acknowledge
+                                </button>
+                            </form>
+                        {% endif %}
+                        
+                        {% if alert.status != 'RESOLVED' %}
+                            <form method="post" action="{% url 'alerts:mark_as_resolved' alert.alert_id %}">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-outline-success btn-sm w-100">
+                                    <i class="fas fa-check-double"></i> Mark Resolved
+                                </button>
+                            </form>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Info Card -->
+            <div class="card mt-3">
+                <div class="card-header">
+                    <h6 class="mb-0">Alert Info</h6>
+                </div>
+                <div class="card-body">
+                    <small class="text-muted">Status: </small>
+                    <strong>{{ alert.get_status_display }}</strong><br>
+                    
+                    <small class="text-muted">Priority: </small>
+                    <strong>{{ alert.get_priority_display }}</strong><br>
+                    
+                    <small class="text-muted">Type: </small>
+                    <strong>{{ alert.alert_type.name }}</strong><br>
+                    
+                    <small class="text-muted d-block mt-2">Alert ID: {{ alert.alert_id }}</small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

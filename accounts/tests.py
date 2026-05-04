@@ -1,4 +1,10 @@
-from django.test import TestCase
+from pathlib import Path
+
+from django.apps import apps
+from django.conf import settings
+from django.template import TemplateSyntaxError
+from django.template.loader import get_template
+from django.test import SimpleTestCase, TestCase
 from django.urls import reverse
 
 from .models import Role, User
@@ -165,6 +171,46 @@ class SignupViewTests(TestCase):
         self.assertEqual(user.houses.count(), 0)
 
 
+class TemplateSyntaxSmokeTests(SimpleTestCase):
+    """Smoke test to fail fast on template syntax regressions."""
+
+    @staticmethod
+    def _collect_template_names(template_dir: Path) -> set[str]:
+        if not template_dir.exists():
+            return set()
+
+        return {
+            str(path.relative_to(template_dir)).replace("\\", "/")
+            for path in template_dir.rglob("*.html")
+        }
+
+    def _project_template_names(self) -> list[str]:
+        names: set[str] = set()
+
+        for template_dir in settings.TEMPLATES[0].get("DIRS", []):
+            names.update(self._collect_template_names(Path(template_dir)))
+
+        for app_config in apps.get_app_configs():
+            app_template_dir = Path(app_config.path) / "templates"
+            names.update(self._collect_template_names(app_template_dir))
+
+        return sorted(names)
+
+    def test_all_templates_compile(self):
+        failures = []
+
+        for template_name in self._project_template_names():
+            try:
+                get_template(template_name)
+            except TemplateSyntaxError as exc:
+                failures.append(f"{template_name}: {exc}")
+
+        self.assertFalse(
+            failures,
+            "Template syntax smoke test failures:\n" + "\n".join(failures),
+        )
+
+
 class LoginRedirectTests(TestCase):
     def setUp(self):
         self.worker_role = Role.objects.create(
@@ -258,3 +304,100 @@ class LoginRedirectTests(TestCase):
         )
 
         self.assertRedirects(response, reverse("investor"))
+
+
+class NavSidebarVisibilityTests(TestCase):
+    """Assert that each role sees exactly its own nav/sidebar chrome."""
+
+    def setUp(self):
+        self.house = PoultryHouse.objects.create(
+            house_code="HSE-NAV",
+            name="Nav Test House",
+            capacity=500,
+        )
+        self.worker_role = Role.objects.create(code=Role.RoleCode.WORKER, name="Farm Worker")
+        self.supervisor_role = Role.objects.create(code=Role.RoleCode.SUPERVISOR, name="Supervisor")
+        self.manager_role = Role.objects.create(code=Role.RoleCode.MANAGER, name="Farm Manager")
+        self.owner_role = Role.objects.create(code=Role.RoleCode.OWNER, name="Investor")
+
+        self.worker = User.objects.create_user(username="nav-worker", password="Pass1234!", role=self.worker_role)
+        self.worker.houses.set([self.house])
+
+        self.supervisor = User.objects.create_user(username="nav-sup", password="Pass1234!", role=self.supervisor_role)
+        self.supervisor.houses.set([self.house])
+
+        self.manager = User.objects.create_user(username="nav-manager", password="Pass1234!", role=self.manager_role)
+        self.investor = User.objects.create_user(username="nav-investor", password="Pass1234!", role=self.owner_role)
+
+    # ------------------------------------------------------------------ worker
+    def test_worker_sees_worker_sidebar_on_workersdash(self):
+        self.client.force_login(self.worker)
+        response = self.client.get(reverse("workersdash"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'id="workerSidebar"')
+        self.assertContains(response, "Worker Panel")
+
+    def test_worker_does_not_see_other_sidebars(self):
+        self.client.force_login(self.worker)
+        response = self.client.get(reverse("workersdash"))
+
+        self.assertNotContains(response, 'id="supervisorSidebar"')
+        self.assertNotContains(response, 'id="managerSidebar"')
+        self.assertNotContains(response, 'id="investorNavbar"')
+        self.assertNotContains(response, "Supervisor Panel")
+
+    # -------------------------------------------------------------- supervisor
+    def test_supervisor_sees_supervisor_sidebar_on_supdash(self):
+        self.client.force_login(self.supervisor)
+        response = self.client.get(reverse("supdash"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'id="supervisorSidebar"')
+        self.assertContains(response, "Supervisor Panel")
+
+    def test_supervisor_does_not_see_other_sidebars(self):
+        self.client.force_login(self.supervisor)
+        response = self.client.get(reverse("supdash"))
+
+        self.assertNotContains(response, 'id="workerSidebar"')
+        self.assertNotContains(response, 'id="managerSidebar"')
+        self.assertNotContains(response, 'id="investorNavbar"')
+        self.assertNotContains(response, "Worker Panel")
+
+    # --------------------------------------------------------------- manager
+    def test_manager_sees_manager_sidebar_on_dashboard(self):
+        self.client.force_login(self.manager)
+        response = self.client.get(reverse("dashboard"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'id="managerSidebar"')
+
+    def test_manager_does_not_see_other_sidebars(self):
+        self.client.force_login(self.manager)
+        response = self.client.get(reverse("dashboard"))
+
+        self.assertNotContains(response, 'id="workerSidebar"')
+        self.assertNotContains(response, 'id="supervisorSidebar"')
+        self.assertNotContains(response, 'id="investorNavbar"')
+        self.assertNotContains(response, "Worker Panel")
+        self.assertNotContains(response, "Supervisor Panel")
+
+    # --------------------------------------------------------------- investor
+    def test_investor_sees_investor_navbar_on_investor_page(self):
+        self.client.force_login(self.investor)
+        response = self.client.get(reverse("investor"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'id="investorNavbar"')
+        self.assertContains(response, "PoultryIQ Investor")
+
+    def test_investor_does_not_see_sidebars(self):
+        self.client.force_login(self.investor)
+        response = self.client.get(reverse("investor"))
+
+        self.assertNotContains(response, 'id="workerSidebar"')
+        self.assertNotContains(response, 'id="supervisorSidebar"')
+        self.assertNotContains(response, 'id="managerSidebar"')
+        self.assertNotContains(response, "Worker Panel")
+        self.assertNotContains(response, "Supervisor Panel")
