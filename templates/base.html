@@ -150,6 +150,12 @@
                 </a>
             </li>
             <li class="nav-item">
+                <a class="nav-link {% if request.resolver_match.url_name == 'sickbay' %}active{% endif %}" href="{% url 'sickbay' %}">
+                    <i class="bi bi-heart-pulse"></i><span>Sick Bay</span>
+                </a>
+
+            </li>
+            <li class="nav-item">
                 <a class="nav-link {% if request.resolver_match.url_name == 'mortality' %}active{% endif %}" href="{% url 'mortality' %}">
                     <i class="bi bi-exclamation-triangle"></i><span>Mortality Log</span>
                 </a>
@@ -193,6 +199,9 @@
                     <i class="bi bi-box-seam"></i><span>Orders</span>
                 </a>
             </li>
+            <a class="nav-link" href="{% url 'view_sickness' %}" {% if request.resolver_match.url_name == 'view_sickness' %}class="active"{% endif %}>
+        <i class="bi bi-clipboard2-pulse"></i> Sickness Records
+    </a> 
             <li class="nav-item">
                 <a class="nav-link {% if request.resolver_match.url_name == 'treatment' %}active{% endif %}" href="{% url 'treatment' %}">
                     <i class="bi bi-heart-pulse"></i><span>Treatment Records</span>

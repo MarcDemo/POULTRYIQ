@@ -131,6 +131,10 @@ def record_feed(request):
             record_date = None
             errors.append("Please provide a valid date.")
 
+        # enforce only today's records
+        if record_date and record_date != date.today():
+            errors.append("Feed records can only be created for today.")
+
         try:
             quantity_kg = Decimal(quantity_raw)
             if quantity_kg <= 0:
@@ -168,6 +172,7 @@ def record_feed(request):
     recent_feed_records = FeedRecord.objects.filter(
         recorded_by=request.user,
         batch__in=batches,
+        record_date=date.today(),
     ).select_related("batch__house")[:10]
 
     return render(
@@ -203,6 +208,10 @@ def record_egg(request):
         except ValueError:
             collection_date = None
             errors.append("Please provide a valid collection date.")
+
+        # enforce only today's collections
+        if collection_date and collection_date != date.today():
+            errors.append("Egg collection records can only be created for today.")
 
         try:
             eggs_collected = int(total_eggs_raw)
@@ -245,6 +254,7 @@ def record_egg(request):
     recent_egg_records = egg_collection.objects.filter(
         collected_by=request.user,
         batch__in=batches,
+        collection_date=date.today(),
     ).select_related("batch__house")[:10]
 
     return render(
@@ -282,6 +292,10 @@ def record_cleaning(request):
             record_date = None
             errors.append("Please provide a valid date.")
 
+        # enforce only today's cleaning records
+        if record_date and record_date != date.today():
+            errors.append("Cleaning records can only be created for today.")
+
         if not any([house_cleaned, disinfection_done, water_changed]):
             errors.append("Please tick at least one cleaning task.")
 
@@ -310,6 +324,7 @@ def record_cleaning(request):
     recent_cleaning_records = CleaningRecord.objects.filter(
         recorded_by=request.user,
         batch__in=batches,
+        record_date=date.today(),
     ).select_related("batch__house")[:10]
     # show only the most recent 7 cleaning records
     recent_cleaning_records = recent_cleaning_records[:7]

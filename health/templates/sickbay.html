@@ -1,4 +1,4 @@
-{% extends "wbase.html" %}
+{% extends "base.html" %}
 
 {% block extra_css %}
 <style>
@@ -96,65 +96,109 @@
     50%  { box-shadow: 0 0 0 16px rgba(220,53,69,0),    0 8px 24px rgba(0,0,0,0.18); }
     100% { box-shadow: 0 0 0  0   rgba(220,53,69,0),    0 8px 24px rgba(0,0,0,0.18); }
 }
+
+/* ── Sickbay banner + particles ── */
+.sickbay-banner {
+    background: linear-gradient(90deg, rgba(220,53,69,0.06), rgba(248,113,113,0.03));
+    border-left: 4px solid rgba(220,53,69,0.18);
+    padding: 12px 16px;
+    border-radius: 10px;
+}
+.s-badge {
+    width: 52px;
+    height: 52px;
+    border-radius: 10px;
+    background: linear-gradient(180deg,#fff 0%, #ffd6d6 100%);
+    color: #c82333;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 28px;
+    box-shadow: 0 6px 18px rgba(200,40,50,0.12);
+    animation: sBadgePulse 1.8s ease-in-out infinite;
+}
+@keyframes sBadgePulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.06); }
+    100% { transform: scale(1); }
+}
+
+.sickbay-particles {
+    position: absolute;
+    inset: 80px 0 auto 0;
+    pointer-events: none;
+    overflow: visible;
+    z-index: 5;
+}
+.sick-cross {
+    position: absolute;
+    width: 18px;
+    height: 18px;
+    background: linear-gradient(180deg,#ff6b6b,#ff8787);
+    clip-path: polygon(30% 0%, 70% 0%, 70% 30%, 100% 30%, 100% 70%, 70% 70%, 70% 100%, 30% 100%, 30% 70%, 0% 70%, 0% 30%, 30% 30%);
+    opacity: 0.0;
+    transform: translateY(0) scale(0.9) rotate(-10deg);
+    animation: crossFloat 3200ms linear forwards;
+}
+@keyframes crossFloat {
+    0% { opacity: 0; transform: translateY(0) scale(0.8) rotate(-10deg); }
+    10% { opacity: 0.9; }
+    70% { opacity: 0.9; transform: translateY(-90px) scale(1) rotate(10deg); }
+    100% { opacity: 0; transform: translateY(-140px) scale(0.6) rotate(25deg); }
+}
+
 </style>
 {% endblock %}
+
+
 
 {% block content %}
 
 <div class="container-fluid">
 
-    <!-- ── Greeting Header ── -->
-    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+    <!-- Sickbay Banner -->
+    <div class="sickbay-banner d-flex align-items-center mb-3">
+        <div class="s-badge me-3">+</div>
         <div>
-            <h3 class="mb-0 fw-bold">
-                <i class="bi bi-person-circle me-2 text-primary"></i>
-                {{ request.user.get_full_name|default:request.user.username }}
-            </h3>
-            <span class="text-muted small">
-                <i class="bi bi-calendar3 me-1"></i>{{ today|date:"l, d F Y" }}
-                &nbsp;·&nbsp;
-                <i class="bi bi-house-door me-1"></i>
-                {% if assigned_houses %}
-                    {% for h in assigned_houses %}<strong>{{ h.name|default:h.house_code }}</strong>{% if not forloop.last %}, {% endif %}{% endfor %}
-                {% else %}
-                    <span class="text-danger">No house assigned</span>
-                {% endif %}
-            </span>
+            <h4 class="mb-0">Sickbay Dashboard</h4>
+            <small class="text-muted">Care & isolation — monitor cases today</small>
         </div>
-        <span class="badge bg-primary fs-6 px-3 py-2">
-            <i class="bi bi-person-badge me-1"></i>Your are in the sickbay dashboardr
-        </span>
     </div>
+
+    <!-- floating crosses container -->
+    <div class="sickbay-particles" aria-hidden="true"></div>
+
 
    
 
     <!-- ── Quick Actions ── -->
     <div class="card shadow-sm mb-4">
         <div class="card-header">
-            <i class="bi bi-lightning-charge me-2"></i>Quick Actions
+            <i class="bi bi-lightning-charge me-2"></i>youre in the sickbay dashbord, here are some quick actions to get you started!
         </div>
         <div class="card-body">
             <div class="row g-3">
                 <div class="col-6 col-md-3">
-                    <a href="{% url 'record_egg' %}" class="btn btn-primary w-100 action-btn btn-eggs d-flex flex-column align-items-center justify-content-center gap-2">
+                    <a href="{% url 'sick_record_egg' %}" class="btn btn-primary w-100 action-btn btn-eggs d-flex flex-column align-items-center justify-content-center gap-2">
                         <i class="bi bi-basket fs-2"></i>
                         <span class="fw-semibold">Record Eggs</span>
                     </a>
                 </div>
                 <div class="col-6 col-md-3">
-                    <a href="{% url 'record_feed' %}" class="btn btn-warning w-100 action-btn btn-feed d-flex flex-column align-items-center justify-content-center gap-2">
+                    <a href="{% url 'sick_record_feed' %}" class="btn btn-warning w-100 action-btn btn-feed d-flex flex-column align-items-center justify-content-center gap-2">
                         <i class="bi bi-bag-fill fs-2"></i>
                         <span class="fw-semibold">Record Feed</span>
                     </a>
                 </div>
                 <div class="col-6 col-md-3">
-                    <a href="{% url 'record-sickbay-cleaning' %}" class="btn btn-success w-100 action-btn btn-clean d-flex flex-column align-items-center justify-content-center gap-2">
+                    <a href="{% url 'sick_record_cleaning' %}" class="btn btn-success w-100 action-btn btn-clean d-flex flex-column align-items-center justify-content-center gap-2">
                         <i class="bi bi-broom fs-2"></i>
                         <span class="fw-semibold">Clean sickbay</span>
                     </a>
                 </div>
                 <div class="col-6 col-md-3">
-                    <a href="{% url 'mortality' %}" class="btn btn-danger w-100 action-btn btn-mortality d-flex flex-column align-items-center justify-content-center gap-2">
+                    <a href="{% url 'sick_mortality' %}" class="btn btn-danger w-100 action-btn btn-mortality d-flex flex-column align-items-center justify-content-center gap-2">
                         <i class="bi bi-exclamation-triangle fs-2"></i>
                         <span class="fw-semibold">Log Mortality</span>
                     </a>
@@ -166,47 +210,8 @@
     
 
 
-    <!-- ── Recent Egg Collections ── -->
-    <div class="card shadow-sm">
-        <div class="card-header">
-            <i class="bi bi-clock-history me-2"></i>My Recent Egg Records
-        </div>
-        <div class="card-body p-0">
-            <div class="table-responsive">
-                <table class="table table-hover mb-0">
-                    <thead>
-                        <tr>
-                            <th>Date</th>
-                            <th>House</th>
-                            <th>Collected</th>
-                            <th>Rejected</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for rec in recent_activity %}
-                        <tr>
-                            <td>{{ rec.collection_date }}</td>
-                            <td><strong>{{ rec.batch.house.name|default:rec.batch.house.house_code }}</strong></td>
-                            <td><span class="badge bg-primary">{{ rec.eggs_collected }}</span></td>
-                            <td>
-                                {% if rec.eggs_rejected > 0 %}
-                                    <span class="badge bg-warning text-dark">{{ rec.eggs_rejected }}</span>
-                                {% else %}
-                                    <span class="text-muted">—</span>
-                                {% endif %}
-                            </td>
-                        </tr>
-                        {% empty %}
-                        <tr>
-                            <td colspan="4" class="text-center text-muted py-3">oops!!! looks like you havent collected any eggs today!</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-
+  
+    
 </div>
 
 {% endblock %}
@@ -255,5 +260,28 @@ function spawnSparkles(btn) {
 document.querySelectorAll('.btn-eggs').forEach(b => b.addEventListener('mouseenter', () => spawnEggs(b)));
 document.querySelectorAll('.btn-feed').forEach(b => b.addEventListener('mouseenter', () => spawnGrains(b)));
 document.querySelectorAll('.btn-clean').forEach(b => b.addEventListener('mouseenter', () => spawnSparkles(b)));
+
+// spawn small medical crosses subtly to remind user they're in sickbay
+function spawnSickCross() {
+    const container = document.querySelector('.sickbay-particles');
+    if (!container) return;
+    const cross = document.createElement('span');
+    cross.className = 'sick-cross';
+    // random horizontal position within page width
+    const left = Math.random() * 92 + 2; // percent
+    cross.style.left = left + '%';
+    cross.style.bottom = '8px';
+    // randomize animation duration slightly
+    const dur = 2800 + Math.floor(Math.random() * 1000);
+    cross.style.animationDuration = dur + 'ms';
+    container.appendChild(cross);
+    cross.addEventListener('animationend', () => cross.remove());
+}
+
+// spawn a few crosses every 3.5s, but only when visible
+let sickInterval = setInterval(spawnSickCross, 3500);
+
+// clear interval when navigating away
+window.addEventListener('beforeunload', () => clearInterval(sickInterval));
 </script>
 {% endblock %}

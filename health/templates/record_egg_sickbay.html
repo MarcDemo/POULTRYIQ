@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% block extra_css %}
+<style>
+/* small copy of sickbay banner styles for sickbay record pages */
+.sickbay-banner{background:linear-gradient(90deg,rgba(220,53,69,0.06),rgba(248,113,113,0.03));border-left:4px solid rgba(220,53,69,0.18);padding:12px 16px;border-radius:10px;margin-bottom:12px;gap:12px}
+.s-badge{width:42px;height:42px;border-radius:8px;background:linear-gradient(180deg,#fff,#ffd6d6);color:#c82333;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:22px;box-shadow:0 6px 18px rgba(200,40,50,0.12);animation:sBadgePulse 1.8s ease-in-out infinite}
+@keyframes sBadgePulse{0%{transform:scale(1)}50%{transform:scale(1.06)}100%{transform:scale(1)}}
+
+/* Hide global sidebar for focused sickbay pages */
+.sidebar, .sidebar-overlay, .mobile-topbar [data-sidebar-toggle] { display: none !important; }
+.wrapper { margin-left: 0 !important; }
+.main-content { padding-left: 0 !important; }
+.sickbay-back { margin-left: auto; }
+
+.card-header { display:flex; align-items:center; justify-content:space-between; }
+.card-header .title { flex:1 }
+@media (max-width: 767px) {
+    .sickbay-banner { flex-direction:column; align-items:flex-start }
+    .sickbay-back { margin-left: 0; margin-top:8px }
+}
+</style>
+{% endblock %}
+{% block content %}
+<div class="container mt-4">
+    <div class="sickbay-banner d-flex align-items-center justify-content-between">
+        <div class="s-badge me-3">+</div>
+        <div>
+            <h4 class="mb-0">Record Eggs — Sickbay</h4>
+            <small class="text-muted">Only records for today are accepted</small>
+        </div>
+        <a href="{% url 'sickbay' %}" class="btn btn-outline-secondary btn-sm sickbay-back"><i class="bi bi-arrow-left me-1"></i>Back to sickbay dashboard</a>
+    </div>
+
+    <!-- reuse form from poultry record_egg.html -->
+    <div class="row g-4">
+        <div class="col-lg-6">
+            <div class="card shadow">
+                <div class="card-header">
+                    <i class="bi bi-basket me-2"></i>Record Eggs (Sickbay)
+                </div>
+
+                <div class="card-body">
+
+                    <form method="POST" novalidate>
+                        {% csrf_token %}
+
+                        <div class="mb-3">
+                            <label for="batch" class="form-label">
+                                <i class="bi bi-house-door me-2"></i>Batch
+                            </label>
+                            <select id="batch" name="batch" class="form-select" required>
+                                <option value="">-- Select batch --</option>
+                                {% for batch in batches %}
+                                <option value="{{ batch.pk }}">{{ batch.house.name|default:batch.house.house_code }} - {{ batch.batch_code }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="collection_date" class="form-label">
+                                <i class="bi bi-calendar me-2"></i>Date
+                            </label>
+                            <input type="date" id="collection_date" name="collection_date" class="form-control" value="{{ today|date:'Y-m-d' }}" required>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="total_eggs" class="form-label">
+                                <i class="bi bi-egg me-2"></i>Total Eggs Collected
+                            </label>
+                            <input type="number" id="total_eggs" name="total_eggs" class="form-control" placeholder="Enter total eggs" required min="0">
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="broken_eggs" class="form-label">
+                                <i class="bi bi-x-circle me-2"></i>Broken Eggs
+                            </label>
+                            <input type="number" id="broken_eggs" name="broken_eggs" class="form-control" placeholder="Enter broken eggs" min="0" value="0">
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="notes" class="form-label">
+                                <i class="bi bi-chat-left-text me-2"></i>Comments
+                            </label>
+                            <textarea id="notes" name="notes" class="form-control" placeholder="Add any comments..." rows="4"></textarea>
+                        </div>
+
+                        <div class="d-grid gap-2 mt-4">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-check-circle me-2"></i>Save Record
+                            </button>
+                        </div>
+
+                    </form>
+
+                </div>
+            </div>
+        </div>
+
+       
+    </div>
+
+</div>
+
+{% endblock %}

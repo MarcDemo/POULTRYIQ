@@ -266,7 +266,7 @@
     </a>
     <a href="{% url 'view_sickness' %}" {% if request.resolver_match.url_name == 'view_sickness' %}class="active"{% endif %}>
         <i class="bi bi-clipboard2-pulse"></i> Sickness Records
-    </a>
+    </a> 
     <a href="{% url 'vaccination' %}" {% if request.resolver_match.url_name == 'vaccination' %}class="active"{% endif %}>
         <i class="bi bi-capsule"></i> Vaccination Scheduler
     </a>
