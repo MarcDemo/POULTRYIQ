@@ -84,6 +84,10 @@ class Alert(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     read_at = models.DateTimeField(null=True, blank=True)
     due_date = models.DateTimeField(null=True, blank=True, help_text="When action should be taken")
+    persist_until_resolved = models.BooleanField(
+        default=False,
+        help_text="Keep this alert active in reminder counts until it is explicitly resolved.",
+    )
 
     # Context (optional)
     related_house = models.ForeignKey(
@@ -114,6 +118,8 @@ class Alert(models.Model):
 
     def mark_as_read(self):
         """Mark alert as read"""
+        if self.persist_until_resolved and self.status != self.Status.RESOLVED:
+            return
         if self.status == self.Status.UNREAD:
             self.status = self.Status.READ
             self.read_at = timezone.now()

@@ -63,8 +63,14 @@ class RespondToAlertForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # Only allow certain status transitions
-        self.fields['status'].choices = [
+        choices = [
             (Alert.Status.READ, 'Mark as Read'),
             (Alert.Status.ACKNOWLEDGED, 'Acknowledge'),
             (Alert.Status.RESOLVED, 'Resolved'),
         ]
+        if self.instance.persist_until_resolved:
+            choices = [
+                (Alert.Status.READ, 'Mark as Read'),
+                (Alert.Status.ACKNOWLEDGED, 'Acknowledge'),
+            ]
+        self.fields['status'].choices = choices

@@ -142,13 +142,18 @@
                             </form>
                         {% endif %}
                         
-                        {% if alert.status != 'RESOLVED' %}
+                        {% if alert.status != 'RESOLVED' and not alert.persist_until_resolved %}
                             <form method="post" action="{% url 'alerts:mark_as_resolved' alert.alert_id %}">
                                 {% csrf_token %}
                                 <button type="submit" class="btn btn-outline-success btn-sm w-100">
                                     <i class="fas fa-check-double"></i> Mark Resolved
                                 </button>
                             </form>
+                        {% endif %}
+                        {% if alert.persist_until_resolved and alert.status != 'RESOLVED' %}
+                            <div class="alert alert-warning mt-2 mb-0">
+                                This reminder clears automatically after the dosage is marked as given in the treatment plan.
+                            </div>
                         {% endif %}
                     </div>
                 </div>

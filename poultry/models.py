@@ -356,3 +356,22 @@ class CleaningRecord(models.Model):
 
     def __str__(self) -> str:
         return f"{self.batch.batch_code} cleaning {self.record_date}"
+
+
+class CleaningPhoto(models.Model):
+    """
+    Photos uploaded as proof for a cleaning record.
+    Multiple photos can be attached to a single CleaningRecord.
+    """
+    photo_id = models.BigAutoField(primary_key=True)
+    cleaning_record = models.ForeignKey(
+        CleaningRecord, on_delete=models.CASCADE, related_name="photos"
+    )
+    image = models.ImageField(upload_to="cleaning_photos/%Y/%m/%d/")
+    uploaded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="cleaning_photos_uploaded"
+    )
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Photo {self.photo_id} for {self.cleaning_record}"

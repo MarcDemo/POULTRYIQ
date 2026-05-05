@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="container mt-4">
+
+    <div class="row g-4">
+        <div class="col-lg-6">
+            <div class="card shadow">
+                <div class="card-header" style="background: linear-gradient(135deg, #198754 0%, #157347 100%);">
+                    <i class="bi bi-bandaid me-2"></i>Sickbay Cleaning
+                </div>
+
+                <div class="card-body">
+                    <form method="POST" novalidate>
+                        {% csrf_token %}
+
+                        <div class="mb-3">
+                            <label for="sickness_report" class="form-label">
+                                <i class="bi bi-heart-pulse me-1"></i>Sickbay Case
+                            </label>
+                            <select id="sickness_report" name="sickness_report" class="form-select" required>
+                                <option value="">-- Select sickbay case --</option>
+                                {% for report in sickbay_reports %}
+                                <option value="{{ report.pk }}">
+                                    {{ report.house_label }} - {{ report.case_label }} - {{ report.isolation_name }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                            <div class="form-text">Only sickbay cases from your assigned houses are listed.</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="record_date" class="form-label">
+                                <i class="bi bi-calendar me-1"></i>Date
+                            </label>
+                            <input type="date" id="record_date" name="record_date" class="form-control" value="{{ today|date:'Y-m-d' }}" required>
+                        </div>
+
+                        <div class="mb-4">
+                            <h6 class="mb-3">Mark tasks completed:</h6>
+
+                            <div class="form-check mb-3">
+                                <input class="form-check-input" type="checkbox" id="sickbay_cleaned" name="sickbay_cleaned">
+                                <label class="form-check-label" for="sickbay_cleaned">
+                                    <i class="bi bi-stars me-2"></i>Sickbay cleaned
+                                </label>
+                            </div>
+
+                            <div class="form-check mb-3">
+                                <input class="form-check-input" type="checkbox" id="disinfected" name="disinfected">
+                                <label class="form-check-label" for="disinfected">
+                                    <i class="bi bi-shield-check me-2"></i>Disinfection done
+                                </label>
+                            </div>
+
+                            <div class="form-check mb-3">
+                                <input class="form-check-input" type="checkbox" id="equipment_cleaned" name="equipment_cleaned">
+                                <label class="form-check-label" for="equipment_cleaned">
+                                    <i class="bi bi-tools me-2"></i>Equipment cleaned
+                                </label>
+                            </div>
+
+                            <div class="form-check mb-3">
+                                <input class="form-check-input" type="checkbox" id="water_changed" name="water_changed">
+                                <label class="form-check-label" for="water_changed">
+                                    <i class="bi bi-droplet me-2"></i>Water changed
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="notes" class="form-label">
+                                <i class="bi bi-chat-left-text me-1"></i>Notes
+                            </label>
+                            <textarea id="notes" name="notes" class="form-control" rows="4" placeholder="Add any cleaning observations..."></textarea>
+                        </div>
+
+                        <div class="d-grid mt-4">
+                            <button type="submit" class="btn btn-success">
+                                <i class="bi bi-check-circle me-2"></i>Save Sickbay Cleaning Record
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-6">
+            <div class="card shadow">
+                <div class="card-header" style="background: linear-gradient(135deg, #198754 0%, #157347 100%);">
+                    <i class="bi bi-clock-history me-2"></i>Your Recent Sickbay Cleaning Records
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Sickbay Area</th>
+                                    <th>Tasks Done</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for rec in recent_cleaning_records %}
+                                <tr>
+                                    <td>{{ rec.record_date }}</td>
+                                    <td>
+                                        <div class="fw-semibold">{{ rec.sickness_report.isolation_name }}</div>
+                                        <small class="text-muted">{{ rec.sickness_report.house_label }}</small>
+                                    </td>
+                                    <td>
+                                        {% if rec.sickbay_cleaned %}<span class="badge bg-success me-1">Cleaned</span>{% endif %}
+                                        {% if rec.disinfection_done %}<span class="badge bg-info me-1">Disinfected</span>{% endif %}
+                                        {% if rec.equipment_cleaned %}<span class="badge bg-primary me-1">Equipment</span>{% endif %}
+                                        {% if rec.water_changed %}<span class="badge bg-dark">Water</span>{% endif %}
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="3" class="text-center text-muted py-4">No sickbay cleaning records yet.</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+{% endblock %}

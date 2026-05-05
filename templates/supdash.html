@@ -85,24 +85,51 @@
         </div>
     </div>
 </div>
-
-<!-- Row 2: Feed + Cleaning Today -->
-<div class="row g-3 mb-4">
+<!-- sickbay cases -->
+ <div class="row g-3 mb-4">
     <div class="col-6 col-md-3">
-        <div class="card h-100 border-0 shadow-sm" style="border-left: 4px solid #ff9800 !important;">
+        <div class="card h-100 border-0 shadow-sm" style="border-left: 4px solid #dc3545 !important;">
             <div class="card-body">
                 <div class="d-flex align-items-center justify-content-between mb-2">
-                    <span class="text-muted small fw-semibold text-uppercase">Feed Today</span>
-                    <div class="rounded-circle d-flex align-items-center justify-content-center" style="width:36px;height:36px;background:#fff3e0;">
-                        <i class="bi bi-bag-fill" style="color:#ff9800;"></i>
+                    <span class="text-muted small fw-semibold text-uppercase">Sickness Today</span>
+                    <div class="rounded-circle d-flex align-items-center justify-content-center" style="width:36px;height:36px;background:#f8d7da;">
+                        <i class="bi bi-heart-pulse text-danger"></i>
                     </div>
                 </div>
-                <h3 class="fw-bold mb-0">{{ today_feed_kg|floatformat:1 }} <small class="fs-6 text-muted">kg</small></h3>
-                <small class="text-muted">Feed given (approved)</small>
+                <h3 class="fw-bold mb-0">{{ today_sickness_cases }}</h3>
+                <small class="text-muted">Reports logged today</small>
             </div>
         </div>
     </div>
     <div class="col-6 col-md-3">
+        <div class="card h-100 border-0 shadow-sm" style="border-left: 4px solid #6f42c1 !important;">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                    <span class="text-muted small fw-semibold text-uppercase">Sickbay Cases</span>
+                    <div class="rounded-circle d-flex align-items-center justify-content-center" style="width:36px;height:36px;background:#efe2ff;">
+                        <i class="bi bi-shield-fill-exclamation" style="color:#6f42c1;"></i>
+                    </div>
+                </div>
+                <h3 class="fw-bold mb-0">{{ isolated_sickness_cases }}</h3>
+                <small class="text-muted">Cases moved to sickbay</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card h-100 border-0 shadow-sm" style="border-left: 4px solid #0dcaf0 !important;">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                    <span class="text-muted small fw-semibold text-uppercase">Pending Doses</span>
+                    <div class="rounded-circle d-flex align-items-center justify-content-center" style="width:36px;height:36px;background:#cff4fc;">
+                        <i class="bi bi-capsule-pill" style="color:#0dcaf0;"></i>
+                    </div>
+                </div>
+                <h3 class="fw-bold mb-0">{{ pending_treatment_doses }}</h3>
+                <small class="text-muted">Treatment items awaiting dosing</small>
+            </div>
+        </div>
+    </div>
+     <div class="col-6 col-md-3">
         <div class="card h-100 border-0 shadow-sm" style="border-left: 4px solid #20c997 !important;">
             <div class="card-body">
                 <div class="d-flex align-items-center justify-content-between mb-2">
@@ -116,29 +143,10 @@
             </div>
         </div>
     </div>
-    <div class="col-6 col-md-3">
-        <a href="{% url 'supapproval' %}?tab=eggs" class="text-decoration-none">
-            <div class="card h-100 border-0 shadow-sm border-warning">
-                <div class="card-body text-center py-3">
-                    <div class="fs-4 text-warning fw-bold">{{ pending_eggs }}</div>
-                    <small class="text-muted">Egg submissions</small>
-                    <div class="mt-1"><span class="badge bg-warning text-dark">Pending</span></div>
-                </div>
-            </div>
-        </a>
-    </div>
-    <div class="col-6 col-md-3">
-        <a href="{% url 'supapproval' %}?tab=mortality" class="text-decoration-none">
-            <div class="card h-100 border-0 shadow-sm border-danger">
-                <div class="card-body text-center py-3">
-                    <div class="fs-4 text-danger fw-bold">{{ pending_mortality }}</div>
-                    <small class="text-muted">Mortality reports</small>
-                    <div class="mt-1"><span class="badge bg-warning text-dark">Pending</span></div>
-                </div>
-            </div>
-        </a>
-    </div>
 </div>
+
+
+
 
 <!-- Recent Pending Eggs -->
 <div class="row g-3 mb-4">
@@ -213,7 +221,98 @@
     </div>
 </div>
 
+
+
 <!-- Quick Actions -->
+<div class="card border-0 shadow-sm mb-4">
+    <div class="card-header d-flex align-items-center justify-content-between">
+        <span><i class="bi bi-heart-pulse me-2"></i>Recent Sickness Reports</span>
+        <a href="{% url 'view_sickness' %}" class="btn btn-sm btn-light fw-semibold">View All</a>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>House</th>
+                        <th>Disease</th>
+                        <th>Affected</th>
+                        <th>Isolation</th>
+                        <th>Cleaning</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for rec in recent_sickness_reports %}
+                    <tr>
+                        <td>{{ rec.house_label }}</td>
+                        <td>{{ rec.disease|default:"Not specified" }}</td>
+                        <td>{{ rec.affected }}</td>
+                        <td>
+                            {% if rec.isolated %}
+                            <span class="badge bg-danger mb-1">In sickbay</span>
+                            <div><small>{{ rec.isolation_name }}</small></div>
+                            {% else %}
+                            <span class="badge bg-secondary">Left in crowd</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if rec.cleaning_sessions %}
+                            <span class="badge bg-success">{{ rec.cleaning_sessions }} log{{ rec.cleaning_sessions|pluralize }}</span>
+                            <div><small>{{ rec.last_cleaned_at }}</small></div>
+                            {% elif rec.isolated %}
+                            <span class="badge bg-warning text-dark">Pending cleaning</span>
+                            {% else %}
+                            <span class="text-muted">Not needed</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="5" class="text-center text-muted py-3"><i class="bi bi-check-circle text-success me-2"></i>No sickness reports for your houses</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="card border-0 shadow-sm mb-4">
+    <div class="card-header d-flex align-items-center justify-content-between">
+        <span><i class="bi bi-capsule-pill me-2"></i>Pending Treatment Doses</span>
+        <a href="{% url 'treatment' %}" class="btn btn-sm btn-light fw-semibold">Open Treatment Plan</a>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>Case</th>
+                        <th>House</th>
+                        <th>Medicine</th>
+                        <th>Dosage</th>
+                        <th>Scheduled</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in recent_pending_treatments %}
+                    <tr>
+                        <td>
+                            <div class="fw-semibold">{{ item.sickness_report.case_label }}</div>
+                            <small class="text-muted">{{ item.sickness_report.affected }} bird{{ item.sickness_report.affected|pluralize }}</small>
+                        </td>
+                        <td>{{ item.sickness_report.house_label }}</td>
+                        <td>{{ item.medicine_name }}</td>
+                        <td>{{ item.dosage }}</td>
+                        <td>{{ item.scheduled_for|default:"Today" }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="5" class="text-center text-muted py-3"><i class="bi bi-check-circle text-success me-2"></i>No pending treatment doses</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
 <div class="card border-0 shadow-sm mb-4">
     <div class="card-header"><i class="bi bi-lightning-charge me-2"></i>Quick Actions</div>
     <div class="card-body">
@@ -244,6 +343,20 @@
                     <i class="bi bi-heartbreak fs-4"></i>
                     <span class="fw-semibold">Mortality</span>
                     {% if pending_mortality > 0 %}<span class="badge bg-warning text-dark">{{ pending_mortality }} pending</span>{% endif %}
+                </a>
+            </div>
+            <div class="col-6 col-md-3">
+                <a href="{% url 'view_sickness' %}" class="btn btn-outline-primary w-100 py-3 d-flex flex-column align-items-center gap-1">
+                    <i class="bi bi-heart-pulse fs-4"></i>
+                    <span class="fw-semibold">Sickness</span>
+                    {% if isolated_sickness_cases > 0 %}<span class="badge bg-danger">{{ isolated_sickness_cases }} in sickbay</span>{% endif %}
+                </a>
+            </div>
+            <div class="col-6 col-md-3">
+                <a href="{% url 'treatment' %}" class="btn btn-outline-info w-100 py-3 d-flex flex-column align-items-center gap-1">
+                    <i class="bi bi-capsule-pill fs-4"></i>
+                    <span class="fw-semibold">Treatments</span>
+                    {% if pending_treatment_doses > 0 %}<span class="badge bg-danger">{{ pending_treatment_doses }} pending</span>{% endif %}
                 </a>
             </div>
         </div>

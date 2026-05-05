@@ -1,0 +1,212 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="container-fluid">
+
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
+    <div>
+        <h3 class="mb-1"><i class="bi bi-heart-pulse me-2"></i>Sickness Register</h3>
+        <small class="text-muted">Single-bird and grouped sickness records, vet diagnosis, and treatment progress.</small>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="{% url 'report_sickness' %}" class="btn btn-outline-danger">
+            <i class="bi bi-plus-circle me-1"></i>Record Sick Bird
+        </a>
+        <a href="{% url 'treatment' %}" class="btn btn-outline-primary">
+            <i class="bi bi-capsule-pill me-1"></i>Treatment Plan
+        </a>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="GET" class="row g-3">
+            <div class="col-md-3">
+                <label for="start" class="form-label">Start Date</label>
+                <input id="start" type="date" name="start" value="{{ selected_start }}" class="form-control">
+            </div>
+
+            <div class="col-md-3">
+                <label for="end" class="form-label">End Date</label>
+                <input id="end" type="date" name="end" value="{{ selected_end }}" class="form-control">
+            </div>
+
+            <div class="col-md-2">
+                <label for="house" class="form-label">House</label>
+                <select id="house" name="house" class="form-select">
+                    <option value="">All houses</option>
+                    {% for house in house_choices %}
+                    <option value="{{ house.pk }}" {% if selected_house == house.pk|stringformat:'s' %}selected{% endif %}>{{ house.name|default:house.house_code }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="col-md-2">
+                <label for="action" class="form-label">Immediate Action</label>
+                <select id="action" name="action" class="form-select">
+                    <option value="">All actions</option>
+                    {% for value, label in action_choices %}
+                    <option value="{{ value }}" {% if selected_action == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="col-md-2">
+                <label for="isolated" class="form-label">Sickbay Status</label>
+                <select id="isolated" name="isolated" class="form-select">
+                    <option value="">All</option>
+                    <option value="yes" {% if selected_isolated == 'yes' %}selected{% endif %}>Moved to sickbay</option>
+                    <option value="no" {% if selected_isolated == 'no' %}selected{% endif %}>Left in crowd</option>
+                </select>
+            </div>
+
+            <div class="col-md-6">
+                <label for="disease" class="form-label">Case / Symptoms / Diagnosis</label>
+                <input id="disease" type="text" name="disease" value="{{ selected_disease }}" class="form-control" placeholder="Search case label, symptoms, or diagnosis">
+            </div>
+
+            <div class="col-md-3 d-flex align-items-end">
+                <button class="btn btn-primary w-100">
+                    <i class="bi bi-funnel me-1"></i>Filter Register
+                </button>
+            </div>
+
+            <div class="col-md-3 d-flex align-items-end">
+                <a href="{% url 'view_sickness' %}" class="btn btn-light w-100">
+                    <i class="bi bi-arrow-clockwise me-1"></i>Reset
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="row g-4 mb-4">
+    <div class="col-12 col-md-3">
+        <div class="card text-center h-100">
+            <div class="card-body">
+                <h6 class="text-muted text-uppercase small mb-2">Total Cases</h6>
+                <h3 class="mb-0">{{ total_cases }}</h3>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 col-md-3">
+        <div class="card text-center h-100">
+            <div class="card-body">
+                <h6 class="text-muted text-uppercase small mb-2">Birds Affected</h6>
+                <h3 class="mb-0">{{ total_affected }}</h3>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 col-md-3">
+        <div class="card text-center h-100">
+            <div class="card-body">
+                <h6 class="text-muted text-uppercase small mb-2">Sickbay Cases</h6>
+                <h3 class="mb-0">{{ isolated_cases }}</h3>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 col-md-3">
+        <div class="card text-center h-100">
+            <div class="card-body">
+                <h6 class="text-muted text-uppercase small mb-2">Common Diagnosis</h6>
+                <h3 class="mb-0">{{ common_disease }}</h3>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-bordered table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Date</th>
+                        <th>Case</th>
+                        <th>Birds</th>
+                        <th>House</th>
+                        <th>Symptoms</th>
+                        <th>Diagnosis</th>
+                        <th>Vet Visit</th>
+                        <th>Treatment Plan</th>
+                        <th>Status</th>
+                        <th>Reporter</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for record in reports %}
+                    <tr>
+                        <td>{{ record.date }}</td>
+                        <td>
+                            <div class="fw-semibold">{{ record.case_label }}</div>
+                            <small class="text-muted">{{ record.get_action_display }}</small>
+                        </td>
+                        <td>{{ record.affected }}</td>
+                        <td>
+                            <div>{{ record.house_label }}</div>
+                            {% if record.isolated %}
+                            <small class="text-danger">{{ record.isolation_name }}</small>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div>{{ record.symptoms|default:"-" }}</div>
+                            {% if record.image %}
+                            <a href="{{ record.image.url }}" target="_blank" rel="noopener">View photo</a>
+                            {% endif %}
+                        </td>
+                        <td>{{ record.diagnosis_label }}</td>
+                        <td>
+                            {% if record.vet_visit_date %}
+                            <div>{{ record.vet_visit_date }}</div>
+                            <small class="text-muted">{{ record.vet_name }}</small>
+                            {% else %}
+                            <span class="text-muted">Pending</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if record.treatment_items_count %}
+                            <span class="badge bg-primary">{{ record.treatment_items_count }} item{{ record.treatment_items_count|pluralize }}</span>
+                            <div class="mt-1">
+                                {% if record.pending_treatment_count %}
+                                <span class="badge bg-danger">{{ record.pending_treatment_count }} pending</span>
+                                {% else %}
+                                <span class="badge bg-success">All given</span>
+                                {% endif %}
+                            </div>
+                            {% else %}
+                            <span class="text-muted">No treatment plan yet</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if record.case_status == 'REPORTED' %}
+                            <span class="badge bg-warning text-dark">Awaiting Vet</span>
+                            {% elif record.case_status == 'DIAGNOSED' %}
+                            <span class="badge bg-info text-dark">Treatment Planned</span>
+                            {% else %}
+                            <span class="badge bg-success">Treatment Given</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div>{{ record.reported_by.get_full_name|default:record.reported_by.username }}</div>
+                            {% if record.notes %}
+                            <small class="text-muted">{{ record.notes }}</small>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="10" class="text-center py-4 text-muted">No sickness records found for the selected filters.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+</div>
+
+{% endblock %}

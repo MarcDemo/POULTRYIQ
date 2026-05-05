@@ -126,56 +126,7 @@
         </span>
     </div>
 
-    <!-- ── KPI Stat Cards ── -->
-    <div class="row g-3 mb-4">
-
-        <div class="col-6 col-md-3">
-            <div class="card h-100 border-0 shadow-sm">
-                <div class="card-body text-center">
-                    <div class="display-6 fw-bold text-primary">{{ total_birds }}</div>
-                    <div class="text-muted small mt-1">
-                        <i class="bi bi-feather me-1"></i>Live Birds
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-6 col-md-3">
-            <div class="card h-100 border-0 shadow-sm">
-                <div class="card-body text-center">
-                    <div class="display-6 fw-bold text-warning">{{ today_eggs }}</div>
-                    <div class="text-muted small mt-1">
-                        <i class="bi bi-basket me-1"></i>Eggs Today
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-6 col-md-3">
-            <div class="card h-100 border-0 shadow-sm">
-                <div class="card-body text-center">
-                    <div class="display-6 fw-bold {% if today_deaths > 0 %}text-danger{% else %}text-success{% endif %}">
-                        {{ today_deaths }}
-                    </div>
-                    <div class="text-muted small mt-1">
-                        <i class="bi bi-exclamation-triangle me-1"></i>Deaths Today
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-6 col-md-3">
-            <div class="card h-100 border-0 shadow-sm">
-                <div class="card-body text-center">
-                    <div class="display-6 fw-bold text-info">{{ house_stats|length }}</div>
-                    <div class="text-muted small mt-1">
-                        <i class="bi bi-grid me-1"></i>Active Batch{{ house_stats|length|pluralize }}
-                    </div>
-                </div>
-            </div>
-        </div>
-
-    </div>
+   
 
     <!-- ── Quick Actions ── -->
     <div class="card shadow-sm mb-4">
@@ -212,49 +163,8 @@
         </div>
     </div>
 
-    <!-- ── House Status ── -->
-    {% if house_stats %}
-    <div class="card shadow-sm mb-4">
-        <div class="card-header">
-            <i class="bi bi-house-door me-2"></i>My House Status
-        </div>
-        <div class="card-body p-0">
-            <div class="table-responsive">
-                <table class="table table-hover mb-0">
-                    <thead>
-                        <tr>
-                            <th>House</th>
-                            <th>Age (days)</th>
-                            <th>Live Birds</th>
-                            <th>Deaths Today</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for stat in house_stats %}
-                        <tr>
-                            <td><strong>{{ stat.house.name|default:stat.house.house_code }}</strong></td>
-                            <td>{{ stat.age_days }}</td>
-                            <td>{{ stat.current_birds }}</td>
-                            <td>
-                                {% if stat.today_deaths > 0 %}
-                                    <span class="badge bg-danger">{{ stat.today_deaths }}</span>
-                                {% else %}
-                                    <span class="badge bg-success">0</span>
-                                {% endif %}
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-    {% else %}
-    <div class="alert alert-warning">
-        <i class="bi bi-info-circle me-2"></i>
-        No active batches found in your assigned house(s). Contact your supervisor.
-    </div>
-    {% endif %}
+    
+
 
     <!-- ── Recent Egg Collections ── -->
     <div class="card shadow-sm">
@@ -288,7 +198,7 @@
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="4" class="text-center text-muted py-3">No egg records yet.</td>
+                            <td colspan="4" class="text-center text-muted py-3">oops!!! looks like you havent collected any eggs today!</td>
                         </tr>
                         {% endfor %}
                     </tbody>

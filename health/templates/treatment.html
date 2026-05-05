@@ -1,119 +1,236 @@
-{% extends 'base.html' %}
+{% extends "base.html" %}
 {% block content %}
 
 <div class="container-fluid">
 
-<h3 class="mb-4">
-    <i class="bi bi-heart-pulse me-2"></i>Treatment Records
-</h3>
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
+    <div>
+        <h3 class="mb-1"><i class="bi bi-capsule-pill me-2"></i>Treatment Plan</h3>
+        <small class="text-muted">After the vet visits, record the diagnosis, medicine, and dosage here. A case can be one bird or a grouped case, and the alert stays active until the dose is marked as given.</small>
+    </div>
+    <a href="{% url 'report_sickness' %}" class="btn btn-outline-danger">
+        <i class="bi bi-heart-pulse me-1"></i>Record Sick Bird
+    </a>
+</div>
+
+<div class="row g-4 mb-4">
+    <div class="col-12 col-md-4">
+        <div class="card text-center h-100">
+            <div class="card-body">
+                <h6 class="text-muted text-uppercase small mb-2">Awaiting Vet</h6>
+                <h3 class="mb-0">{{ pending_vet_cases_count }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-md-4">
+        <div class="card text-center h-100">
+            <div class="card-body">
+                <h6 class="text-muted text-uppercase small mb-2">Pending Doses</h6>
+                <h3 class="mb-0">{{ pending_treatment_count }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-md-4">
+        <div class="card text-center h-100">
+            <div class="card-body">
+                <h6 class="text-muted text-uppercase small mb-2">Active Alerts</h6>
+                <h3 class="mb-0">{{ active_treatment_alerts }}</h3>
+            </div>
+        </div>
+    </div>
+</div>
 
 <div class="row g-4">
+    <div class="col-xl-5">
+        <div class="card h-100">
+            <div class="card-header">
+                <i class="bi bi-clipboard2-pulse me-2"></i>Vet Diagnosis + Medication
+            </div>
+            <div class="card-body">
+                <form method="POST" novalidate>
+                    {% csrf_token %}
+                    <input type="hidden" name="form_action" value="record_treatment_plan">
 
-<!-- FORM -->
-<div class="col-lg-4">
-<div class="card">
-<div class="card-header">
-    <i class="bi bi-plus-circle me-2"></i>Record Treatment
-</div>
+                    <div class="mb-3">
+                        <label for="sickness_report" class="form-label">Sickness Case</label>
+                        <select id="sickness_report" name="sickness_report" class="form-select" required>
+                            <option value="">-- Select sickness case --</option>
+                            {% for case in open_cases %}
+                            <option value="{{ case.pk }}">
+                                {{ case.case_label }} - {{ case.house_label }} - {{ case.affected }} bird{{ case.affected|pluralize }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
 
-<div class="card-body">
-<form method="POST" novalidate>
-{% csrf_token %}
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label for="vet_visit_date" class="form-label">Vet Visit Date</label>
+                            <input id="vet_visit_date" type="date" name="vet_visit_date" class="form-control" value="{{ today|date:'Y-m-d' }}" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="vet_name" class="form-label">Vet Name</label>
+                            <input id="vet_name" type="text" name="vet_name" class="form-control" placeholder="Dr. Nakato" required>
+                        </div>
+                    </div>
 
-<div class="mb-3">
-<label for="date" class="form-label">
-    <i class="bi bi-calendar me-1"></i>Date
-</label>
-<input type="date" id="date" name="date" class="form-control" required>
-</div>
+                    <div class="mt-3">
+                        <label for="diagnosis" class="form-label">Diagnosis</label>
+                        <input id="diagnosis" type="text" name="diagnosis" class="form-control" placeholder="e.g. Newcastle Disease" required>
+                    </div>
 
-<div class="mb-3">
-<label for="house" class="form-label">
-    <i class="bi bi-building me-1"></i>House
-</label>
-<select id="house" name="house" class="form-select">
-<option>House A</option>
-<option>House B</option>
-<option>House C</option>
-</select>
-</div>
+                    <div class="mt-3">
+                        <label for="diagnosis_notes" class="form-label">Diagnosis Notes</label>
+                        <textarea id="diagnosis_notes" name="diagnosis_notes" class="form-control" rows="3" placeholder="Lab findings, symptoms confirmed, cautions..."></textarea>
+                    </div>
 
-<div class="mb-3">
-<label for="disease" class="form-label">
-    <i class="bi bi-exclamation-circle me-1"></i>Disease
-</label>
-<input type="text" id="disease" name="disease" class="form-control" placeholder="e.g., Coccidiosis" required>
-</div>
+                    <hr class="my-4">
 
-<div class="mb-3">
-<label for="medication" class="form-label">
-    <i class="bi bi-capsule me-1"></i>Medication
-</label>
-<input type="text" id="medication" name="medication" class="form-control" placeholder="Medication name" required>
-</div>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label for="medicine_name" class="form-label">Medicine</label>
+                            <input id="medicine_name" type="text" name="medicine_name" class="form-control" placeholder="Medication name" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="dosage" class="form-label">Dosage</label>
+                            <input id="dosage" type="text" name="dosage" class="form-control" placeholder="e.g. 2ml twice daily" required>
+                        </div>
+                    </div>
 
-<div class="mb-3">
-<label for="dosage" class="form-label">
-    <i class="bi bi-eyedropper me-1"></i>Dosage
-</label>
-<input type="text" id="dosage" name="dosage" class="form-control" placeholder="Dosage info" required>
-</div>
+                    <div class="row g-3 mt-1">
+                        <div class="col-md-6">
+                            <label for="administration_route" class="form-label">Administration Route</label>
+                            <input id="administration_route" type="text" name="administration_route" class="form-control" placeholder="Water, oral, injection">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="scheduled_for" class="form-label">Scheduled For</label>
+                            <input id="scheduled_for" type="date" name="scheduled_for" class="form-control" value="{{ today|date:'Y-m-d' }}">
+                        </div>
+                    </div>
 
-<div class="d-grid">
-<button class="btn btn-success" type="submit">
-    <i class="bi bi-check-circle me-2"></i>Save
-</button>
-</div>
+                    
 
-</form>
-</div>
-</div>
-</div>
+                    <div class="mt-3">
+                        <label for="instructions" class="form-label">Treatment Instructions</label>
+                        <textarea id="instructions" name="instructions" class="form-control" rows="3" placeholder="Any extra dosage instructions or handling notes..."></textarea>
+                    </div>
 
-<!-- TABLE -->
-<div class="col-lg-8">
-<div class="card">
-<div class="card-header">
-    <i class="bi bi-table me-2"></i>Treatment History
-</div>
-<div class="card-body">
+                    <div class="d-grid mt-4">
+                        <button class="btn btn-success" type="submit">
+                            <i class="bi bi-check-circle me-2"></i>Save Diagnosis and Treatment
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
 
-<div class="table-responsive">
-<table class="table table-hover">
+    <div class="col-xl-7">
+        <div class="card mb-4">
+            <div class="card-header d-flex align-items-center justify-content-between">
+                <span><i class="bi bi-bell me-2"></i>Pending Treatment Doses</span>
+                <span class="badge bg-danger">{{ pending_treatment_count }}</span>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Case</th>
+                                <th>Diagnosis</th>
+                                <th>Medicine</th>
+                                <th>Dosage</th>
+                                <th>Plan</th>
+                                <th>Alert</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in pending_treatment_items %}
+                            <tr>
+                                <td>
+                                    <div class="fw-semibold">{{ item.sickness_report.case_label }}</div>
+                                    <small class="text-muted">{{ item.sickness_report.house_label }} • {{ item.sickness_report.affected }} bird{{ item.sickness_report.affected|pluralize }}</small>
+                                </td>
+                                <td>{{ item.sickness_report.diagnosis_label }}</td>
+                                <td>
+                                    <div class="fw-semibold">{{ item.medicine_name }}</div>
+                                    {% if item.administration_route %}
+                                    <small class="text-muted">{{ item.administration_route }}</small>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div class="fw-semibold">{{ item.dosage }}</div>
+                                    {% if item.instructions %}
+                                    <small class="text-muted">{{ item.instructions }}</small>
+                                    {% endif %}
+                                </td>
+                                <td>{{ item.scheduled_for|default:"Today" }}</td>
+                                <td>
+                                    {% if item.has_active_alert %}
+                                    <span class="badge bg-danger">Active</span>
+                                    {% else %}
+                                    <span class="badge bg-secondary">None</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <form method="POST" class="d-inline">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="form_action" value="mark_given">
+                                        <input type="hidden" name="plan_id" value="{{ item.pk }}">
+                                        <button type="submit" class="btn btn-sm btn-success">
+                                            <i class="bi bi-check2-circle me-1"></i>Mark Given
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="7" class="text-center text-muted py-4">No pending treatment doses right now.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
 
-<thead>
-<tr>
-<th>Date</th>
-<th>House</th>
-<th>Disease</th>
-<th>Medication</th>
-<th>Dosage</th>
-<th>Mode</th>
-<th>Vet</th>
-</tr>
-</thead>
-
-<tbody>
-
-<tr>
-<td>31 March 2026</td>
-<td><span class="badge bg-info">House A</span></td>
-<td>Coccidiosis</td>
-<td>Sulfadimethoxine</td>
-<td>500mg</td>
-<td>eye drop</td>
-<td>shakirah</td>
-</tr>
-
-</tbody>
-
-</table>
-</div>
-
-</div>
-</div>
-</div>
-
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-clock-history me-2"></i>Recently Given Doses
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-striped mb-0">
+                        <thead>
+                            <tr>
+                                <th>Case</th>
+                                <th>Medicine</th>
+                                <th>Dosage</th>
+                                <th>Given At</th>
+                                <th>Marked By</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in completed_treatment_items %}
+                            <tr>
+                                <td>{{ item.sickness_report.case_label }}</td>
+                                <td>{{ item.medicine_name }}</td>
+                                <td>{{ item.dosage }}</td>
+                                <td>{{ item.given_at|date:"M d, Y H:i" }}</td>
+                                <td>{{ item.marked_given_by.get_full_name|default:item.marked_given_by.username }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="5" class="text-center text-muted py-4">No doses have been marked as given yet.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 
 </div>
