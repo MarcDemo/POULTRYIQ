@@ -213,7 +213,89 @@
     </div>
 </div>
 
+<div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+        <div class="card h-100 border-0 shadow-sm" style="border-left: 4px solid #dc3545 !important;">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                    <span class="text-muted small fw-semibold text-uppercase">Sickness Today</span>
+                    <div class="rounded-circle d-flex align-items-center justify-content-center" style="width:36px;height:36px;background:#f8d7da;">
+                        <i class="bi bi-heart-pulse text-danger"></i>
+                    </div>
+                </div>
+                <h3 class="fw-bold mb-0">{{ today_sickness_cases }}</h3>
+                <small class="text-muted">Reports logged today</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card h-100 border-0 shadow-sm" style="border-left: 4px solid #6f42c1 !important;">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                    <span class="text-muted small fw-semibold text-uppercase">Isolation Cases</span>
+                    <div class="rounded-circle d-flex align-items-center justify-content-center" style="width:36px;height:36px;background:#efe2ff;">
+                        <i class="bi bi-shield-fill-exclamation" style="color:#6f42c1;"></i>
+                    </div>
+                </div>
+                <h3 class="fw-bold mb-0">{{ isolated_sickness_cases }}</h3>
+                <small class="text-muted">Active isolated or sickbay cases</small>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Quick Actions -->
+<div class="card border-0 shadow-sm mb-4">
+    <div class="card-header d-flex align-items-center justify-content-between">
+        <span><i class="bi bi-heart-pulse me-2"></i>Recent Sickness Reports</span>
+        <a href="{% url 'view_sickness' %}" class="btn btn-sm btn-light fw-semibold">View All</a>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>House</th>
+                        <th>Disease</th>
+                        <th>Affected</th>
+                        <th>Isolation</th>
+                        <th>Cleaning</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for rec in recent_sickness_reports %}
+                    <tr>
+                        <td>{{ rec.house_label }}</td>
+                        <td>{{ rec.disease|default:"Not specified" }}</td>
+                        <td>{{ rec.affected }}</td>
+                        <td>
+                            {% if rec.isolated %}
+                            <span class="badge bg-danger mb-1">Isolated</span>
+                            <div><small>{{ rec.isolation_name }}</small></div>
+                            {% else %}
+                            <span class="badge bg-secondary">Not isolated</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if rec.cleaning_sessions %}
+                            <span class="badge bg-success">{{ rec.cleaning_sessions }} log{{ rec.cleaning_sessions|pluralize }}</span>
+                            <div><small>{{ rec.last_cleaned_at }}</small></div>
+                            {% elif rec.isolated %}
+                            <span class="badge bg-warning text-dark">Pending cleaning</span>
+                            {% else %}
+                            <span class="text-muted">Not needed</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="5" class="text-center text-muted py-3"><i class="bi bi-check-circle text-success me-2"></i>No sickness reports for your houses</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
 <div class="card border-0 shadow-sm mb-4">
     <div class="card-header"><i class="bi bi-lightning-charge me-2"></i>Quick Actions</div>
     <div class="card-body">
@@ -244,6 +326,13 @@
                     <i class="bi bi-heartbreak fs-4"></i>
                     <span class="fw-semibold">Mortality</span>
                     {% if pending_mortality > 0 %}<span class="badge bg-warning text-dark">{{ pending_mortality }} pending</span>{% endif %}
+                </a>
+            </div>
+            <div class="col-6 col-md-3">
+                <a href="{% url 'view_sickness' %}" class="btn btn-outline-primary w-100 py-3 d-flex flex-column align-items-center gap-1">
+                    <i class="bi bi-heart-pulse fs-4"></i>
+                    <span class="fw-semibold">Sickness</span>
+                    {% if isolated_sickness_cases > 0 %}<span class="badge bg-danger">{{ isolated_sickness_cases }} isolated</span>{% endif %}
                 </a>
             </div>
         </div>

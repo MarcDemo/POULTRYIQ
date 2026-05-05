@@ -1,12 +1,13 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
-from django.db.models import Sum
+from django.db.models import Count, Max, Sum
 from django.utils.timezone import now
 from datetime import date
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 
 from accounts.decorators import worker_required, supervisor_required
+from health.models import SicknessReport
 from .models import (
     PoultryBatch,
     DailyProduction,
@@ -95,6 +96,16 @@ def _get_worker_active_batches(user):
     ).select_related("house").order_by("house__house_code", "batch_code")
 
 
+def _role_code(user) -> str:
+    return (getattr(user.role, "code", "") or "").upper()
+
+
+def _scope_to_supervisor_houses(queryset, user, house_lookup):
+    if _role_code(user) == "SUPERVISOR":
+        return queryset.filter(**{f"{house_lookup}__in": user.houses.all()})
+    return queryset
+
+
 @worker_required
 def record_feed(request):
     batches = _get_worker_active_batches(request.user)
@@ -106,6 +117,7 @@ def record_feed(request):
         quantity_raw = request.POST.get("quantity", "").strip()
         time_given_raw = request.POST.get("time_given", "").strip()
         notes = request.POST.get("notes", "").strip()
+        photos = request.FILES.getlist('photos')
 
         errors = []
         selected_batch = batches.filter(pk=batch_id).first() if batch_id else None
@@ -256,6 +268,7 @@ def record_cleaning(request):
         disinfection_done = bool(request.POST.get("disinfected"))
         water_changed = bool(request.POST.get("water_changed"))
         notes = request.POST.get("notes", "").strip()
+        photos = request.FILES.getlist('photos')
 
         errors = []
         selected_batch = batches.filter(pk=batch_id).first() if batch_id else None
@@ -272,11 +285,15 @@ def record_cleaning(request):
         if not any([house_cleaned, disinfection_done, water_changed]):
             errors.append("Please tick at least one cleaning task.")
 
+        # require at least one uploaded photo as proof
+        if not photos:
+            errors.append("Please upload at least one photo as proof of cleaning.")
+
         if errors:
             for error in errors:
                 messages.error(request, error)
         else:
-            CleaningRecord.objects.create(
+            cleaning = CleaningRecord.objects.create(
                 batch=selected_batch,
                 record_date=record_date,
                 house_cleaned=house_cleaned,
@@ -285,6 +302,8 @@ def record_cleaning(request):
                 notes=notes,
                 recorded_by=request.user,
             )
+
+            
             messages.success(request, "Cleaning routine record saved successfully.")
             return redirect("record_cleaning")
 
@@ -292,6 +311,8 @@ def record_cleaning(request):
         recorded_by=request.user,
         batch__in=batches,
     ).select_related("batch__house")[:10]
+    # show only the most recent 7 cleaning records
+    recent_cleaning_records = recent_cleaning_records[:7]
 
     return render(
         request,
@@ -345,7 +366,9 @@ def workersdash(request):
     ).aggregate(total=Sum("eggs_collected"))["total"] or 0
 
     recent_activity = egg_collection.objects.filter(
-        collected_by=user
+        collected_by=user,
+        collection_date=today,
+        batch__house__in=assigned_houses,
     ).select_related("batch__house").order_by("-collected_at")[:5]
 
     context = {
@@ -364,42 +387,61 @@ def workersdash(request):
 @supervisor_required
 def supdash(request):
     today = date.today()
+    egg_records = _scope_to_supervisor_houses(egg_collection.objects.all(), request.user, "batch__house")
+    feed_records = _scope_to_supervisor_houses(FeedRecord.objects.all(), request.user, "batch__house")
+    cleaning_records = _scope_to_supervisor_houses(CleaningRecord.objects.all(), request.user, "batch__house")
+    mortality_records = _scope_to_supervisor_houses(MortalityRecord.objects.all(), request.user, "batch__house")
+    sickness_records = _scope_to_supervisor_houses(SicknessReport.objects.all(), request.user, "house_ref")
 
     # Pending counts
-    pending_eggs = egg_collection.objects.filter(status=ApprovalStatus.PENDING).count()
-    pending_feed = FeedRecord.objects.filter(status=ApprovalStatus.PENDING).count()
-    pending_cleaning = CleaningRecord.objects.filter(status=ApprovalStatus.PENDING).count()
-    pending_mortality = MortalityRecord.objects.filter(status=ApprovalStatus.PENDING).count()
+    pending_eggs = egg_records.filter(status=ApprovalStatus.PENDING).count()
+    pending_feed = feed_records.filter(status=ApprovalStatus.PENDING).count()
+    pending_cleaning = cleaning_records.filter(status=ApprovalStatus.PENDING).count()
+    pending_mortality = mortality_records.filter(status=ApprovalStatus.PENDING).count()
     total_pending = pending_eggs + pending_feed + pending_cleaning + pending_mortality
 
     # Today's summary (approved records only)
-    today_eggs = egg_collection.objects.filter(
+    today_eggs = egg_records.filter(
         collection_date=today, status=ApprovalStatus.APPROVED
     ).aggregate(total=Sum("eggs_collected"))["total"] or 0
 
-    today_deaths = MortalityRecord.objects.filter(
+    today_deaths = mortality_records.filter(
         record_date=today, status=ApprovalStatus.APPROVED
     ).aggregate(total=Sum("number_dead"))["total"] or 0
 
-    today_feed_kg = FeedRecord.objects.filter(
+    today_feed_kg = feed_records.filter(
         record_date=today, status=ApprovalStatus.APPROVED
     ).aggregate(total=Sum("quantity_kg"))["total"] or 0
 
-    houses_cleaned_today = CleaningRecord.objects.filter(
+    houses_cleaned_today = cleaning_records.filter(
         record_date=today, status=ApprovalStatus.APPROVED, house_cleaned=True
     ).count()
+    today_sickness_cases = sickness_records.filter(date=today).count()
+    isolated_sickness_cases = sickness_records.filter(isolated=True).count()
 
     # Recent pending items for quick view
-    recent_pending_eggs = egg_collection.objects.filter(
+    recent_pending_eggs = egg_records.filter(
         status=ApprovalStatus.PENDING
     ).select_related("batch__house", "collected_by").order_by("-collected_at")[:5]
 
-    recent_pending_mortality = MortalityRecord.objects.filter(
+    recent_pending_mortality = mortality_records.filter(
         status=ApprovalStatus.PENDING
     ).select_related("batch__house", "reported_by", "cause").order_by("-reported_at")[:5]
+    recent_sickness_reports = (
+        sickness_records.select_related("house_ref", "batch", "reported_by")
+        .annotate(
+            cleaning_sessions=Count("sickbay_cleanings", distinct=True),
+            last_cleaned_at=Max("sickbay_cleanings__record_date"),
+        )
+        .order_by("-date", "-created_at")[:5]
+    )
 
     # Active batches / houses overview
-    active_batches = PoultryBatch.objects.filter(status=PoultryBatch.Status.ACTIVE).select_related("house")
+    active_batches = _scope_to_supervisor_houses(
+        PoultryBatch.objects.filter(status=PoultryBatch.Status.ACTIVE),
+        request.user,
+        "house",
+    ).select_related("house")
     total_birds = 0
     for batch in active_batches:
         mort = batch.mortality_records.filter(status=ApprovalStatus.APPROVED).aggregate(
@@ -417,8 +459,11 @@ def supdash(request):
         "today_deaths": today_deaths,
         "today_feed_kg": today_feed_kg,
         "houses_cleaned_today": houses_cleaned_today,
+        "today_sickness_cases": today_sickness_cases,
+        "isolated_sickness_cases": isolated_sickness_cases,
         "recent_pending_eggs": recent_pending_eggs,
         "recent_pending_mortality": recent_pending_mortality,
+        "recent_sickness_reports": recent_sickness_reports,
         "total_birds": total_birds,
         "active_batches_count": active_batches.count(),
     }
@@ -427,7 +472,10 @@ def supdash(request):
 
 @supervisor_required
 def sup_approve_eggs(request, pk):
-    record = get_object_or_404(egg_collection, pk=pk)
+    record = get_object_or_404(
+        _scope_to_supervisor_houses(egg_collection.objects.all(), request.user, "batch__house"),
+        pk=pk,
+    )
     action = request.POST.get("action")
     review_notes = request.POST.get("review_notes", "").strip()
     if action == "approve":
@@ -445,7 +493,10 @@ def sup_approve_eggs(request, pk):
 
 @supervisor_required
 def sup_approve_feed(request, pk):
-    record = get_object_or_404(FeedRecord, pk=pk)
+    record = get_object_or_404(
+        _scope_to_supervisor_houses(FeedRecord.objects.all(), request.user, "batch__house"),
+        pk=pk,
+    )
     action = request.POST.get("action")
     review_notes = request.POST.get("review_notes", "").strip()
     if action == "approve":
@@ -463,7 +514,10 @@ def sup_approve_feed(request, pk):
 
 @supervisor_required
 def sup_approve_cleaning(request, pk):
-    record = get_object_or_404(CleaningRecord, pk=pk)
+    record = get_object_or_404(
+        _scope_to_supervisor_houses(CleaningRecord.objects.all(), request.user, "batch__house"),
+        pk=pk,
+    )
     action = request.POST.get("action")
     review_notes = request.POST.get("review_notes", "").strip()
     if action == "approve":
@@ -481,7 +535,10 @@ def sup_approve_cleaning(request, pk):
 
 @supervisor_required
 def sup_approve_mortality(request, pk):
-    record = get_object_or_404(MortalityRecord, pk=pk)
+    record = get_object_or_404(
+        _scope_to_supervisor_houses(MortalityRecord.objects.all(), request.user, "batch__house"),
+        pk=pk,
+    )
     action = request.POST.get("action")
     review_notes = request.POST.get("review_notes", "").strip()
     if action == "approve":
@@ -501,20 +558,36 @@ def sup_approve_mortality(request, pk):
 def supapproval(request):
     tab = request.GET.get("tab", "eggs")
 
-    pending_eggs = egg_collection.objects.filter(
+    pending_eggs = _scope_to_supervisor_houses(
+        egg_collection.objects.filter(
         status=ApprovalStatus.PENDING
+        ),
+        request.user,
+        "batch__house",
     ).select_related("batch__house", "collected_by").order_by("-collected_at")
 
-    pending_feed = FeedRecord.objects.filter(
+    pending_feed = _scope_to_supervisor_houses(
+        FeedRecord.objects.filter(
         status=ApprovalStatus.PENDING
+        ),
+        request.user,
+        "batch__house",
     ).select_related("batch__house", "recorded_by").order_by("-created_at")
 
-    pending_cleaning = CleaningRecord.objects.filter(
+    pending_cleaning = _scope_to_supervisor_houses(
+        CleaningRecord.objects.filter(
         status=ApprovalStatus.PENDING
+        ),
+        request.user,
+        "batch__house",
     ).select_related("batch__house", "recorded_by").order_by("-created_at")
 
-    pending_mortality = MortalityRecord.objects.filter(
+    pending_mortality = _scope_to_supervisor_houses(
+        MortalityRecord.objects.filter(
         status=ApprovalStatus.PENDING
+        ),
+        request.user,
+        "batch__house",
     ).select_related("batch__house", "reported_by", "cause").order_by("-reported_at")
 
     context = {

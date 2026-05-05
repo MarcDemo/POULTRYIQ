@@ -1,0 +1,84 @@
+{% extends 'supbase.html' %}
+{% load static %}
+
+{% block content %}
+
+<div class="container mt-4">
+
+	<div class="row justify-content-center">
+		<div class="col-12 col-md-7 col-lg-6">
+
+			<div class="card shadow">
+				<div class="card-header" style="background: linear-gradient(135deg, #dc3545 0%, #ef476f 100%);">
+					<i class="bi bi-heart-pulse me-2"></i>Report Sick Birds
+				</div>
+				<div class="card-body">
+
+					<form method="POST" enctype="multipart/form-data" novalidate>
+						{% csrf_token %}
+
+						<div class="mb-3">
+							<label for="date" class="form-label"><i class="bi bi-calendar3 me-1"></i>Date</label>
+							<input id="date" type="date" name="date" class="form-control" value="{{ today|date:'Y-m-d' }}" required>
+						</div>
+
+						<div class="mb-3">
+							<label for="house" class="form-label"><i class="bi bi-house-door me-1"></i>House</label>
+							<select id="house" name="house" class="form-select" required>
+								<option value="">-- Select house --</option>
+								{% for h in houses %}
+								<option value="{{ h.pk }}">{{ h.name|default:h.house_code }}</option>
+								{% endfor %}
+							</select>
+							<div class="form-text">Only houses assigned to you are listed here.</div>
+						</div>
+
+						<div class="mb-3">
+							<label for="disease" class="form-label"><i class="bi bi-thermometer-sun me-1"></i>Symptoms / Disease</label>
+							<input id="disease" type="text" name="disease" class="form-control" placeholder="e.g. coughing, weak legs">
+						</div>
+
+						<div class="mb-3">
+							<label for="affected" class="form-label"><i class="bi bi-people-fill me-1"></i>Number of Birds Affected</label>
+							<input id="affected" type="number" name="affected" class="form-control" required min="1">
+						</div>
+
+						<div class="mb-3">
+							<label for="image" class="form-label"><i class="bi bi-camera me-1"></i>Upload Photo</label>
+							<input id="image" name="image" class="form-control" type="file" accept="image/*">
+							<div class="form-text">Optional — upload a photo to help with diagnosis.</div>
+						</div>
+
+						<div class="mb-3">
+							<label for="action" class="form-label"><i class="bi bi-wrench-adjustable-circle me-1"></i>Action Taken</label>
+							<select id="action" name="action" class="form-select" required>
+								<option value="">-- Select action --</option>
+								<option value="sickbay">Moved to Sickbay</option>
+								<option value="isolate">Isolated</option>
+								<option value="crowd">Left in Crowd</option>
+							</select>
+							<div class="form-text">If birds are isolated or moved to sickbay, the system creates an isolation name like <strong>House A-Isolation(Newcastle)</strong>.</div>
+						</div>
+
+						<div class="mb-3">
+							<label for="notes" class="form-label"><i class="bi bi-chat-left-text me-1"></i>Notes</label>
+							<textarea id="notes" name="notes" class="form-control" rows="3" placeholder="Any additional observations..."></textarea>
+						</div>
+
+						<div class="d-grid mt-3">
+							<button type="submit" class="btn btn-danger">
+								<i class="bi bi-check-circle me-1"></i>Submit Report
+							</button>
+						</div>
+
+					</form>
+
+				</div>
+			</div>
+
+		</div>
+	</div>
+
+</div>
+
+{% endblock %}

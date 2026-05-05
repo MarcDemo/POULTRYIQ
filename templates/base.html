@@ -250,6 +250,12 @@
                 </a>
             </li>
             <li class="nav-item">
+                <a class="nav-link {% if request.resolver_match.url_name == 'view_sickness' %}active{% endif %}" href="{% url 'view_sickness' %}">
+                    <i class="bi bi-heart-pulse"></i><span>Health Records</span>
+                </a>
+
+            </li>
+            <li class="nav-item">
                 <a class="nav-link {% if request.resolver_match.url_name == 'vaccine_report' %}active{% endif %}" href="{% url 'vaccine_report' %}">
                     <i class="bi bi-capsule"></i><span>Vaccination</span>
                 </a>

@@ -1,0 +1,181 @@
+{% extends base_template %}
+{% block content %}
+
+<div class="container-fluid">
+
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
+    <div>
+        <h3 class="mb-1"><i class="bi bi-heart-pulse me-2"></i>Sickness Records</h3>
+        <small class="text-muted">Worker sickness reports, isolation status, and sickbay cleaning follow-up.</small>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="GET" class="row g-3">
+            <div class="col-md-3">
+                <label for="start" class="form-label">Start Date</label>
+                <input id="start" type="date" name="start" value="{{ selected_start }}" class="form-control">
+            </div>
+
+            <div class="col-md-3">
+                <label for="end" class="form-label">End Date</label>
+                <input id="end" type="date" name="end" value="{{ selected_end }}" class="form-control">
+            </div>
+
+            <div class="col-md-2">
+                <label for="house" class="form-label">House</label>
+                <select id="house" name="house" class="form-select">
+                    <option value="">All houses</option>
+                    {% for house in house_choices %}
+                    <option value="{{ house.pk }}" {% if selected_house == house.pk|stringformat:'s' %}selected{% endif %}>
+                        {{ house.name|default:house.house_code }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="col-md-2">
+                <label for="action" class="form-label">Action</label>
+                <select id="action" name="action" class="form-select">
+                    <option value="">All actions</option>
+                    {% for value, label in action_choices %}
+                    <option value="{{ value }}" {% if selected_action == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="col-md-2">
+                <label for="isolated" class="form-label">Isolation</label>
+                <select id="isolated" name="isolated" class="form-select">
+                    <option value="">All</option>
+                    <option value="yes" {% if selected_isolated == 'yes' %}selected{% endif %}>Isolated only</option>
+                    <option value="no" {% if selected_isolated == 'no' %}selected{% endif %}>Not isolated</option>
+                </select>
+            </div>
+
+            <div class="col-md-6">
+                <label for="disease" class="form-label">Disease / Symptoms</label>
+                <input id="disease" type="text" name="disease" value="{{ selected_disease }}" class="form-control" placeholder="e.g. Newcastle, coughing, weak legs">
+            </div>
+
+            <div class="col-md-3 d-flex align-items-end">
+                <button class="btn btn-primary w-100">
+                    <i class="bi bi-funnel me-1"></i>Filter Records
+                </button>
+            </div>
+
+            <div class="col-md-3 d-flex align-items-end">
+                <a href="{% url 'view_sickness' %}" class="btn btn-light w-100">
+                    <i class="bi bi-arrow-clockwise me-1"></i>Reset
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="row g-4 mb-4">
+    <div class="col-12 col-md-3">
+        <div class="card text-center h-100">
+            <div class="card-body">
+                <h6 class="text-muted text-uppercase small mb-2">Total Cases</h6>
+                <h3 class="mb-0">{{ total_cases }}</h3>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 col-md-3">
+        <div class="card text-center h-100">
+            <div class="card-body">
+                <h6 class="text-muted text-uppercase small mb-2">Birds Affected</h6>
+                <h3 class="mb-0">{{ total_affected }}</h3>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 col-md-3">
+        <div class="card text-center h-100">
+            <div class="card-body">
+                <h6 class="text-muted text-uppercase small mb-2">Isolated Cases</h6>
+                <h3 class="mb-0">{{ isolated_cases }}</h3>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 col-md-3">
+        <div class="card text-center h-100">
+            <div class="card-body">
+                <h6 class="text-muted text-uppercase small mb-2">Common Disease</h6>
+                <h3 class="mb-0">{{ common_disease }}</h3>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-bordered table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Date</th>
+                        <th>House</th>
+                        <th>Batch</th>
+                        <th>Disease / Symptoms</th>
+                        <th>Birds Affected</th>
+                        <th>Action</th>
+                        <th>Isolation</th>
+                        <th>Sickbay Cleaning</th>
+                        <th>Worker</th>
+                        <th>Notes</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for record in reports %}
+                    <tr>
+                        <td>{{ record.date }}</td>
+                        <td>{{ record.house_label }}</td>
+                        <td>{% if record.batch %}{{ record.batch.batch_code }}{% else %}<span class="text-muted">No active batch linked</span>{% endif %}</td>
+                        <td>
+                            <div class="fw-semibold">{{ record.disease|default:"Not specified" }}</div>
+                            {% if record.image %}
+                            <a href="{{ record.image.url }}" target="_blank" rel="noopener">View photo</a>
+                            {% endif %}
+                        </td>
+                        <td>{{ record.affected }}</td>
+                        <td>{{ record.get_action_display }}</td>
+                        <td>
+                            {% if record.isolated %}
+                            <span class="badge bg-danger mb-1">Isolated</span>
+                            <div><small>{{ record.isolation_name }}</small></div>
+                            {% else %}
+                            <span class="badge bg-secondary">Not isolated</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if record.cleaning_sessions %}
+                            <span class="badge bg-success">{{ record.cleaning_sessions }} log{{ record.cleaning_sessions|pluralize }}</span>
+                            <div><small>Last cleaned: {{ record.last_cleaned_at }}</small></div>
+                            {% elif record.isolated %}
+                            <span class="badge bg-warning text-dark">Not cleaned yet</span>
+                            {% else %}
+                            <span class="text-muted">Not needed</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ record.reported_by.get_full_name|default:record.reported_by.username }}</td>
+                        <td>{{ record.notes|default:"-" }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="10" class="text-center py-4 text-muted">No sickness records found for the selected filters.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+</div>
+
+{% endblock %}
