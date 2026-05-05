@@ -85,24 +85,51 @@
         </div>
     </div>
 </div>
-
-<!-- Row 2: Feed + Cleaning Today -->
-<div class="row g-3 mb-4">
+<!-- sickbay cases -->
+ <div class="row g-3 mb-4">
     <div class="col-6 col-md-3">
-        <div class="card h-100 border-0 shadow-sm" style="border-left: 4px solid #ff9800 !important;">
+        <div class="card h-100 border-0 shadow-sm" style="border-left: 4px solid #dc3545 !important;">
             <div class="card-body">
                 <div class="d-flex align-items-center justify-content-between mb-2">
-                    <span class="text-muted small fw-semibold text-uppercase">Feed Today</span>
-                    <div class="rounded-circle d-flex align-items-center justify-content-center" style="width:36px;height:36px;background:#fff3e0;">
-                        <i class="bi bi-bag-fill" style="color:#ff9800;"></i>
+                    <span class="text-muted small fw-semibold text-uppercase">Sickness Today</span>
+                    <div class="rounded-circle d-flex align-items-center justify-content-center" style="width:36px;height:36px;background:#f8d7da;">
+                        <i class="bi bi-heart-pulse text-danger"></i>
                     </div>
                 </div>
-                <h3 class="fw-bold mb-0">{{ today_feed_kg|floatformat:1 }} <small class="fs-6 text-muted">kg</small></h3>
-                <small class="text-muted">Feed given (approved)</small>
+                <h3 class="fw-bold mb-0">{{ today_sickness_cases }}</h3>
+                <small class="text-muted">Reports logged today</small>
             </div>
         </div>
     </div>
     <div class="col-6 col-md-3">
+        <div class="card h-100 border-0 shadow-sm" style="border-left: 4px solid #6f42c1 !important;">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                    <span class="text-muted small fw-semibold text-uppercase">Sickbay Cases</span>
+                    <div class="rounded-circle d-flex align-items-center justify-content-center" style="width:36px;height:36px;background:#efe2ff;">
+                        <i class="bi bi-shield-fill-exclamation" style="color:#6f42c1;"></i>
+                    </div>
+                </div>
+                <h3 class="fw-bold mb-0">{{ isolated_sickness_cases }}</h3>
+                <small class="text-muted">Cases moved to sickbay</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card h-100 border-0 shadow-sm" style="border-left: 4px solid #0dcaf0 !important;">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                    <span class="text-muted small fw-semibold text-uppercase">Pending Doses</span>
+                    <div class="rounded-circle d-flex align-items-center justify-content-center" style="width:36px;height:36px;background:#cff4fc;">
+                        <i class="bi bi-capsule-pill" style="color:#0dcaf0;"></i>
+                    </div>
+                </div>
+                <h3 class="fw-bold mb-0">{{ pending_treatment_doses }}</h3>
+                <small class="text-muted">Treatment items awaiting dosing</small>
+            </div>
+        </div>
+    </div>
+     <div class="col-6 col-md-3">
         <div class="card h-100 border-0 shadow-sm" style="border-left: 4px solid #20c997 !important;">
             <div class="card-body">
                 <div class="d-flex align-items-center justify-content-between mb-2">
@@ -116,29 +143,10 @@
             </div>
         </div>
     </div>
-    <div class="col-6 col-md-3">
-        <a href="{% url 'supapproval' %}?tab=eggs" class="text-decoration-none">
-            <div class="card h-100 border-0 shadow-sm border-warning">
-                <div class="card-body text-center py-3">
-                    <div class="fs-4 text-warning fw-bold">{{ pending_eggs }}</div>
-                    <small class="text-muted">Egg submissions</small>
-                    <div class="mt-1"><span class="badge bg-warning text-dark">Pending</span></div>
-                </div>
-            </div>
-        </a>
-    </div>
-    <div class="col-6 col-md-3">
-        <a href="{% url 'supapproval' %}?tab=mortality" class="text-decoration-none">
-            <div class="card h-100 border-0 shadow-sm border-danger">
-                <div class="card-body text-center py-3">
-                    <div class="fs-4 text-danger fw-bold">{{ pending_mortality }}</div>
-                    <small class="text-muted">Mortality reports</small>
-                    <div class="mt-1"><span class="badge bg-warning text-dark">Pending</span></div>
-                </div>
-            </div>
-        </a>
-    </div>
 </div>
+
+
+
 
 <!-- Recent Pending Eggs -->
 <div class="row g-3 mb-4">
@@ -213,50 +221,7 @@
     </div>
 </div>
 
-<div class="row g-3 mb-4">
-    <div class="col-6 col-md-3">
-        <div class="card h-100 border-0 shadow-sm" style="border-left: 4px solid #dc3545 !important;">
-            <div class="card-body">
-                <div class="d-flex align-items-center justify-content-between mb-2">
-                    <span class="text-muted small fw-semibold text-uppercase">Sickness Today</span>
-                    <div class="rounded-circle d-flex align-items-center justify-content-center" style="width:36px;height:36px;background:#f8d7da;">
-                        <i class="bi bi-heart-pulse text-danger"></i>
-                    </div>
-                </div>
-                <h3 class="fw-bold mb-0">{{ today_sickness_cases }}</h3>
-                <small class="text-muted">Reports logged today</small>
-            </div>
-        </div>
-    </div>
-    <div class="col-6 col-md-3">
-        <div class="card h-100 border-0 shadow-sm" style="border-left: 4px solid #6f42c1 !important;">
-            <div class="card-body">
-                <div class="d-flex align-items-center justify-content-between mb-2">
-                    <span class="text-muted small fw-semibold text-uppercase">Sickbay Cases</span>
-                    <div class="rounded-circle d-flex align-items-center justify-content-center" style="width:36px;height:36px;background:#efe2ff;">
-                        <i class="bi bi-shield-fill-exclamation" style="color:#6f42c1;"></i>
-                    </div>
-                </div>
-                <h3 class="fw-bold mb-0">{{ isolated_sickness_cases }}</h3>
-                <small class="text-muted">Cases moved to sickbay</small>
-            </div>
-        </div>
-    </div>
-    <div class="col-6 col-md-3">
-        <div class="card h-100 border-0 shadow-sm" style="border-left: 4px solid #0dcaf0 !important;">
-            <div class="card-body">
-                <div class="d-flex align-items-center justify-content-between mb-2">
-                    <span class="text-muted small fw-semibold text-uppercase">Pending Doses</span>
-                    <div class="rounded-circle d-flex align-items-center justify-content-center" style="width:36px;height:36px;background:#cff4fc;">
-                        <i class="bi bi-capsule-pill" style="color:#0dcaf0;"></i>
-                    </div>
-                </div>
-                <h3 class="fw-bold mb-0">{{ pending_treatment_doses }}</h3>
-                <small class="text-muted">Treatment items awaiting dosing</small>
-            </div>
-        </div>
-    </div>
-</div>
+
 
 <!-- Quick Actions -->
 <div class="card border-0 shadow-sm mb-4">
