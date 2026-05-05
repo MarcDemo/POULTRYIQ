@@ -86,6 +86,10 @@ class HealthEventItem(models.Model):
     
 
 class SicknessReport(models.Model):
+    class CaseStatus(models.TextChoices):
+        REPORTED = "REPORTED", "Awaiting Vet Diagnosis"
+        DIAGNOSED = "DIAGNOSED", "Treatment Planned"
+        TREATMENT_COMPLETED = "TREATMENT_COMPLETED", "Treatment Given"
 
     ACTION_CHOICES = [
         ('sickbay','Moved to Sickbay'),
@@ -108,8 +112,20 @@ class SicknessReport(models.Model):
         null=True,
         blank=True,
     )
+    bird_identifier = models.CharField(max_length=80, blank=True)
+    symptoms = models.TextField(blank=True)
 
     disease = models.CharField(max_length=255, blank=True)
+    vet_name = models.CharField(max_length=120, blank=True)
+    vet_visit_date = models.DateField(null=True, blank=True)
+    diagnosis_notes = models.TextField(blank=True)
+    case_status = models.CharField(
+        max_length=30,
+        choices=CaseStatus.choices,
+        default=CaseStatus.REPORTED,
+        db_index=True,
+    )
+    treatment_completed_at = models.DateTimeField(null=True, blank=True)
 
     affected = models.IntegerField()
 
@@ -135,8 +151,22 @@ class SicknessReport(models.Model):
         return self.house
 
     @property
+    def case_label(self) -> str:
+        identifier = (self.bird_identifier or "").strip()
+        if identifier:
+            return identifier
+        bird_count = self.affected or 0
+        if bird_count == 1:
+            return "1 bird"
+        return f"{bird_count} birds"
+
+    @property
+    def diagnosis_label(self) -> str:
+        return (self.disease or "").strip() or "Pending vet diagnosis"
+
+    @property
     def is_isolation_case(self) -> bool:
-        return self.action in {"sickbay", "isolate"}
+        return self.action == "sickbay"
 
     def _build_isolation_name(self) -> str:
         house_name = self.house_label or "House"
@@ -151,7 +181,7 @@ class SicknessReport(models.Model):
         super().save(*args, **kwargs)
 
     def __str__(self) -> str:
-        return f"{self.house_label} sickness {self.date}"
+        return f"{self.case_label} {self.house_label} sickness {self.date}"
 
 
 class SickbayCleaningRecord(models.Model):
@@ -182,3 +212,52 @@ class SickbayCleaningRecord(models.Model):
 
     def __str__(self) -> str:
         return f"{self.sickness_report.isolation_name or self.sickness_report.house_label} cleaning {self.record_date}"
+
+
+class TreatmentPlanItem(models.Model):
+    plan_id = models.BigAutoField(primary_key=True)
+    sickness_report = models.ForeignKey(
+        SicknessReport,
+        on_delete=models.CASCADE,
+        related_name="treatment_items",
+    )
+    medicine_name = models.CharField(max_length=150)
+    dosage = models.CharField(max_length=120)
+    administration_route = models.CharField(max_length=80, blank=True)
+    instructions = models.TextField(blank=True)
+    scheduled_for = models.DateField(null=True, blank=True, db_index=True)
+    is_given = models.BooleanField(default=False, db_index=True)
+    given_at = models.DateTimeField(null=True, blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="treatment_plan_items_created",
+    )
+    marked_given_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="treatment_plan_items_given",
+    )
+    alert = models.ForeignKey(
+        "alerts.Alert",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="treatment_plan_items",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["is_given", "scheduled_for", "-created_at"]
+        indexes = [
+            models.Index(fields=["is_given", "scheduled_for"]),
+        ]
+
+    @property
+    def has_active_alert(self) -> bool:
+        return bool(self.alert_id and self.alert.status != "RESOLVED")
+
+    def __str__(self) -> str:
+        return f"{self.sickness_report.case_label} - {self.medicine_name}"

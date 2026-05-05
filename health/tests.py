@@ -4,12 +4,13 @@ from django.test import TestCase
 from django.urls import reverse
 
 from accounts.models import Role, User
+from alerts.models import Alert, AlertType
 from poultry.models import PoultryBatch, PoultryHouse
 
-from .models import SickbayCleaningRecord, SicknessReport
+from .models import SickbayCleaningRecord, SicknessReport, TreatmentPlanItem
 
 
-class SicknessFlowTests(TestCase):
+class SupervisorSicknessWorkflowTests(TestCase):
     def setUp(self):
         self.worker_role = Role.objects.create(
             code=Role.RoleCode.WORKER,
@@ -77,18 +78,19 @@ class SicknessFlowTests(TestCase):
             created_by=self.manager,
         )
 
-    def test_worker_sickness_report_links_house_batch_and_isolation(self):
-        self.client.force_login(self.worker)
+    def test_supervisor_records_single_bird_sickness_case(self):
+        self.client.force_login(self.supervisor)
 
         response = self.client.post(
             reverse("report_sickness"),
             {
-                "date": "2026-05-04",
+                "date": "2026-05-05",
                 "house": str(self.house_a.pk),
-                "disease": "Newcastle",
-                "affected": "12",
-                "action": "isolate",
-                "notes": "Birds separated quickly.",
+                        "bird_identifier": "BIRD-001",
+                "affected": "1",
+                "symptoms": "Coughing and low appetite",
+                "action": "sickbay",
+                "notes": "Moved out for observation.",
             },
         )
 
@@ -96,20 +98,198 @@ class SicknessFlowTests(TestCase):
         report = SicknessReport.objects.get()
         self.assertEqual(report.house_ref, self.house_a)
         self.assertEqual(report.batch, self.batch_a)
+        self.assertEqual(report.bird_identifier, "BIRD-001")
+        self.assertEqual(report.symptoms, "Coughing and low appetite")
+        self.assertEqual(report.affected, 1)
+        self.assertEqual(report.case_status, SicknessReport.CaseStatus.REPORTED)
         self.assertTrue(report.isolated)
-        self.assertEqual(report.isolation_name, "House A-Isolation(Newcastle)")
 
-    def test_worker_can_record_sickbay_cleaning_from_isolated_report(self):
+    def test_supervisor_can_record_grouped_sickness_case(self):
+        self.client.force_login(self.supervisor)
+
+        response = self.client.post(
+            reverse("report_sickness"),
+            {
+                "date": "2026-05-05",
+                "house": str(self.house_a.pk),
+                        "bird_identifier": "",
+                "affected": "10",
+                "symptoms": "Sneezing and watery eyes in one pen",
+                "action": "crowd",
+                "notes": "Observed as one grouped case before vet review.",
+            },
+        )
+
+        self.assertRedirects(response, reverse("report_sickness"))
+        report = SicknessReport.objects.get()
+        self.assertEqual(report.affected, 10)
+        self.assertEqual(report.case_label, "10 birds")
+        self.assertEqual(report.case_status, SicknessReport.CaseStatus.REPORTED)
+        self.assertFalse(report.isolated)
+
+    def test_supervisor_records_diagnosis_and_dosage_creates_persistent_alert(self):
         report = SicknessReport.objects.create(
-            date=date(2026, 5, 4),
+            date=date(2026, 5, 5),
             house="House A",
             house_ref=self.house_a,
             batch=self.batch_a,
-            disease="Coryza",
-            affected=8,
+            bird_identifier="BIRD-002",
+            symptoms="Swollen eyes",
+            affected=1,
+            action="sickbay",
+            reported_by=self.supervisor,
+            case_status=SicknessReport.CaseStatus.REPORTED,
+        )
+
+        self.client.force_login(self.supervisor)
+        response = self.client.post(
+            reverse("treatment"),
+            {
+                "form_action": "record_treatment_plan",
+                "sickness_report": str(report.pk),
+                "vet_visit_date": "2026-05-05",
+                "vet_name": "Dr. Nakato",
+                "diagnosis": "Coryza",
+                "medicine_name": "Tylosin",
+                "dosage": "2ml twice daily",
+                "administration_route": "Oral",
+                "scheduled_for": "2026-05-05",
+                "instructions": "Give after feeding.",
+                "diagnosis_notes": "Continue for 3 days.",
+            },
+        )
+
+        self.assertRedirects(response, reverse("treatment"))
+        report.refresh_from_db()
+        plan_item = TreatmentPlanItem.objects.get(sickness_report=report)
+
+        self.assertEqual(report.disease, "Coryza")
+        self.assertEqual(report.vet_name, "Dr. Nakato")
+        self.assertEqual(report.case_status, SicknessReport.CaseStatus.DIAGNOSED)
+        self.assertEqual(plan_item.medicine_name, "Tylosin")
+        self.assertEqual(plan_item.dosage, "2ml twice daily")
+        self.assertIsNotNone(plan_item.alert)
+        self.assertTrue(plan_item.alert.persist_until_resolved)
+        self.assertEqual(plan_item.alert.status, Alert.Status.UNREAD)
+
+    def test_marking_dose_as_given_resolves_alert_and_completes_case(self):
+        health_type = AlertType.objects.create(
+            code=AlertType.AlertTypeCode.HEALTH,
+            name="Health Alert",
+        )
+        report = SicknessReport.objects.create(
+            date=date(2026, 5, 5),
+            house="House A",
+            house_ref=self.house_a,
+            batch=self.batch_a,
+            bird_identifier="BIRD-003",
+            symptoms="Weak legs",
+            disease="Vitamin deficiency",
+            vet_name="Dr. Nakato",
+            vet_visit_date=date(2026, 5, 5),
+            affected=1,
+            action="crowd",
+            reported_by=self.supervisor,
+            case_status=SicknessReport.CaseStatus.DIAGNOSED,
+        )
+        alert = Alert.objects.create(
+            alert_type=health_type,
+            title="Treatment due for 1 bird",
+            message="Give vitamins",
+            receiver=self.supervisor,
+            priority=Alert.Priority.HIGH,
+            persist_until_resolved=True,
+        )
+        plan_item = TreatmentPlanItem.objects.create(
+            sickness_report=report,
+            medicine_name="Vitamin mix",
+            dosage="5ml in water",
+            scheduled_for=date(2026, 5, 5),
+            created_by=self.supervisor,
+            alert=alert,
+        )
+
+        self.client.force_login(self.supervisor)
+        response = self.client.post(
+            reverse("treatment"),
+            {
+                "form_action": "mark_given",
+                "plan_id": str(plan_item.pk),
+            },
+        )
+
+        self.assertRedirects(response, reverse("treatment"))
+        plan_item.refresh_from_db()
+        alert.refresh_from_db()
+        report.refresh_from_db()
+
+        self.assertTrue(plan_item.is_given)
+        self.assertIsNotNone(plan_item.given_at)
+        self.assertEqual(plan_item.marked_given_by, self.supervisor)
+        self.assertEqual(alert.status, Alert.Status.RESOLVED)
+        self.assertEqual(report.case_status, SicknessReport.CaseStatus.TREATMENT_COMPLETED)
+        self.assertIsNotNone(report.treatment_completed_at)
+
+    def test_supervisor_dashboard_scopes_sickness_and_treatments_to_assigned_houses(self):
+        report_a = SicknessReport.objects.create(
+            date=date(2026, 5, 5),
+            house="House A",
+            house_ref=self.house_a,
+            batch=self.batch_a,
+            bird_identifier="BIRD-A",
+            symptoms="Sneezing",
+            affected=1,
+            action="sickbay",
+            reported_by=self.supervisor,
+        )
+        report_b = SicknessReport.objects.create(
+            date=date(2026, 5, 5),
+            house="House B",
+            house_ref=self.house_b,
+            batch=self.batch_b,
+            bird_identifier="BIRD-B",
+            symptoms="Drooping wings",
+            affected=1,
+            action="sickbay",
+            reported_by=self.manager,
+        )
+        TreatmentPlanItem.objects.create(
+            sickness_report=report_a,
+            medicine_name="Med A",
+            dosage="1ml",
+            created_by=self.supervisor,
+        )
+        TreatmentPlanItem.objects.create(
+            sickness_report=report_b,
+            medicine_name="Med B",
+            dosage="2ml",
+            created_by=self.manager,
+        )
+
+        self.client.force_login(self.supervisor)
+        response = self.client.get(reverse("supdash"))
+
+        recent_reports = list(response.context["recent_sickness_reports"])
+        recent_treatments = list(response.context["recent_pending_treatments"])
+        self.assertEqual(len(recent_reports), 1)
+        self.assertEqual(recent_reports[0].house_ref, self.house_a)
+        self.assertEqual(response.context["pending_treatment_doses"], 1)
+        self.assertEqual(len(recent_treatments), 1)
+        self.assertEqual(recent_treatments[0].sickness_report.house_ref, self.house_a)
+
+    def test_worker_can_record_sickbay_cleaning_from_sickbay_report(self):
+        today = date.today()
+        report = SicknessReport.objects.create(
+            date=today,
+            house="House A",
+            house_ref=self.house_a,
+            batch=self.batch_a,
+            bird_identifier="BIRD-004",
+            symptoms="Lethargic",
+            affected=1,
             action="sickbay",
             notes="Moved to sickbay.",
-            reported_by=self.worker,
+            reported_by=self.supervisor,
         )
         self.client.force_login(self.worker)
 
@@ -117,7 +297,7 @@ class SicknessFlowTests(TestCase):
             reverse("record_sickbay_cleaning"),
             {
                 "sickness_report": str(report.pk),
-                "record_date": "2026-05-04",
+                "record_date": today.isoformat(),
                 "sickbay_cleaned": "on",
                 "disinfected": "on",
                 "notes": "Area cleaned after treatment round.",
@@ -130,61 +310,3 @@ class SicknessFlowTests(TestCase):
         self.assertTrue(cleaning.sickbay_cleaned)
         self.assertTrue(cleaning.disinfection_done)
         self.assertEqual(cleaning.recorded_by, self.worker)
-
-    def test_supervisor_dashboard_only_shows_sickness_from_assigned_houses(self):
-        SicknessReport.objects.create(
-            date=date(2026, 5, 4),
-            house="House A",
-            house_ref=self.house_a,
-            batch=self.batch_a,
-            disease="Newcastle",
-            affected=10,
-            action="isolate",
-            reported_by=self.worker,
-        )
-        SicknessReport.objects.create(
-            date=date(2026, 5, 4),
-            house="House B",
-            house_ref=self.house_b,
-            batch=self.batch_b,
-            disease="Coccidiosis",
-            affected=7,
-            action="isolate",
-            reported_by=self.manager,
-        )
-
-        self.client.force_login(self.supervisor)
-        response = self.client.get(reverse("supdash"))
-
-        recent_reports = list(response.context["recent_sickness_reports"])
-        self.assertEqual(len(recent_reports), 1)
-        self.assertEqual(recent_reports[0].house_ref, self.house_a)
-        self.assertEqual(response.context["isolated_sickness_cases"], 1)
-
-    def test_manager_sickness_view_exposes_cleaning_summary(self):
-        report = SicknessReport.objects.create(
-            date=date(2026, 5, 4),
-            house="House A",
-            house_ref=self.house_a,
-            batch=self.batch_a,
-            disease="Newcastle",
-            affected=10,
-            action="isolate",
-            reported_by=self.worker,
-        )
-        SickbayCleaningRecord.objects.create(
-            sickness_report=report,
-            record_date=date(2026, 5, 4),
-            sickbay_cleaned=True,
-            recorded_by=self.worker,
-        )
-
-        self.client.force_login(self.manager)
-        response = self.client.get(reverse("view_sickness"))
-
-        report_row = list(response.context["reports"])[0]
-        self.assertEqual(response.context["total_cases"], 1)
-        self.assertEqual(response.context["total_affected"], 10)
-        self.assertEqual(response.context["isolated_cases"], 1)
-        self.assertEqual(report_row.cleaning_sessions, 1)
-        self.assertEqual(report_row.last_cleaned_at, date(2026, 5, 4))

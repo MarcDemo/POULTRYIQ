@@ -1,11 +1,14 @@
 from datetime import date
+from datetime import datetime
 
-
+from django.contrib.auth import get_user_model
 from django.contrib import messages
-from django.db.models import Count, Max, Sum
+from django.db.models import Count, Max, Q, Sum
 from django.shortcuts import redirect, render
+from django.utils import timezone
 
-from accounts.decorators import worker_required
+from accounts.decorators import supervisor_required, worker_required
+from alerts.models import Alert, AlertType
 from poultry.models import (
     MortalityCause,
     MortalityRecord,
@@ -16,8 +19,9 @@ from poultry.models import (
     CleaningRecord,
 )
 from decimal import Decimal, InvalidOperation
-from datetime import datetime
-from .models import SickbayCleaningRecord, SicknessReport
+from .models import SickbayCleaningRecord, SicknessReport, TreatmentPlanItem
+
+User = get_user_model()
 
 # Create your views here.
 @worker_required
@@ -103,8 +107,224 @@ def mortality(request):
         },
     )
 
+def _scoped_health_houses(user):
+    if _role_code(user) == "SUPERVISOR":
+        return user.houses.all().order_by("house_code", "name")
+    return PoultryHouse.objects.filter(is_active=True).order_by("house_code", "name")
+
+
+def _scoped_sickness_cases(user):
+    return _scope_sickness_reports_for_user(
+        SicknessReport.objects.select_related("house_ref", "batch__house", "reported_by").prefetch_related(
+            "treatment_items",
+            "treatment_items__alert",
+        ),
+        user,
+    )
+
+
+def _scoped_treatment_items(user):
+    queryset = TreatmentPlanItem.objects.select_related(
+        "sickness_report__house_ref",
+        "sickness_report__batch",
+        "sickness_report__reported_by",
+        "alert",
+        "marked_given_by",
+    )
+    if _role_code(user) == "SUPERVISOR":
+        queryset = queryset.filter(sickness_report__house_ref__in=user.houses.all())
+    return queryset
+
+
+def _get_health_alert_type():
+    alert_type, _ = AlertType.objects.get_or_create(
+        code=AlertType.AlertTypeCode.HEALTH,
+        defaults={
+            "name": "Health Alert",
+            "description": "Vet diagnosis and treatment reminders.",
+        },
+    )
+    return alert_type
+
+
+def _get_treatment_alert_receiver(report, fallback_user):
+    reporter_role = _role_code(report.reported_by)
+    if report.reported_by.is_active and reporter_role in {"SUPERVISOR", "MANAGER", "OWNER"}:
+        return report.reported_by
+
+    supervisors = User.objects.filter(
+        is_active=True,
+        role__code__in=["SUPERVISOR", "MANAGER", "OWNER"],
+    )
+    if report.house_ref_id:
+        supervisors = supervisors.filter(houses=report.house_ref)
+
+    return supervisors.distinct().first() or fallback_user
+
+
+def _create_treatment_alert(plan_item, receiver):
+    due_date = None
+    if plan_item.scheduled_for:
+        due_date = timezone.make_aware(datetime.combine(plan_item.scheduled_for, datetime.min.time()))
+
+    return Alert.objects.create(
+        alert_type=_get_health_alert_type(),
+        title=f"Treatment due for {plan_item.sickness_report.case_label}",
+        message=(
+            f"Diagnosis: {plan_item.sickness_report.diagnosis_label}\n"
+            f"Case size: {plan_item.sickness_report.affected} bird(s)\n"
+            f"Medicine: {plan_item.medicine_name}\n"
+            f"Dosage: {plan_item.dosage}\n"
+            f"Instructions: {plan_item.instructions or 'Follow the vet guidance recorded in the treatment plan.'}"
+        ),
+        receiver=receiver,
+        sender=None,
+        priority=Alert.Priority.HIGH,
+        related_house=plan_item.sickness_report.house_ref,
+        related_batch=plan_item.sickness_report.batch,
+        due_date=due_date,
+        persist_until_resolved=True,
+    )
+
+
+@supervisor_required
 def treatment(request):
-    return render(request, 'treatment.html')
+    role_code = _role_code(request.user)
+    sickness_cases = _scoped_sickness_cases(request.user)
+    open_cases = sickness_cases.exclude(case_status=SicknessReport.CaseStatus.TREATMENT_COMPLETED)
+    treatment_items = _scoped_treatment_items(request.user).order_by("is_given", "scheduled_for", "-created_at")
+    pending_treatment_items = treatment_items.filter(is_given=False)
+    completed_treatment_items = treatment_items.filter(is_given=True)[:10]
+
+    if request.method == "POST":
+        form_action = request.POST.get("form_action", "").strip()
+
+        if form_action == "record_treatment_plan":
+            sickness_report_id = request.POST.get("sickness_report", "").strip()
+            diagnosis = request.POST.get("diagnosis", "").strip()
+            vet_name = request.POST.get("vet_name", "").strip()
+            vet_visit_date_raw = request.POST.get("vet_visit_date", "").strip()
+            medicine_name = request.POST.get("medicine_name", "").strip()
+            dosage = request.POST.get("dosage", "").strip()
+            administration_route = request.POST.get("administration_route", "").strip()
+            instructions = request.POST.get("instructions", "").strip()
+            scheduled_for_raw = request.POST.get("scheduled_for", "").strip()
+            diagnosis_notes = request.POST.get("diagnosis_notes", "").strip()
+
+            errors = []
+            selected_report = open_cases.filter(pk=sickness_report_id).first() if sickness_report_id else None
+
+            if not selected_report:
+                errors.append("Please select a valid sickness case.")
+            if not diagnosis:
+                errors.append("Please record the vet diagnosis.")
+            if not vet_name:
+                errors.append("Please enter the vet's name.")
+            if not medicine_name:
+                errors.append("Please record the medicine prescribed.")
+            if not dosage:
+                errors.append("Please record the dosage.")
+
+            try:
+                vet_visit_date = date.fromisoformat(vet_visit_date_raw)
+            except ValueError:
+                vet_visit_date = None
+                errors.append("Please provide a valid vet visit date.")
+
+            scheduled_for = None
+            if scheduled_for_raw:
+                try:
+                    scheduled_for = date.fromisoformat(scheduled_for_raw)
+                except ValueError:
+                    errors.append("Please provide a valid treatment schedule date.")
+
+            
+
+            if errors:
+                for error in errors:
+                    messages.error(request, error)
+            else:
+                selected_report.disease = diagnosis
+                selected_report.vet_name = vet_name
+                selected_report.vet_visit_date = vet_visit_date
+                selected_report.diagnosis_notes = diagnosis_notes
+                selected_report.case_status = SicknessReport.CaseStatus.DIAGNOSED
+                selected_report.treatment_completed_at = None
+                selected_report.save(
+                    update_fields=[
+                        "disease",
+                        "vet_name",
+                        "vet_visit_date",
+                        "diagnosis_notes",
+                        "case_status",
+                        "treatment_completed_at",
+                    ]
+                )
+
+                plan_item = TreatmentPlanItem.objects.create(
+                    sickness_report=selected_report,
+                    medicine_name=medicine_name,
+                    dosage=dosage,
+                    administration_route=administration_route,
+                    instructions=instructions,
+                    scheduled_for=scheduled_for or vet_visit_date,
+                    
+                    created_by=request.user,
+                )
+
+                receiver = _get_treatment_alert_receiver(selected_report, request.user)
+                plan_item.alert = _create_treatment_alert(plan_item, receiver)
+                plan_item.save(update_fields=["alert"]) 
+
+                messages.success(request, "Vet diagnosis and treatment plan saved.")
+                return redirect("treatment")
+
+        elif form_action == "mark_given":
+            plan_id = request.POST.get("plan_id", "").strip()
+            selected_plan = pending_treatment_items.filter(pk=plan_id).first() if plan_id else None
+
+            if not selected_plan:
+                messages.error(request, "Please choose a valid treatment item to mark as given.")
+            else:
+                selected_plan.is_given = True
+                selected_plan.given_at = timezone.now()
+                selected_plan.marked_given_by = request.user
+                selected_plan.save(update_fields=["is_given", "given_at", "marked_given_by"])
+
+                if selected_plan.alert_id:
+                    selected_plan.alert.mark_as_resolved()
+
+                parent_case = selected_plan.sickness_report
+                if not parent_case.treatment_items.filter(is_given=False).exists():
+                    parent_case.case_status = SicknessReport.CaseStatus.TREATMENT_COMPLETED
+                    parent_case.treatment_completed_at = timezone.now()
+                else:
+                    parent_case.case_status = SicknessReport.CaseStatus.DIAGNOSED
+                    parent_case.treatment_completed_at = None
+                parent_case.save(update_fields=["case_status", "treatment_completed_at"])
+
+                messages.success(request, "Treatment dose marked as given.")
+                return redirect("treatment")
+
+        else:
+            messages.error(request, "Unknown treatment action.")
+
+    return render(
+        request,
+        "treatment.html",
+        {
+            "base_template": "supbase.html" if role_code == "SUPERVISOR" else "base.html",
+            "today": date.today(),
+            "open_cases": open_cases.order_by("-date", "-created_at")[:20],
+            "pending_vet_cases_count": open_cases.filter(case_status=SicknessReport.CaseStatus.REPORTED).count(),
+            "pending_treatment_items": pending_treatment_items,
+            "completed_treatment_items": completed_treatment_items,
+            "pending_treatment_count": pending_treatment_items.count(),
+            "active_treatment_alerts": pending_treatment_items.filter(
+                alert__status__in=[Alert.Status.UNREAD, Alert.Status.READ, Alert.Status.ACKNOWLEDGED]
+            ).count(),
+        },
+    )
 
 def vaccination(request):
     return render(request, 'vaccination.html')
@@ -127,17 +347,18 @@ def _scope_sickness_reports_for_user(queryset, user):
     return queryset
 
 
-
+@supervisor_required
 def report_sickness(request):
-    houses = request.user.houses.all().order_by("house_code", "name")
+    houses = _scoped_health_houses(request.user)
 
     if request.method == "POST":
         house_id = request.POST.get("house", "").strip()
-        disease = request.POST.get("disease", "").strip()
         affected_raw = request.POST.get("affected", "").strip()
+        symptoms = request.POST.get("symptoms", "").strip()
         action = request.POST.get("action", "").strip()
         notes = request.POST.get("notes", "").strip()
         report_date_raw = request.POST.get("date", "").strip()
+       
 
         errors = []
         selected_house = houses.filter(pk=house_id).first() if house_id else None
@@ -165,10 +386,13 @@ def report_sickness(request):
         try:
             affected = int(affected_raw)
             if affected < 1:
-                errors.append("Number of affected birds must be at least 1.")
+                errors.append("Number of sick birds must be at least 1.")
         except ValueError:
             affected = None
-            errors.append("Please provide a valid number of affected birds.")
+            errors.append("Please provide a valid number of sick birds.")
+
+        if not symptoms:
+            errors.append("Please describe the sickness signs or symptoms.")
 
         if action not in dict(SicknessReport.ACTION_CHOICES):
             errors.append("Please select a valid action taken.")
@@ -182,21 +406,26 @@ def report_sickness(request):
                 house=selected_house.name or selected_house.house_code,
                 house_ref=selected_house,
                 batch=selected_batch,
-                disease=disease,
+                symptoms=symptoms,
+                disease="",
                 affected=affected,
                 action=action,
                 notes=notes,
                 image=request.FILES.get("image"),
                 reported_by=request.user,
+                case_status=SicknessReport.CaseStatus.REPORTED,
             )
-            messages.success(request, "Sickness report saved successfully.")
+            messages.success(request, "Sickness case saved successfully.")
             return redirect("report_sickness")
 
     return render(
         request,
         "report_sickness.html",
         {
+            "base_template": "supbase.html" if _role_code(request.user) == "SUPERVISOR" else "base.html",
             "houses": houses,
+            "action_choices": SicknessReport.ACTION_CHOICES,
+            "recent_cases": _scoped_sickness_cases(request.user).order_by("-date", "-created_at")[:8],
             "today": date.today(),
         },
     )
@@ -205,9 +434,9 @@ def report_sickness(request):
 @worker_required
 def record_sickbay_cleaning(request):
     assigned_houses = request.user.houses.all().order_by("house_code", "name")
-    isolated_reports = (
+    sickbay_reports = (
         SicknessReport.objects.filter(
-            isolated=True,
+            action="sickbay",
             house_ref__in=assigned_houses,
         )
         .select_related("house_ref", "batch", "reported_by")
@@ -224,10 +453,10 @@ def record_sickbay_cleaning(request):
         notes = request.POST.get("notes", "").strip()
 
         errors = []
-        selected_report = isolated_reports.filter(pk=report_id).first() if report_id else None
+        selected_report = sickbay_reports.filter(pk=report_id).first() if report_id else None
 
         if not selected_report:
-            errors.append("Please select a valid isolated or sickbay case.")
+            errors.append("Please select a valid sickbay case.")
 
         try:
             record_date = date.fromisoformat(record_date_raw)
@@ -273,7 +502,7 @@ def record_sickbay_cleaning(request):
         request,
         "record_sickbay_cleaning.html",
         {
-            "isolated_reports": isolated_reports,
+            "sickbay_reports": sickbay_reports,
             "recent_cleaning_records": recent_cleaning_records,
             "today": date.today(),
         },
@@ -290,7 +519,9 @@ def view_sickness_reports(request):
         return redirect("workersdash")
 
     reports = _scope_sickness_reports_for_user(
-        SicknessReport.objects.select_related("house_ref", "batch__house", "reported_by"),
+        SicknessReport.objects.select_related("house_ref", "batch__house", "reported_by").prefetch_related(
+            "treatment_items",
+        ),
         request.user,
     )
 
@@ -308,7 +539,11 @@ def view_sickness_reports(request):
     if house_id:
         reports = reports.filter(house_ref_id=house_id)
     if disease:
-        reports = reports.filter(disease__icontains=disease)
+        reports = reports.filter(
+            Q(disease__icontains=disease)
+            | Q(symptoms__icontains=disease)
+            | Q(bird_identifier__icontains=disease)
+        )
     if action in dict(SicknessReport.ACTION_CHOICES):
         reports = reports.filter(action=action)
     if isolated == "yes":
@@ -319,6 +554,12 @@ def view_sickness_reports(request):
     reports = reports.annotate(
         cleaning_sessions=Count("sickbay_cleanings", distinct=True),
         last_cleaned_at=Max("sickbay_cleanings__record_date"),
+        treatment_items_count=Count("treatment_items", distinct=True),
+        pending_treatment_count=Count(
+            "treatment_items",
+            filter=Q(treatment_items__is_given=False),
+            distinct=True,
+        ),
     ).order_by("-date", "-created_at")
 
     total_cases = reports.count()
@@ -333,9 +574,7 @@ def view_sickness_reports(request):
     )
     common_disease = common_disease_entry["disease"] if common_disease_entry else "N/A"
 
-    house_choices = PoultryHouse.objects.filter(is_active=True).order_by("house_code", "name")
-    if role_code == "SUPERVISOR":
-        house_choices = request.user.houses.all().order_by("house_code", "name")
+    house_choices = _scoped_health_houses(request.user)
 
     return render(
         request,

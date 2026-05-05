@@ -1,84 +1,142 @@
-{% extends 'supbase.html' %}
+{% extends "base.html" %}
 {% load static %}
 
 {% block content %}
 
-<div class="container mt-4">
+<div class="container-fluid">
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
+        <div>
+            <h3 class="mb-1"><i class="bi bi-heart-pulse me-2"></i>Record Sickness Case</h3>
+            <small class="text-muted">A case can represent one bird or a grouped set of birds with the same sickness signs.</small>
+        </div>
+        <a href="{% url 'treatment' %}" class="btn btn-outline-primary">
+            <i class="bi bi-capsule-pill me-1"></i>Open Treatment Plan
+        </a>
+    </div>
 
-	<div class="row justify-content-center">
-		<div class="col-12 col-md-7 col-lg-6">
+    <div class="row g-4">
+        <div class="col-lg-5">
+            <div class="card shadow-sm h-100">
+                <div class="card-header" style="background: linear-gradient(135deg, #dc3545 0%, #ef476f 100%);">
+                    <i class="bi bi-journal-medical me-2"></i>Bird Sickness Form
+                </div>
+                <div class="card-body">
+                    <form method="POST" enctype="multipart/form-data" novalidate>
+                        {% csrf_token %}
 
-			<div class="card shadow">
-				<div class="card-header" style="background: linear-gradient(135deg, #dc3545 0%, #ef476f 100%);">
-					<i class="bi bi-heart-pulse me-2"></i>Report Sick Birds
-				</div>
-				<div class="card-body">
+                        <div class="mb-3">
+                            <label for="date" class="form-label"><i class="bi bi-calendar3 me-1"></i>Date</label>
+                            <input id="date" type="date" name="date" class="form-control" value="{{ today|date:'Y-m-d' }}" required>
+                        </div>
 
-					<form method="POST" enctype="multipart/form-data" novalidate>
-						{% csrf_token %}
+                        <div class="mb-3">
+                            <label for="house" class="form-label"><i class="bi bi-house-door me-1"></i>House</label>
+                            <select id="house" name="house" class="form-select" required>
+                                <option value="">-- Select house --</option>
+                                {% for h in houses %}
+                                <option value="{{ h.pk }}">{{ h.name|default:h.house_code }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
 
-						<div class="mb-3">
-							<label for="date" class="form-label"><i class="bi bi-calendar3 me-1"></i>Date</label>
-							<input id="date" type="date" name="date" class="form-control" value="{{ today|date:'Y-m-d' }}" required>
-						</div>
+                    
 
-						<div class="mb-3">
-							<label for="house" class="form-label"><i class="bi bi-house-door me-1"></i>House</label>
-							<select id="house" name="house" class="form-select" required>
-								<option value="">-- Select house --</option>
-								{% for h in houses %}
-								<option value="{{ h.pk }}">{{ h.name|default:h.house_code }}</option>
-								{% endfor %}
-							</select>
-							<div class="form-text">Only houses assigned to you are listed here.</div>
-						</div>
+                    <div class="mb-3">
+                        <label for="affected" class="form-label"><i class="bi bi-people-fill me-1"></i>Number of Sick Birds in This Case</label>
+                        <input id="affected" type="number" name="affected" class="form-control" value="1" min="1" required>
+                        <div class="form-text">If 10 birds share the same symptoms, you can record them as one case and enter `10` here.</div>
+                    </div>
 
-						<div class="mb-3">
-							<label for="disease" class="form-label"><i class="bi bi-thermometer-sun me-1"></i>Symptoms / Disease</label>
-							<input id="disease" type="text" name="disease" class="form-control" placeholder="e.g. coughing, weak legs">
-						</div>
+                      
 
-						<div class="mb-3">
-							<label for="affected" class="form-label"><i class="bi bi-people-fill me-1"></i>Number of Birds Affected</label>
-							<input id="affected" type="number" name="affected" class="form-control" required min="1">
-						</div>
+                        <div class="mb-3">
+                            <label for="symptoms" class="form-label"><i class="bi bi-thermometer-half me-1"></i>Observed Symptoms</label>
+                            <textarea id="symptoms" name="symptoms" class="form-control" rows="3" placeholder="e.g. coughing, swollen eyes, not feeding" required></textarea>
+                        </div>
 
-						<div class="mb-3">
-							<label for="image" class="form-label"><i class="bi bi-camera me-1"></i>Upload Photo</label>
-							<input id="image" name="image" class="form-control" type="file" accept="image/*">
-							<div class="form-text">Optional — upload a photo to help with diagnosis.</div>
-						</div>
+                        <div class="mb-3">
+                            <label for="action" class="form-label"><i class="bi bi-wrench-adjustable-circle me-1"></i>Immediate Action</label>
+                            <select id="action" name="action" class="form-select" required>
+                                <option value="">-- Select action --</option>
+                                {% for value, label in action_choices %}
+                                <option value="{{ value }}">{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                            <div class="form-text">Isolation names are generated automatically when the case is moved to sickbay.</div>
+                        </div>
 
-						<div class="mb-3">
-							<label for="action" class="form-label"><i class="bi bi-wrench-adjustable-circle me-1"></i>Action Taken</label>
-							<select id="action" name="action" class="form-select" required>
-								<option value="">-- Select action --</option>
-								<option value="sickbay">Moved to Sickbay</option>
-								<option value="isolate">Isolated</option>
-								<option value="crowd">Left in Crowd</option>
-							</select>
-							<div class="form-text">If birds are isolated or moved to sickbay, the system creates an isolation name like <strong>House A-Isolation(Newcastle)</strong>.</div>
-						</div>
+                        <div class="mb-3">
+                            <label for="image" class="form-label"><i class="bi bi-camera me-1"></i>Photo</label>
+                            <input id="image" name="image" class="form-control" type="file" accept="image/*">
+                        </div>
 
-						<div class="mb-3">
-							<label for="notes" class="form-label"><i class="bi bi-chat-left-text me-1"></i>Notes</label>
-							<textarea id="notes" name="notes" class="form-control" rows="3" placeholder="Any additional observations..."></textarea>
-						</div>
+                        <div class="mb-3">
+                            <label for="notes" class="form-label"><i class="bi bi-chat-left-text me-1"></i>Supervisor Notes</label>
+                            <textarea id="notes" name="notes" class="form-control" rows="3" placeholder="Extra observations before the vet visit..."></textarea>
+                        </div>
 
-						<div class="d-grid mt-3">
-							<button type="submit" class="btn btn-danger">
-								<i class="bi bi-check-circle me-1"></i>Submit Report
-							</button>
-						</div>
+                        <div class="d-grid mt-4">
+                            <button type="submit" class="btn btn-danger">
+                                <i class="bi bi-check-circle me-1"></i>Save Bird Case
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
 
-					</form>
-
-				</div>
-			</div>
-
-		</div>
-	</div>
-
+        <div class="col-lg-7">
+            <div class="card shadow-sm h-100">
+                <div class="card-header d-flex align-items-center justify-content-between">
+                    <span><i class="bi bi-list-check me-2"></i>Recent Sickness Cases</span>
+                    <a href="{% url 'view_sickness' %}" class="btn btn-sm btn-light fw-semibold">View Full Register</a>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Case</th>
+                                    <th>House</th>
+                                    <th>Birds</th>
+                                    <th>Symptoms</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for case in recent_cases %}
+                                <tr>
+                                    <td>{{ case.date }}</td>
+                                    <td>
+                                        <div class="fw-semibold">{{ case.case_label }}</div>
+                                        <small class="text-muted">{{ case.get_action_display }}</small>
+                                    </td>
+                                    <td>{{ case.house_label }}</td>
+                                    <td>{{ case.affected }}</td>
+                                    <td>{{ case.symptoms|default:"-" }}</td>
+                                    <td>
+                                        {% if case.case_status == 'REPORTED' %}
+                                        <span class="badge bg-warning text-dark">Awaiting Vet</span>
+                                        {% elif case.case_status == 'DIAGNOSED' %}
+                                        <span class="badge bg-info text-dark">Treatment Planned</span>
+                                        {% else %}
+                                        <span class="badge bg-success">Treatment Given</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="6" class="text-center text-muted py-4">No sickness cases recorded yet.</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 
 {% endblock %}

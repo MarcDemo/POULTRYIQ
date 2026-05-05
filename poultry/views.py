@@ -7,7 +7,7 @@ from datetime import datetime
 from decimal import Decimal, InvalidOperation
 
 from accounts.decorators import worker_required, supervisor_required
-from health.models import SicknessReport
+from health.models import SicknessReport, TreatmentPlanItem
 from .models import (
     PoultryBatch,
     DailyProduction,
@@ -407,6 +407,7 @@ def supdash(request):
     cleaning_records = _scope_to_supervisor_houses(CleaningRecord.objects.all(), request.user, "batch__house")
     mortality_records = _scope_to_supervisor_houses(MortalityRecord.objects.all(), request.user, "batch__house")
     sickness_records = _scope_to_supervisor_houses(SicknessReport.objects.all(), request.user, "house_ref")
+    treatment_plan_items = _scope_to_supervisor_houses(TreatmentPlanItem.objects.all(), request.user, "sickness_report__house_ref")
 
     # Pending counts
     pending_eggs = egg_records.filter(status=ApprovalStatus.PENDING).count()
@@ -433,6 +434,7 @@ def supdash(request):
     ).count()
     today_sickness_cases = sickness_records.filter(date=today).count()
     isolated_sickness_cases = sickness_records.filter(isolated=True).count()
+    pending_treatment_doses = treatment_plan_items.filter(is_given=False).count()
 
     # Recent pending items for quick view
     recent_pending_eggs = egg_records.filter(
@@ -449,6 +451,11 @@ def supdash(request):
             last_cleaned_at=Max("sickbay_cleanings__record_date"),
         )
         .order_by("-date", "-created_at")[:5]
+    )
+    recent_pending_treatments = (
+        treatment_plan_items.filter(is_given=False)
+        .select_related("sickness_report__house_ref")
+        .order_by("scheduled_for", "-created_at")[:5]
     )
 
     # Active batches / houses overview
@@ -476,9 +483,11 @@ def supdash(request):
         "houses_cleaned_today": houses_cleaned_today,
         "today_sickness_cases": today_sickness_cases,
         "isolated_sickness_cases": isolated_sickness_cases,
+        "pending_treatment_doses": pending_treatment_doses,
         "recent_pending_eggs": recent_pending_eggs,
         "recent_pending_mortality": recent_pending_mortality,
         "recent_sickness_reports": recent_sickness_reports,
+        "recent_pending_treatments": recent_pending_treatments,
         "total_birds": total_birds,
         "active_batches_count": active_batches.count(),
     }

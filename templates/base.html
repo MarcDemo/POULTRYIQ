@@ -190,6 +190,11 @@
                 </a>
             </li>
             <li class="nav-item">
+                <a class="nav-link" href="{% url 'alerts:inbox' %}" {% if request.resolver_match.app_name == 'alerts' %}class="active"{% endif %}>
+                        <i class="bi bi-bell"></i> Alerts
+                    </a>
+            </li>
+            <li class="nav-item">
                 <a class="nav-link {% if request.resolver_match.url_name == 'sales' %}active{% endif %}" href="{% url 'sales' %}">
                     <i class="bi bi-graph-up"></i><span>Make a Sale</span>
                 </a>
@@ -199,14 +204,28 @@
                     <i class="bi bi-box-seam"></i><span>Orders</span>
                 </a>
             </li>
-            <a class="nav-link" href="{% url 'view_sickness' %}" {% if request.resolver_match.url_name == 'view_sickness' %}class="active"{% endif %}>
-        <i class="bi bi-clipboard2-pulse"></i> Sickness Records
-    </a> 
             <li class="nav-item">
+                <a class="nav-link" href="{% url 'view_sickness' %}" {% if request.resolver_match.url_name == 'view_sickness' %}class="active"{% endif %}>
+                    <i class="bi bi-clipboard2-pulse"></i> Sickness Records
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="{% url 'report_sickness' %}" {% if request.resolver_match.url_name == 'report_sickness' %}class="active"{% endif %}>
+                    <i class="bi bi-heart-pulse"></i> Record Sick Bird
+    </a>
+    <li class="nav-item">
+ <a class="nav-link" href="{% url 'treatment' %}" {% if request.resolver_match.url_name == 'treatment' %}class="active"{% endif %}>
+        <i class="bi bi-capsule-pill"></i> Treatment Plan
+    </a>
+    </li>
+
+
+    </li>
+            <!-- <li class="nav-item">
                 <a class="nav-link {% if request.resolver_match.url_name == 'treatment' %}active{% endif %}" href="{% url 'treatment' %}">
                     <i class="bi bi-heart-pulse"></i><span>Treatment Records</span>
                 </a>
-            </li>
+            </li> -->
             <li class="nav-item">
                 <a class="nav-link {% if request.resolver_match.url_name == 'vaccination' %}active{% endif %}" href="{% url 'vaccination' %}">
                     <i class="bi bi-capsule"></i><span>Vaccination Scheduler</span>

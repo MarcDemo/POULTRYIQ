@@ -10,6 +10,16 @@ from .models import Alert, AlertType, AlertTemplate, AlertSchedule
 from .forms import SendMessageForm, RespondToAlertForm
 
 
+def _active_alert_count_qs(user):
+    return Alert.objects.filter(receiver=user).filter(
+        Q(status=Alert.Status.UNREAD)
+        | Q(
+            persist_until_resolved=True,
+            status__in=[Alert.Status.READ, Alert.Status.ACKNOWLEDGED],
+        )
+    )
+
+
 @login_required
 def alerts_inbox(request):
     """Display user's alerts/messages inbox"""
@@ -32,7 +42,7 @@ def alerts_inbox(request):
         alerts = alerts.filter(alert_type__code=type_filter)
     
     # Get counts
-    unread_count = Alert.objects.filter(receiver=user, status=Alert.Status.UNREAD).count()
+    unread_count = _active_alert_count_qs(user).count()
     urgent_count = alerts.filter(priority=Alert.Priority.URGENT).count()
     overdue_count = alerts.filter(
         due_date__lt=timezone.now(),
@@ -61,7 +71,7 @@ def alert_detail(request, alert_id):
     alert = get_object_or_404(Alert, alert_id=alert_id, receiver=request.user)
     
     # Mark as read if not already
-    if alert.status == Alert.Status.UNREAD:
+    if alert.status == Alert.Status.UNREAD and not alert.persist_until_resolved:
         alert.mark_as_read()
     
     form = RespondToAlertForm(instance=alert)
@@ -197,7 +207,7 @@ def mark_as_acknowledged(request, alert_id):
     alert.mark_as_acknowledged()
     messages.success(request, 'Alert acknowledged')
     
-    return redirect('alerts:alert_detail', alert_id=alert_id)
+    return redirect('alerts:detail', alert_id=alert_id)
 
 
 @login_required
@@ -205,10 +215,13 @@ def mark_as_acknowledged(request, alert_id):
 def mark_as_resolved(request, alert_id):
     """Quick action to mark alert as resolved"""
     alert = get_object_or_404(Alert, alert_id=alert_id, receiver=request.user)
+    if alert.persist_until_resolved:
+        messages.error(request, 'This treatment alert is cleared automatically when the dose is marked as given.')
+        return redirect('alerts:detail', alert_id=alert_id)
     alert.mark_as_resolved()
     messages.success(request, 'Alert marked as resolved')
     
-    return redirect('alerts:alert_detail', alert_id=alert_id)
+    return redirect('alerts:detail', alert_id=alert_id)
 
 
 def create_system_alert(title, message, receiver, alert_type_code='SYSTEM', priority='MEDIUM', 
@@ -281,7 +294,7 @@ from django.http import JsonResponse
 @login_required
 def get_unread_count(request):
     """AJAX endpoint to get unread alert count"""
-    count = Alert.objects.filter(receiver=request.user, status=Alert.Status.UNREAD).count()
+    count = _active_alert_count_qs(request.user).count()
     return JsonResponse({'unread_count': count})
 
 
@@ -303,7 +316,9 @@ def get_recent_alerts(request):
             'message': alert.message[:120] + ('…' if len(alert.message) > 120 else ''),
             'priority': alert.priority,
             'status': alert.status,
-            'is_unread': alert.status == Alert.Status.UNREAD,
+            'is_unread': alert.status == Alert.Status.UNREAD or (
+                alert.persist_until_resolved and alert.status != Alert.Status.RESOLVED
+            ),
             'type_name': alert.alert_type.name,
             'sender_name': alert.sender.display_name if alert.sender else 'System',
             'created_at': alert.created_at.strftime('%b %d, %H:%M'),

@@ -16,17 +16,17 @@
 
                         <div class="mb-3">
                             <label for="sickness_report" class="form-label">
-                                <i class="bi bi-heart-pulse me-1"></i>Isolation / Sickbay Case
+                                <i class="bi bi-heart-pulse me-1"></i>Sickbay Case
                             </label>
                             <select id="sickness_report" name="sickness_report" class="form-select" required>
-                                <option value="">-- Select isolated case --</option>
-                                {% for report in isolated_reports %}
+                                <option value="">-- Select sickbay case --</option>
+                                {% for report in sickbay_reports %}
                                 <option value="{{ report.pk }}">
-                                    {{ report.house_label }} - {{ report.disease|default:"General sickness" }} - {{ report.isolation_name }}
+                                    {{ report.house_label }} - {{ report.case_label }} - {{ report.isolation_name }}
                                 </option>
                                 {% endfor %}
                             </select>
-                            <div class="form-text">Only isolated or sickbay cases from your assigned houses are listed.</div>
+                            <div class="form-text">Only sickbay cases from your assigned houses are listed.</div>
                         </div>
 
                         <div class="mb-3">
@@ -96,7 +96,7 @@
                             <thead>
                                 <tr>
                                     <th>Date</th>
-                                    <th>Isolation Area</th>
+                                    <th>Sickbay Area</th>
                                     <th>Tasks Done</th>
                                 </tr>
                             </thead>
