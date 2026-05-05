@@ -77,6 +77,23 @@ class User(AbstractUser):
         return self.role.code if self.role else ""
 
     @property
+    def is_worker(self) -> bool:
+        return self.role_code == "WORKER"
+
+    @property
+    def is_supervisor(self) -> bool:
+        return self.role_code == "SUPERVISOR"
+
+    @property
+    def is_manager(self) -> bool:
+        return self.role_code == "MANAGER"
+
+    @property
+    def is_investor(self) -> bool:
+        role_name = (self.role.name or "").strip().lower() if self.role else ""
+        return self.role_code in {"OWNER", "INVESTOR"} or "investor" in role_name
+
+    @property
     def can_authenticate(self) -> bool:
         return self.is_active and not self.is_locked
 

@@ -44,6 +44,7 @@ INSTALLED_APPS = [
     "sales",
     "hr",
     "health",
+    "alerts",
     
 ]
 

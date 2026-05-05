@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Send Bulk Message - Poultry IQ{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header bg-info text-white">
+                    <h4 class="mb-0">
+                        <i class="fas fa-users"></i> Send Bulk Message
+                    </h4>
+                </div>
+                
+                <div class="card-body">
+                    <form method="post">
+                        {% csrf_token %}
+                        
+                        <div class="form-group mb-3">
+                            <label class="form-label">Select Poultry Houses <span class="text-danger">*</span></label>
+                            <div class="alert alert-info small">
+                                <i class="fas fa-info-circle"></i> 
+                                Message will be sent to all workers/supervisors assigned to selected houses
+                            </div>
+                            
+                            <div class="border p-3" style="max-height: 250px; overflow-y: auto;">
+                                {% for house in houses %}
+                                    <div class="form-check">
+                                        <input type="checkbox" name="houses" value="{{ house.id }}" 
+                                               id="house_{{ house.id }}" class="form-check-input">
+                                        <label for="house_{{ house.id }}" class="form-check-label">
+                                            <strong>{{ house.name }}</strong>
+                                            {% if house.house_type %}
+                                                <small class="text-muted">({{ house.get_house_type_display }})</small>
+                                            {% endif %}
+                                        </label>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        
+                        <div class="form-group mb-3">
+                            <label for="title" class="form-label">
+                                Message Title <span class="text-danger">*</span>
+                            </label>
+                            <input type="text" name="title" id="title" class="form-control" 
+                                   placeholder="e.g., Maintenance reminder" required>
+                        </div>
+                        
+                        <div class="form-group mb-3">
+                            <label for="message" class="form-label">
+                                Message <span class="text-danger">*</span>
+                            </label>
+                            <textarea name="message" id="message" class="form-control" rows="8" 
+                                      placeholder="Type your message here..." required></textarea>
+                            <small class="form-text text-muted">Detailed message to all recipients</small>
+                        </div>
+                        
+                        <div class="form-group mb-3">
+                            <label for="priority" class="form-label">Priority</label>
+                            <select name="priority" id="priority" class="form-control">
+                                {% for value, label in priorities %}
+                                    <option value="{{ value }}">{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <button type="submit" class="btn btn-info">
+                                <i class="fas fa-envelope"></i> Send to All Selected
+                            </button>
+                            <a href="{% url 'alerts:inbox' %}" class="btn btn-secondary">
+                                Cancel
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            
+            <!-- Info Card -->
+            <div class="card mt-4">
+                <div class="card-header">
+                    <h6 class="mb-0"><i class="fas fa-broadcast-tower"></i> About Bulk Messages</h6>
+                </div>
+                <div class="card-body small">
+                    <p><strong>Use cases:</strong></p>
+                    <ul>
+                        <li>Farm-wide announcements (system maintenance, new procedures)</li>
+                        <li>Emergency alerts (disease outbreak, equipment failure)</li>
+                        <li>Maintenance reminders (scheduled cleaning, supply checks)</li>
+                        <li>Coordination messages (upcoming inspections, training)</li>
+                    </ul>
+                    <p class="mt-3"><strong>Note:</strong> Each recipient gets an individual message they can acknowledge and track.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
