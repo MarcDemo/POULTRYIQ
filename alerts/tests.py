@@ -1,6 +1,7 @@
 from django.test import TestCase
 from django.utils import timezone
 from django.contrib.auth import get_user_model
+from django.urls import reverse
 from .models import Alert, AlertType, AlertTemplate, AlertSchedule
 from accounts.models import Role
 
@@ -94,3 +95,55 @@ class AlertModelTests(TestCase):
         
         self.assertEqual(alert.sender, self.supervisor)
         self.assertFalse(alert.is_system_alert)
+
+
+class AlertSendViewTests(TestCase):
+    def setUp(self):
+        self.worker_role = Role.objects.create(
+            code=Role.RoleCode.WORKER,
+            name='Farm Worker'
+        )
+        self.manager_role = Role.objects.create(
+            code=Role.RoleCode.MANAGER,
+            name='Farm Manager'
+        )
+
+        self.worker = User.objects.create_user(
+            username='receiver-worker',
+            email='receiver@farm.com',
+            password='testpass123',
+            role=self.worker_role
+        )
+        self.manager = User.objects.create_user(
+            username='sender-manager',
+            email='manager@farm.com',
+            password='testpass123',
+            role=self.manager_role
+        )
+
+    def test_send_message_creates_direct_alert_type_if_missing(self):
+        self.client.force_login(self.manager)
+
+        self.assertFalse(
+            AlertType.objects.filter(code=AlertType.AlertTypeCode.DIRECT).exists()
+        )
+
+        response = self.client.post(
+            reverse('alerts:send_message'),
+            {
+                'receiver': self.worker.id,
+                'title': 'Task update',
+                'message': 'Please check feeders in house A.',
+                'priority': Alert.Priority.MEDIUM,
+            },
+        )
+
+        self.assertRedirects(response, reverse('alerts:inbox'))
+        self.assertTrue(
+            AlertType.objects.filter(code=AlertType.AlertTypeCode.DIRECT).exists()
+        )
+
+        alert = Alert.objects.get(title='Task update')
+        self.assertEqual(alert.sender, self.manager)
+        self.assertEqual(alert.receiver, self.worker)
+        self.assertEqual(alert.alert_type.code, AlertType.AlertTypeCode.DIRECT)

@@ -10,6 +10,29 @@ from .models import Alert, AlertType, AlertTemplate, AlertSchedule
 from .forms import SendMessageForm, RespondToAlertForm
 
 
+def _get_or_create_alert_type(alert_type_code: str) -> AlertType:
+    """Return an alert type, creating it when seed data is missing."""
+    normalized_code = (alert_type_code or "").upper()
+    default_name = dict(AlertType.AlertTypeCode.choices).get(
+        normalized_code,
+        normalized_code.replace("_", " ").title() or "Alert",
+    )
+
+    alert_type, _ = AlertType.objects.get_or_create(
+        code=normalized_code,
+        defaults={
+            "name": default_name,
+            "is_active": True,
+        },
+    )
+
+    if not alert_type.is_active:
+        alert_type.is_active = True
+        alert_type.save(update_fields=["is_active"])
+
+    return alert_type
+
+
 @login_required
 def alerts_inbox(request):
     """Display user's alerts/messages inbox"""
@@ -96,13 +119,16 @@ def send_message(request):
         form = SendMessageForm(request.POST, sender=request.user)
         if form.is_valid():
             alert = form.save(commit=False)
-            
+
+            # receiver is a custom form field and must be assigned explicitly.
+            alert.receiver = form.cleaned_data['receiver']
+
             # Set alert type to DIRECT
-            alert.alert_type = AlertType.objects.get(code=AlertType.AlertTypeCode.DIRECT)
+            alert.alert_type = _get_or_create_alert_type(AlertType.AlertTypeCode.DIRECT)
             alert.sender = request.user
-            
+
             alert.save()
-            
+
             messages.success(
                 request,
                 f'Message sent to {alert.receiver.display_name}'
@@ -146,7 +172,7 @@ def send_bulk_message(request):
         ).distinct()
         
         # Create alert for each recipient
-        alert_type = AlertType.objects.get(code=AlertType.AlertTypeCode.DIRECT)
+        alert_type = _get_or_create_alert_type(AlertType.AlertTypeCode.DIRECT)
         created_count = 0
         
         for recipient in recipients:
@@ -226,7 +252,7 @@ def create_system_alert(title, message, receiver, alert_type_code='SYSTEM', prio
             priority='HIGH'
         )
     """
-    alert_type = AlertType.objects.get(code=alert_type_code)
+    alert_type = _get_or_create_alert_type(alert_type_code)
     
     return Alert.objects.create(
         alert_type=alert_type,
