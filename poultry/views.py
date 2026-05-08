@@ -15,6 +15,7 @@ from .models import (
     egg_collection,
     FeedRecord,
     CleaningRecord,
+    CleaningPhoto,
     MortalityRecord,
     ApprovalStatus,
 )
@@ -316,6 +317,13 @@ def record_cleaning(request):
                 notes=notes,
                 recorded_by=request.user,
             )
+
+            for photo in photos:
+                CleaningPhoto.objects.create(
+                    cleaning_record=cleaning,
+                    image=photo,
+                    uploaded_by=request.user,
+                )
 
             
             messages.success(request, "Cleaning routine record saved successfully.")
