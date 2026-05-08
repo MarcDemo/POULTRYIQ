@@ -225,7 +225,11 @@ class TreatmentPlanItem(models.Model):
     dosage = models.CharField(max_length=120)
     administration_route = models.CharField(max_length=80, blank=True)
     instructions = models.TextField(blank=True)
-    scheduled_for = models.DateField(null=True, blank=True, db_index=True)
+    scheduled_for = models.DateTimeField(null=True, blank=True, db_index=True)
+  
+    start_datetime = models.DateTimeField(null=True, blank=True)
+    duration_days = models.PositiveIntegerField(null=True, blank=True)
+    frequency_hours = models.PositiveIntegerField(null=True, blank=True)
     is_given = models.BooleanField(default=False, db_index=True)
     given_at = models.DateTimeField(null=True, blank=True)
     created_by = models.ForeignKey(

@@ -596,7 +596,7 @@ def supapproval(request):
         ),
         request.user,
         "batch__house",
-    ).select_related("batch__house", "collected_by").order_by("-collected_at")
+    ).select_related("batch__house", "collected_by", "sickness_report").order_by("-collected_at")
 
     pending_feed = _scope_to_supervisor_houses(
         FeedRecord.objects.filter(
@@ -604,7 +604,7 @@ def supapproval(request):
         ),
         request.user,
         "batch__house",
-    ).select_related("batch__house", "recorded_by").order_by("-created_at")
+    ).select_related("batch__house", "recorded_by", "sickness_report").order_by("-created_at")
 
     pending_cleaning = _scope_to_supervisor_houses(
         CleaningRecord.objects.filter(
@@ -612,7 +612,7 @@ def supapproval(request):
         ),
         request.user,
         "batch__house",
-    ).select_related("batch__house", "recorded_by").order_by("-created_at")
+    ).select_related("batch__house", "recorded_by", "sickness_report").order_by("-created_at")
 
     pending_mortality = _scope_to_supervisor_houses(
         MortalityRecord.objects.filter(

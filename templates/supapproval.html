@@ -65,7 +65,14 @@
                             <small class="text-muted">{{ rec.collected_at|date:"d M Y H:i" }}</small>
                         </td>
                         <td>
-                            <div>{{ rec.batch.house.name|default:rec.batch.house.house_code }}</div>
+                            <div>
+                                {{ rec.batch.house.name|default:rec.batch.house.house_code }}
+                                {% if rec.sickness_report_id %}
+                                    <span class="badge bg-danger ms-2">Sickbay: {{ rec.sickness_report.case_label }}</span>
+                                {% else %}
+                                    <span class="badge bg-secondary ms-2">House</span>
+                                {% endif %}
+                            </div>
                             <small class="text-muted">{{ rec.batch.batch_code }}</small>
                         </td>
                         <td>{{ rec.collection_date }}</td>
@@ -120,7 +127,14 @@
                             <small class="text-muted">{{ rec.created_at|date:"d M Y H:i" }}</small>
                         </td>
                         <td>
-                            <div>{{ rec.batch.house.name|default:rec.batch.house.house_code }}</div>
+                            <div>
+                                {{ rec.batch.house.name|default:rec.batch.house.house_code }}
+                                {% if rec.sickness_report_id %}
+                                    <span class="badge bg-danger ms-2">Sickbay: {{ rec.sickness_report.case_label }}</span>
+                                {% else %}
+                                    <span class="badge bg-secondary ms-2">House</span>
+                                {% endif %}
+                            </div>
                             <small class="text-muted">{{ rec.batch.batch_code }}</small>
                         </td>
                         <td>{{ rec.record_date }}</td>
@@ -174,7 +188,14 @@
                             <small class="text-muted">{{ rec.created_at|date:"d M Y H:i" }}</small>
                         </td>
                         <td>
-                            <div>{{ rec.batch.house.name|default:rec.batch.house.house_code }}</div>
+                            <div>
+                                {{ rec.batch.house.name|default:rec.batch.house.house_code }}
+                                {% if rec.sickness_report_id %}
+                                    <span class="badge bg-danger ms-2">Sickbay: {{ rec.sickness_report.case_label }}</span>
+                                {% else %}
+                                    <span class="badge bg-secondary ms-2">House</span>
+                                {% endif %}
+                            </div>
                             <small class="text-muted">{{ rec.batch.batch_code }}</small>
                         </td>
                         <td>{{ rec.record_date }}</td>

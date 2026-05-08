@@ -18,6 +18,7 @@
 }
 </style>
 {% endblock %}
+{% comment %}extra_js consolidated below{% endcomment %}
 {% block content %}
 <div class="container mt-4">
     <div class="sickbay-banner d-flex align-items-center justify-content-between">
@@ -45,13 +46,77 @@
                             <label for="batch" class="form-label">
                                 <i class="bi bi-house-door me-1"></i>Batch
                             </label>
-                            <select id="batch" name="batch" class="form-select" required>
-                                <option value="">-- Select batch --</option>
-                                {% for batch in batches %}
-                                <option value="{{ batch.pk }}">{{ batch.house.name|default:batch.house.house_code }} - {{ batch.batch_code }}</option>
-                                {% endfor %}
-                            </select>
+                                <select id="sickness_report" name="sickness_report" class="form-select mb-2">
+                                    <option value="">-- select sickbay case --</option>
+                                    {% for case in sick_reports %}
+                                        <option value="{{ case.pk }}" {% if case.batch %}data-batch="{{ case.batch.pk }}" data-house="{{ case.house_ref_id }}"{% endif %}>{{ case.house_label }} - {{ case.diagnosis_label }} ({{ case.case_label }})</option>
+                                    {% endfor %}
+                                </select>
+                               
+                            
                         </div>
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function(){
+    const caseSelect = document.getElementById('sickness_report');
+    const batchSelect = document.getElementById('batch');
+    if(batchSelect){
+        const placeholder = batchSelect.querySelector('option[value=""]');
+        if(placeholder){ placeholder.disabled = true; }
+    }
+    if(!caseSelect) return;
+    // cache all options
+    const allOptions = Array.from(caseSelect.options);
+
+    function filterOptions(){
+        const batchVal = batchSelect ? batchSelect.value : '';
+        const batchHouse = batchSelect && batchSelect.selectedIndex > -1 ? batchSelect.options[batchSelect.selectedIndex].getAttribute('data-house') : null;
+        allOptions.forEach(opt => {
+            const dataBatch = opt.getAttribute('data-batch');
+            const dataHouse = opt.getAttribute('data-house');
+            let show = true;
+            if(batchVal){
+                if(dataBatch){
+                    show = dataBatch === batchVal;
+                } else if(dataHouse && batchHouse){
+                    show = dataHouse === batchHouse;
+                } else {
+                    show = false;
+                }
+            } else {
+                show = true;
+            }
+            opt.style.display = show ? '' : 'none';
+        });
+        // clear selection if hidden
+        if(caseSelect.selectedIndex > -1 && caseSelect.options[caseSelect.selectedIndex].style.display === 'none'){
+            caseSelect.value = '';
+        }
+    }
+
+    if(batchSelect){
+        batchSelect.addEventListener('change', filterOptions);
+        // initial filter
+        filterOptions();
+    }
+
+    caseSelect.addEventListener('change', function(){
+        const sel = caseSelect.options[caseSelect.selectedIndex];
+        if(!sel) return;
+        const dataBatch = sel.getAttribute('data-batch');
+        const dataHouse = sel.getAttribute('data-house');
+        if(dataBatch && batchSelect){
+            batchSelect.value = dataBatch;
+            batchSelect.dispatchEvent(new Event('change'));
+        } else if(dataHouse && batchSelect){
+            // try to pick a batch with matching house
+            const opt = Array.from(batchSelect.options).find(o => o.getAttribute('data-house') === dataHouse);
+            if(opt){ batchSelect.value = opt.value; batchSelect.dispatchEvent(new Event('change')); }
+        }
+    });
+});
+</script>
+{% endblock %}
 
                         <div class="mb-3">
                             <label for="record_date" class="form-label">

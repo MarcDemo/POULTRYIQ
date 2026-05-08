@@ -1,5 +1,5 @@
 from datetime import date
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from django.contrib.auth import get_user_model
 from django.contrib import messages
@@ -9,6 +9,7 @@ from django.utils import timezone
 
 from accounts.decorators import supervisor_required, worker_required
 from alerts.models import Alert, AlertType
+from .services import get_health_alert_type, get_treatment_alert_receiver, create_treatment_alert
 from poultry.models import (
     MortalityCause,
     MortalityRecord,
@@ -136,55 +137,7 @@ def _scoped_treatment_items(user):
     return queryset
 
 
-def _get_health_alert_type():
-    alert_type, _ = AlertType.objects.get_or_create(
-        code=AlertType.AlertTypeCode.HEALTH,
-        defaults={
-            "name": "Health Alert",
-            "description": "Vet diagnosis and treatment reminders.",
-        },
-    )
-    return alert_type
-
-
-def _get_treatment_alert_receiver(report, fallback_user):
-    reporter_role = _role_code(report.reported_by)
-    if report.reported_by.is_active and reporter_role in {"SUPERVISOR", "MANAGER", "OWNER"}:
-        return report.reported_by
-
-    supervisors = User.objects.filter(
-        is_active=True,
-        role__code__in=["SUPERVISOR", "MANAGER", "OWNER"],
-    )
-    if report.house_ref_id:
-        supervisors = supervisors.filter(houses=report.house_ref)
-
-    return supervisors.distinct().first() or fallback_user
-
-
-def _create_treatment_alert(plan_item, receiver):
-    due_date = None
-    if plan_item.scheduled_for:
-        due_date = timezone.make_aware(datetime.combine(plan_item.scheduled_for, datetime.min.time()))
-
-    return Alert.objects.create(
-        alert_type=_get_health_alert_type(),
-        title=f"Treatment due for {plan_item.sickness_report.case_label}",
-        message=(
-            f"Diagnosis: {plan_item.sickness_report.diagnosis_label}\n"
-            f"Case size: {plan_item.sickness_report.affected} bird(s)\n"
-            f"Medicine: {plan_item.medicine_name}\n"
-            f"Dosage: {plan_item.dosage}\n"
-            f"Instructions: {plan_item.instructions or 'Follow the vet guidance recorded in the treatment plan.'}"
-        ),
-        receiver=receiver,
-        sender=None,
-        priority=Alert.Priority.HIGH,
-        related_house=plan_item.sickness_report.house_ref,
-        related_batch=plan_item.sickness_report.batch,
-        due_date=due_date,
-        persist_until_resolved=True,
-    )
+# Using alert helper functions from health.services
 
 
 @supervisor_required
@@ -195,6 +148,21 @@ def treatment(request):
     treatment_items = _scoped_treatment_items(request.user).order_by("is_given", "scheduled_for", "-created_at")
     pending_treatment_items = treatment_items.filter(is_given=False)
     completed_treatment_items = treatment_items.filter(is_given=True)[:10]
+    # compute which pending items are due (scheduled datetime <= now)
+    now = timezone.now()
+    due_ids = []
+    for it in pending_treatment_items:
+        sf = it.scheduled_for
+        if not sf:
+            continue
+        # ensure timezone-aware comparison
+        try:
+            if timezone.is_naive(sf):
+                sf = timezone.make_aware(datetime.combine(sf.date(), sf.time()))
+        except Exception:
+            pass
+        if sf <= now:
+            due_ids.append(it.pk)
 
     if request.method == "POST":
         form_action = request.POST.get("form_action", "").strip()
@@ -209,6 +177,11 @@ def treatment(request):
             administration_route = request.POST.get("administration_route", "").strip()
             instructions = request.POST.get("instructions", "").strip()
             scheduled_for_raw = request.POST.get("scheduled_for", "").strip()
+            scheduled_time_raw = request.POST.get("scheduled_time", "").strip()
+            start_date_raw = request.POST.get("start_date", "").strip()
+            start_time_raw = request.POST.get("start_time", "").strip()
+            duration_days_raw = request.POST.get("duration_days", "").strip()
+            frequency_hours_raw = request.POST.get("frequency_hours", "").strip()
             diagnosis_notes = request.POST.get("diagnosis_notes", "").strip()
 
             errors = []
@@ -234,9 +207,40 @@ def treatment(request):
             scheduled_for = None
             if scheduled_for_raw:
                 try:
-                    scheduled_for = date.fromisoformat(scheduled_for_raw)
+                    if scheduled_time_raw:
+                        scheduled_for = datetime.fromisoformat(f"{scheduled_for_raw}T{scheduled_time_raw}")
+                    else:
+                        scheduled_for = datetime.fromisoformat(f"{scheduled_for_raw}T00:00:00")
                 except ValueError:
-                    errors.append("Please provide a valid treatment schedule date.")
+                    errors.append("Please provide a valid treatment schedule date/time.")
+
+            start_datetime = None
+            duration_days = None
+            frequency_hours = None
+            if start_date_raw:
+                try:
+                    if start_time_raw:
+                        start_datetime = datetime.fromisoformat(f"{start_date_raw}T{start_time_raw}")
+                    else:
+                        start_datetime = datetime.fromisoformat(f"{start_date_raw}T00:00:00")
+                except ValueError:
+                    errors.append("Please provide a valid start date/time for the treatment plan.")
+
+            if duration_days_raw:
+                try:
+                    duration_days = int(duration_days_raw)
+                    if duration_days < 1:
+                        errors.append("Duration must be at least 1 day.")
+                except ValueError:
+                    errors.append("Please provide a valid integer duration in days.")
+
+            if frequency_hours_raw:
+                try:
+                    frequency_hours = int(frequency_hours_raw)
+                    if frequency_hours < 1:
+                        errors.append("Frequency must be at least 1 hour.")
+                except ValueError:
+                    errors.append("Please provide a valid integer frequency in hours.")
 
             
 
@@ -261,20 +265,50 @@ def treatment(request):
                     ]
                 )
 
-                plan_item = TreatmentPlanItem.objects.create(
-                    sickness_report=selected_report,
-                    medicine_name=medicine_name,
-                    dosage=dosage,
-                    administration_route=administration_route,
-                    instructions=instructions,
-                    scheduled_for=scheduled_for or vet_visit_date,
-                    
-                    created_by=request.user,
-                )
+                # Build schedule of doses using datetime + hourly frequency
+                scheduled_datetimes = []
+                if start_datetime and duration_days and frequency_hours:
+                    # schedule from start_datetime up to (start + duration_days)
+                    end_datetime = start_datetime + timedelta(days=duration_days) - timedelta(seconds=1)
+                    current = start_datetime
+                    while current <= end_datetime:
+                        scheduled_datetimes.append(current)
+                        current = current + timedelta(hours=frequency_hours)
+                elif scheduled_for:
+                    scheduled_datetimes = [scheduled_for]
+                else:
+                    # fallback to vet visit date (at midnight) if present
+                    if vet_visit_date:
+                        scheduled_datetimes = [datetime.combine(vet_visit_date, datetime.min.time())]
 
-                receiver = _get_treatment_alert_receiver(selected_report, request.user)
-                plan_item.alert = _create_treatment_alert(plan_item, receiver)
-                plan_item.save(update_fields=["alert"]) 
+                receiver = get_treatment_alert_receiver(selected_report, request.user)
+                created_items = []
+                for due_dt in scheduled_datetimes:
+                    item = TreatmentPlanItem.objects.create(
+                        sickness_report=selected_report,
+                        medicine_name=medicine_name,
+                        dosage=dosage,
+                        administration_route=administration_route,
+                        instructions=instructions,
+                        scheduled_for=due_dt,
+                        start_datetime=start_datetime,
+                        duration_days=duration_days,
+                        frequency_hours=frequency_hours,
+                        created_by=request.user,
+                    )
+                    alert_obj = create_treatment_alert(item, receiver)
+                    if alert_obj:
+                        item.alert = alert_obj
+                        item.save(update_fields=["alert"]) 
+                    created_items.append(item)
+
+                # update isolation name to housename-disease (as requested)
+                try:
+                    selected_report.isolation_name = f"{selected_report.house_label}-{selected_report.disease or diagnosis}"
+                    selected_report.save(update_fields=["isolation_name"])
+                except Exception:
+                    # non-fatal
+                    pass
 
                 messages.success(request, "Vet diagnosis and treatment plan saved.")
                 return redirect("treatment")
@@ -323,6 +357,8 @@ def treatment(request):
             "active_treatment_alerts": pending_treatment_items.filter(
                 alert__status__in=[Alert.Status.UNREAD, Alert.Status.READ, Alert.Status.ACKNOWLEDGED]
             ).count(),
+            "due_ids": due_ids,
+            "now": now,
         },
     )
 
@@ -609,9 +645,15 @@ def sick_record_egg(request):
         house__in=request.user.houses.all(),
         status=PoultryBatch.Status.ACTIVE,
     ).select_related("house").order_by("house__house_code", "batch_code")
+    assigned_sick_reports = (
+        SicknessReport.objects.filter(action="sickbay", house_ref__in=request.user.houses.all())
+        .select_related("house_ref", "batch")
+        .order_by("-date", "-created_at")
+    )
 
     if request.method == "POST":
         batch_id = request.POST.get("batch", "").strip()
+        sickness_report_id = request.POST.get("sickness_report", "").strip()
         collection_date_raw = request.POST.get("collection_date", "").strip()
         total_eggs_raw = request.POST.get("total_eggs", "").strip()
         broken_eggs_raw = request.POST.get("broken_eggs", "0").strip()
@@ -619,6 +661,9 @@ def sick_record_egg(request):
 
         errors = []
         selected_batch = batches.filter(pk=batch_id).first() if batch_id else None
+        selected_report = assigned_sick_reports.filter(pk=sickness_report_id).first() if sickness_report_id else None
+        if selected_report and selected_report.batch:
+            selected_batch = selected_report.batch
 
         if not selected_batch:
             errors.append("Please select a valid batch from your assigned houses.")
@@ -656,6 +701,9 @@ def sick_record_egg(request):
         ):
             errors.append("Broken eggs cannot be more than total eggs.")
 
+        if not selected_batch and not selected_report:
+            errors.append("Please select a valid batch or sickbay case from your assignment.")
+
         if errors:
             for error in errors:
                 messages.error(request, error)
@@ -667,17 +715,18 @@ def sick_record_egg(request):
                 eggs_rejected=eggs_rejected,
                 notes=notes,
                 collected_by=request.user,
+                sickness_report=selected_report,
             )
             messages.success(request, "Sickbay: Egg collection saved.")
             return redirect("sick_record_egg")
 
+    from django.db.models import Q
     recent_egg_records = egg_collection.objects.filter(
         collected_by=request.user,
-        batch__in=batches,
         collection_date=date.today(),
-    ).select_related("batch__house")[:10]
+    ).filter(Q(batch__in=batches) | Q(sickness_report__in=assigned_sick_reports)).select_related("batch__house")[:10]
 
-    return render(request, "record_egg_sickbay.html", {"batches": batches, "today": date.today(), "recent_egg_records": recent_egg_records})
+    return render(request, "record_egg_sickbay.html", {"batches": batches, "today": date.today(), "recent_egg_records": recent_egg_records, "sick_reports": assigned_sick_reports})
 
 
 @worker_required
@@ -686,9 +735,15 @@ def sick_record_feed(request):
         house__in=request.user.houses.all(),
         status=PoultryBatch.Status.ACTIVE,
     ).select_related("house").order_by("house__house_code", "batch_code")
+    assigned_sick_reports = (
+        SicknessReport.objects.filter(action="sickbay", house_ref__in=request.user.houses.all())
+        .select_related("house_ref", "batch")
+        .order_by("-date", "-created_at")
+    )
 
     if request.method == "POST":
         batch_id = request.POST.get("batch", "").strip()
+        sickness_report_id = request.POST.get("sickness_report", "").strip()
         record_date_raw = request.POST.get("record_date", "").strip()
         feed_type = request.POST.get("feed_type", FeedRecord.FeedType.OTHER).strip()
         quantity_raw = request.POST.get("quantity", "").strip()
@@ -697,6 +752,9 @@ def sick_record_feed(request):
 
         errors = []
         selected_batch = batches.filter(pk=batch_id).first() if batch_id else None
+        selected_report = assigned_sick_reports.filter(pk=sickness_report_id).first() if sickness_report_id else None
+        if selected_report and selected_report.batch:
+            selected_batch = selected_report.batch
 
         if not selected_batch:
             errors.append("Please select a valid batch from your assigned houses.")
@@ -728,6 +786,9 @@ def sick_record_feed(request):
             except ValueError:
                 errors.append("Please provide a valid time.")
 
+        if not selected_batch and not selected_report:
+            errors.append("Please select a valid batch or sickbay case from your assignment.")
+
         if errors:
             for error in errors:
                 messages.error(request, error)
@@ -740,17 +801,18 @@ def sick_record_feed(request):
                 time_given=parsed_time,
                 notes=notes,
                 recorded_by=request.user,
+                sickness_report=selected_report,
             )
             messages.success(request, "Sickbay: Feed record saved.")
             return redirect("sick_record_feed")
 
+    from django.db.models import Q
     recent_feed_records = FeedRecord.objects.filter(
         recorded_by=request.user,
-        batch__in=batches,
         record_date=date.today(),
-    ).select_related("batch__house")[:10]
+    ).filter(Q(batch__in=batches) | Q(sickness_report__in=assigned_sick_reports)).select_related("batch__house")[:10]
 
-    return render(request, "record_feed_sickbay.html", {"batches": batches, "today": date.today(), "recent_feed_records": recent_feed_records, "feed_types": FeedRecord.FeedType.choices})
+    return render(request, "record_feed_sickbay.html", {"batches": batches, "today": date.today(), "recent_feed_records": recent_feed_records, "feed_types": FeedRecord.FeedType.choices, "sick_reports": assigned_sick_reports})
 
 
 @worker_required
@@ -759,9 +821,15 @@ def sick_record_cleaning(request):
         house__in=request.user.houses.all(),
         status=PoultryBatch.Status.ACTIVE,
     ).select_related("house").order_by("house__house_code", "batch_code")
+    assigned_sick_reports = (
+        SicknessReport.objects.filter(action="sickbay", house_ref__in=request.user.houses.all())
+        .select_related("house_ref", "batch")
+        .order_by("-date", "-created_at")
+    )
 
     if request.method == "POST":
         batch_id = request.POST.get("batch", "").strip()
+        sickness_report_id = request.POST.get("sickness_report", "").strip()
         record_date_raw = request.POST.get("record_date", "").strip()
         house_cleaned = bool(request.POST.get("cleaned"))
         disinfection_done = bool(request.POST.get("disinfected"))
@@ -770,6 +838,9 @@ def sick_record_cleaning(request):
 
         errors = []
         selected_batch = batches.filter(pk=batch_id).first() if batch_id else None
+        selected_report = assigned_sick_reports.filter(pk=sickness_report_id).first() if sickness_report_id else None
+        if selected_report and selected_report.batch:
+            selected_batch = selected_report.batch
 
         if not selected_batch:
             errors.append("Please select a valid batch from your assigned houses.")
@@ -786,6 +857,9 @@ def sick_record_cleaning(request):
         if not any([house_cleaned, disinfection_done, water_changed]):
             errors.append("Please tick at least one cleaning task.")
 
+        if not selected_batch and not selected_report:
+            errors.append("Please select a valid batch or sickbay case from your assignment.")
+
         if errors:
             for error in errors:
                 messages.error(request, error)
@@ -798,17 +872,18 @@ def sick_record_cleaning(request):
                 water_changed=water_changed,
                 notes=notes,
                 recorded_by=request.user,
+                sickness_report=selected_report,
             )
             messages.success(request, "Sickbay: Cleaning record saved.")
             return redirect("sick_record_cleaning")
 
+    from django.db.models import Q
     recent_cleaning_records = CleaningRecord.objects.filter(
         recorded_by=request.user,
-        batch__in=batches,
         record_date=date.today(),
-    ).select_related("batch__house")[:7]
+    ).filter(Q(batch__in=batches) | Q(sickness_report__in=assigned_sick_reports)).select_related("batch__house")[:7]
 
-    return render(request, "record_cleaning_sickbay.html", {"batches": batches, "today": date.today(), "recent_cleaning_records": recent_cleaning_records})
+    return render(request, "record_cleaning_sickbay.html", {"batches": batches, "today": date.today(), "recent_cleaning_records": recent_cleaning_records, "sick_reports": assigned_sick_reports})
 
 
 @worker_required

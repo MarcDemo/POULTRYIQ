@@ -45,12 +45,12 @@
                             <label for="batch" class="form-label">
                                 <i class="bi bi-house-door me-2"></i>Batch
                             </label>
-                            <select id="batch" name="batch" class="form-select" required>
-                                <option value="">-- Select batch --</option>
-                                {% for batch in batches %}
-                                <option value="{{ batch.pk }}">{{ batch.house.name|default:batch.house.house_code }} - {{ batch.batch_code }}</option>
-                                {% endfor %}
-                            </select>
+                           <select id="sickness_report" name="sickness_report" class="form-select mb-2">
+                                    <option value="">-- select sickbay case --</option>
+                                    {% for case in sick_reports %}
+                                    <option value="{{ case.pk }}" {% if case.batch %}data-batch="{{ case.batch.pk }}"{% endif %}>{{ case.house_label }} - {{ case.diagnosis_label }} ({{ case.case_label }})</option>
+                                    {% endfor %}
+                                </select>
                         </div>
 
                         <div class="mb-3">
