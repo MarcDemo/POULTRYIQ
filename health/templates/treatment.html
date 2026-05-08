@@ -1,6 +1,19 @@
 {% extends "base.html" %}
 {% block content %}
 
+{% block extra_css %}
+<style>
+/* Allow horizontal scrolling when content is wider than viewport */
+.container-fluid, .main-content { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.table-responsive { overflow-x: auto; }
+/* Ensure tables can shrink on small screens but allow horizontal scroll when needed */
+.table-responsive table { min-width: 760px; }
+/* Improve button spacing */
+.card-header .badge { margin-left: 8px; }
+.btn-sm { padding: .25rem .5rem; }
+</style>
+{% endblock %}
+
 <div class="container-fluid">
 
 <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
@@ -103,8 +116,31 @@
                             <input id="administration_route" type="text" name="administration_route" class="form-control" placeholder="Water, oral, injection">
                         </div>
                         <div class="col-md-6">
-                            <label for="scheduled_for" class="form-label">Scheduled For</label>
+                            <label for="scheduled_for" class="form-label">Scheduled For (date)</label>
                             <input id="scheduled_for" type="date" name="scheduled_for" class="form-control" value="{{ today|date:'Y-m-d' }}">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="scheduled_time" class="form-label">Scheduled Time</label>
+                            <input id="scheduled_time" type="time" name="scheduled_time" class="form-control" value="08:00">
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mt-2">
+                        <div class="col-md-4">
+                            <label for="start_date" class="form-label">Plan Start Date</label>
+                            <input id="start_date" type="date" name="start_date" class="form-control" value="{{ today|date:'Y-m-d' }}" required>
+                        </div>
+                        <div class="col-md-2">
+                            <label for="start_time" class="form-label">Start Time</label>
+                            <input id="start_time" type="time" name="start_time" class="form-control" value="08:00" required>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="duration_days" class="form-label">Duration (days)</label>
+                            <input id="duration_days" type="number" min="1" name="duration_days" class="form-control" placeholder="e.g. 5" required>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="frequency_hours" class="form-label">Frequency (hours)</label>
+                            <input id="frequency_hours" type="number" min="1" name="frequency_hours" class="form-control" placeholder="e.g. 8" required>
                         </div>
                     </div>
 
@@ -165,7 +201,7 @@
                                     <small class="text-muted">{{ item.instructions }}</small>
                                     {% endif %}
                                 </td>
-                                <td>{{ item.scheduled_for|default:"Today" }}</td>
+                                <td>{% if item.scheduled_for %}{{ item.scheduled_for|date:"M d, Y H:i" }}{% else %}Today{% endif %}</td>
                                 <td>
                                     {% if item.has_active_alert %}
                                     <span class="badge bg-danger">Active</span>
@@ -174,6 +210,7 @@
                                     {% endif %}
                                 </td>
                                 <td>
+                                    {% if item.pk in due_ids %}
                                     <form method="POST" class="d-inline">
                                         {% csrf_token %}
                                         <input type="hidden" name="form_action" value="mark_given">
@@ -182,6 +219,11 @@
                                             <i class="bi bi-check2-circle me-1"></i>Mark Given
                                         </button>
                                     </form>
+                                    {% else %}
+                                    <button type="button" class="btn btn-sm btn-secondary" disabled title="Not due yet">
+                                        Not due
+                                    </button>
+                                    {% endif %}
                                 </td>
                             </tr>
                             {% empty %}

@@ -231,6 +231,10 @@ class PoultryHouse(models.Model):
 class egg_collection(models.Model):
     collection_id = models.BigAutoField(primary_key=True)
     batch = models.ForeignKey(PoultryBatch, on_delete=models.PROTECT, related_name="egg_collections")
+    # optional link to a sickbay case when this collection is for a sickness report
+    sickness_report = models.ForeignKey(
+        'health.SicknessReport', on_delete=models.PROTECT, null=True, blank=True, related_name='sickbay_egg_collections'
+    )
     collection_date = models.DateField(db_index=True)
 
     eggs_collected = models.PositiveIntegerField(validators=[MinValueValidator(0)])
@@ -261,7 +265,8 @@ class egg_collection(models.Model):
     class Meta:
         ordering = ["-collection_date", "-collection_id"]
         indexes = [
-            models.Index(fields=["batch", "collection_date"]),
+                models.Index(fields=["batch", "collection_date"]),
+                models.Index(fields=["sickness_report", "collection_date"]),
         ]
 
     def __str__(self) -> str:
@@ -277,6 +282,9 @@ class FeedRecord(models.Model):
 
     feed_id = models.BigAutoField(primary_key=True)
     batch = models.ForeignKey(PoultryBatch, on_delete=models.PROTECT, related_name="feed_records")
+    sickness_report = models.ForeignKey(
+        'health.SicknessReport', on_delete=models.PROTECT, null=True, blank=True, related_name='sickbay_feed_records'
+    )
     record_date = models.DateField(db_index=True)
     feed_type = models.CharField(max_length=20, choices=FeedType.choices, default=FeedType.OTHER)
     quantity_kg = models.DecimalField(
@@ -311,6 +319,7 @@ class FeedRecord(models.Model):
         ordering = ["-record_date", "-feed_id"]
         indexes = [
             models.Index(fields=["batch", "record_date"]),
+            models.Index(fields=["sickness_report", "record_date"]),
         ]
 
     def __str__(self) -> str:
@@ -320,6 +329,9 @@ class FeedRecord(models.Model):
 class CleaningRecord(models.Model):
     cleaning_id = models.BigAutoField(primary_key=True)
     batch = models.ForeignKey(PoultryBatch, on_delete=models.PROTECT, related_name="cleaning_records")
+    sickness_report = models.ForeignKey(
+        'health.SicknessReport', on_delete=models.PROTECT, null=True, blank=True, related_name='sickbay_cleaning_records'
+    )
     record_date = models.DateField(db_index=True)
 
     house_cleaned = models.BooleanField(default=False)
@@ -352,6 +364,7 @@ class CleaningRecord(models.Model):
         ordering = ["-record_date", "-cleaning_id"]
         indexes = [
             models.Index(fields=["batch", "record_date"]),
+            models.Index(fields=["sickness_report", "record_date"]),
         ]
 
     def __str__(self) -> str:
