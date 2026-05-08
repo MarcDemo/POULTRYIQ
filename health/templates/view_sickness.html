@@ -1,4 +1,30 @@
 {% extends "base.html" %}
+{% block extra_css %}
+<style>
+    .symptom-photo-thumb {
+        width: 64px;
+        height: 64px;
+        object-fit: cover;
+        border: 1px solid #dee2e6;
+        border-radius: 0.5rem;
+        cursor: zoom-in;
+        transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .symptom-photo-thumb:hover {
+        transform: scale(1.04);
+        box-shadow: 0 0.25rem 0.75rem rgba(0, 0, 0, 0.18);
+    }
+
+    .symptom-photo-modal-img {
+        width: 100%;
+        max-height: 75vh;
+        object-fit: contain;
+        border-radius: 0.5rem;
+        background: #f8f9fa;
+    }
+</style>
+{% endblock %}
 {% block content %}
 
 <div class="container-fluid">
@@ -154,7 +180,21 @@
                         <td>
                             <div>{{ record.symptoms|default:"-" }}</div>
                             {% if record.image %}
-                            <a href="{{ record.image.url }}" target="_blank" rel="noopener">View photo</a>
+                            <button
+                                type="button"
+                                class="btn btn-link p-0 mt-1 d-inline-flex align-items-center symptom-photo-trigger"
+                                data-bs-toggle="modal"
+                                data-bs-target="#symptomPhotoModal"
+                                data-img-src="{{ record.image.url }}"
+                                data-img-alt="Sickness photo for {{ record.case_label }}"
+                                aria-label="Open sickness photo"
+                            >
+                                <img
+                                    src="{{ record.image.url }}"
+                                    alt="Sickness photo for {{ record.case_label }}"
+                                    class="symptom-photo-thumb"
+                                >
+                            </button>
                             {% endif %}
                         </td>
                         <td>{{ record.diagnosis_label }}</td>
@@ -209,4 +249,37 @@
 
 </div>
 
+<div class="modal fade" id="symptomPhotoModal" tabindex="-1" aria-labelledby="symptomPhotoModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="symptomPhotoModalLabel">Sickness Photo</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <img id="symptomPhotoModalImage" src="" alt="Sickness photo preview" class="symptom-photo-modal-img">
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener("DOMContentLoaded", function () {
+        const modalImage = document.getElementById("symptomPhotoModalImage");
+        const triggers = document.querySelectorAll(".symptom-photo-trigger");
+
+        triggers.forEach(function (trigger) {
+            trigger.addEventListener("click", function () {
+                const imgSrc = this.getAttribute("data-img-src");
+                const imgAlt = this.getAttribute("data-img-alt") || "Sickness photo preview";
+
+                modalImage.setAttribute("src", imgSrc);
+                modalImage.setAttribute("alt", imgAlt);
+            });
+        });
+    });
+</script>
 {% endblock %}
