@@ -9,7 +9,7 @@
                     <i class="bi bi-exclamation-triangle me-2"></i>Mortality Log
                 </div>
                 <div class="card-body">
-                    <form method="POST" novalidate>
+                    <form method="POST" novalidate enctype="multipart/form-data">
                         {% csrf_token %}
 
                         <div class="mb-3">
