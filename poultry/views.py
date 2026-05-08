@@ -410,6 +410,12 @@ def workersdash(request):
 @supervisor_required
 def supdash(request):
     today = date.today()
+    role_code = _role_code(request.user)
+    if role_code == "SUPERVISOR":
+        assigned_houses = request.user.houses.filter(is_active=True).order_by("house_code", "name")
+    else:
+        assigned_houses = PoultryHouse.objects.filter(is_active=True).order_by("house_code", "name")
+
     egg_records = _scope_to_supervisor_houses(egg_collection.objects.all(), request.user, "batch__house")
     feed_records = _scope_to_supervisor_houses(FeedRecord.objects.all(), request.user, "batch__house")
     cleaning_records = _scope_to_supervisor_houses(CleaningRecord.objects.all(), request.user, "batch__house")
@@ -480,6 +486,8 @@ def supdash(request):
 
     context = {
         "today": today,
+        "assigned_houses": assigned_houses,
+        "assigned_houses_count": assigned_houses.count(),
         "pending_eggs": pending_eggs,
         "pending_feed": pending_feed,
         "pending_cleaning": pending_cleaning,
@@ -589,6 +597,11 @@ def sup_approve_mortality(request, pk):
 @supervisor_required
 def supapproval(request):
     tab = request.GET.get("tab", "eggs")
+    role_code = _role_code(request.user)
+    if role_code == "SUPERVISOR":
+        assigned_houses = request.user.houses.filter(is_active=True).order_by("house_code", "name")
+    else:
+        assigned_houses = PoultryHouse.objects.filter(is_active=True).order_by("house_code", "name")
 
     pending_eggs = _scope_to_supervisor_houses(
         egg_collection.objects.filter(
@@ -624,6 +637,8 @@ def supapproval(request):
 
     context = {
         "tab": tab,
+        "assigned_houses": assigned_houses,
+        "assigned_houses_count": assigned_houses.count(),
         "pending_eggs": pending_eggs,
         "pending_feed": pending_feed,
         "pending_cleaning": pending_cleaning,
