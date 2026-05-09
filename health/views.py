@@ -145,6 +145,11 @@ def treatment(request):
     role_code = _role_code(request.user)
     sickness_cases = _scoped_sickness_cases(request.user)
     open_cases = sickness_cases.exclude(case_status=SicknessReport.CaseStatus.TREATMENT_COMPLETED)
+    transferable_cases = sickness_cases.filter(
+        action="sickbay",
+        case_status=SicknessReport.CaseStatus.TREATMENT_COMPLETED,
+        transferred_back_at__isnull=True,
+    ).order_by("-treatment_completed_at", "-date", "-created_at")
     treatment_items = _scoped_treatment_items(request.user).order_by("is_given", "scheduled_for", "-created_at")
     pending_treatment_items = treatment_items.filter(is_given=False)
     completed_treatment_items = treatment_items.filter(is_given=True)[:10]
@@ -340,6 +345,30 @@ def treatment(request):
                 messages.success(request, "Treatment dose marked as given.")
                 return redirect("treatment")
 
+        elif form_action == "transfer_back":
+            sickness_report_id = request.POST.get("sickness_report_id", "").strip()
+            selected_report = transferable_cases.filter(pk=sickness_report_id).first() if sickness_report_id else None
+
+            if not selected_report:
+                messages.error(request, "Only completed sickbay treatment cases can be transferred back.")
+            elif selected_report.treatment_items.filter(is_given=False).exists():
+                messages.error(request, "Complete all treatment doses before transferring birds back.")
+            else:
+                selected_report.transferred_back_at = timezone.now()
+                selected_report.transferred_back_by = request.user
+                selected_report.isolated = False
+                selected_report.isolation_name = ""
+                selected_report.save(
+                    update_fields=[
+                        "transferred_back_at",
+                        "transferred_back_by",
+                        "isolated",
+                        "isolation_name",
+                    ]
+                )
+                messages.success(request, "Birds transferred back to their house.")
+                return redirect("treatment")
+
         else:
             messages.error(request, "Unknown treatment action.")
 
@@ -350,6 +379,8 @@ def treatment(request):
             "base_template": "supbase.html" if role_code == "SUPERVISOR" else "base.html",
             "today": date.today(),
             "open_cases": open_cases.order_by("-date", "-created_at")[:20],
+            "transferable_cases": transferable_cases[:20],
+            "transferable_cases_count": transferable_cases.count(),
             "pending_vet_cases_count": open_cases.filter(case_status=SicknessReport.CaseStatus.REPORTED).count(),
             "pending_treatment_items": pending_treatment_items,
             "completed_treatment_items": completed_treatment_items,

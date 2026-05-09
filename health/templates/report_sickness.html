@@ -3,11 +3,11 @@
 
 {% block content %}
 
-<div class="container-fluid">
-    <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
+<div class="container-fluid worker-field-page">
+    <div class="worker-hero d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
         <div>
-            <h3 class="mb-1"><i class="bi bi-heart-pulse me-2"></i>Record Sickness Case</h3>
-            <small class="text-muted">A case can represent one bird or a grouped set of birds with the same sickness signs.</small>
+            <h3 class="mb-1"><i class="bi bi-heart-pulse me-2 text-danger"></i>Sick birds</h3>
+            <div class="worker-subtitle">Record birds that look sick. <span class="luganda">Wandiika enkoko ezirabika nga zirwadde.</span></div>
         </div>
         <a href="{% url 'treatment' %}" class="btn btn-outline-primary">
             <i class="bi bi-capsule-pill me-1"></i>Open Treatment Plan
@@ -16,23 +16,24 @@
 
     <div class="row g-4">
         <div class="col-lg-5">
-            <div class="card shadow-sm h-100">
+            <div class="card field-card h-100">
                 <div class="card-header" style="background: linear-gradient(135deg, #dc3545 0%, #ef476f 100%);">
-                    <i class="bi bi-journal-medical me-2"></i>Bird Sickness Form
+                    <i class="bi bi-journal-medical me-2"></i>Sick bird form
+                    <span class="luganda">Foomu y'enkoko endwadde</span>
                 </div>
                 <div class="card-body">
-                    <form method="POST" enctype="multipart/form-data" novalidate>
+                    <form method="POST" class="field-form js-confirm-submit" data-confirm-message="Send this sick bird record? / Osindike ekiwandiiko ky'enkoko endwadde?" enctype="multipart/form-data" novalidate>
                         {% csrf_token %}
 
                         <div class="mb-3">
-                            <label for="date" class="form-label"><i class="bi bi-calendar3 me-1"></i>Date</label>
+                            <label for="date" class="form-label"><i class="bi bi-calendar3 me-1"></i>Today <span class="luganda">Leero</span></label>
                             <input id="date" type="date" name="date" class="form-control" value="{{ today|date:'Y-m-d' }}" required>
                         </div>
 
                         <div class="mb-3">
-                            <label for="house" class="form-label"><i class="bi bi-house-door me-1"></i>House</label>
+                            <label for="house" class="form-label"><i class="bi bi-house-door me-1"></i>House <span class="luganda">Ennyumba</span></label>
                             <select id="house" name="house" class="form-select" required>
-                                <option value="">-- Select house --</option>
+                                <option value="">-- Choose house --</option>
                                 {% for h in houses %}
                                 <option value="{{ h.pk }}">{{ h.name|default:h.house_code }}</option>
                                 {% endfor %}
@@ -42,42 +43,44 @@
                     
 
                     <div class="mb-3">
-                        <label for="affected" class="form-label"><i class="bi bi-people-fill me-1"></i>Number of Sick Birds in This Case</label>
-                        <input id="affected" type="number" name="affected" class="form-control" value="1" min="1" required>
-                        <div class="form-text">If 10 birds share the same symptoms, you can record them as one case and enter `10` here.</div>
+                        <label for="affected" class="form-label"><i class="bi bi-people-fill me-1"></i>How many are sick? <span class="luganda">Endwadde mmeka?</span></label>
+                        <input id="affected" type="number" name="affected" class="form-control" value="1" min="1" required inputmode="numeric">
+                        <div class="form-text">If many birds look the same, put the total number. / Bwe ziba nnyingi nga zirina obubonero bwe bumu, wandiika omuwendo gwazo.</div>
                     </div>
 
                       
 
                         <div class="mb-3">
-                            <label for="symptoms" class="form-label"><i class="bi bi-thermometer-half me-1"></i>Observed Symptoms</label>
-                            <textarea id="symptoms" name="symptoms" class="form-control" rows="3" placeholder="e.g. coughing, swollen eyes, not feeding" required></textarea>
+                            <label for="symptoms" class="form-label"><i class="bi bi-thermometer-half me-1"></i>What do you see? <span class="luganda">Olaba ki?</span></label>
+                            <textarea id="symptoms" name="symptoms" class="form-control" rows="3" placeholder="Coughing, swollen eyes, not eating" required></textarea>
+                            <div class="form-text">Examples: coughing, weak, swollen eyes. / Ebyokulabirako: okukolola, okunafuwa, amaaso okuzimba.</div>
                         </div>
 
                         <div class="mb-3">
-                            <label for="action" class="form-label"><i class="bi bi-wrench-adjustable-circle me-1"></i>Immediate Action</label>
+                            <label for="action" class="form-label"><i class="bi bi-wrench-adjustable-circle me-1"></i>What did you do? <span class="luganda">Wakoze ki?</span></label>
                             <select id="action" name="action" class="form-select" required>
-                                <option value="">-- Select action --</option>
+                                <option value="">-- Choose action --</option>
                                 {% for value, label in action_choices %}
                                 <option value="{{ value }}">{{ label }}</option>
                                 {% endfor %}
                             </select>
-                            <div class="form-text">Isolation names are generated automatically when the case is moved to sickbay.</div>
+                            <div class="form-text">Choose sickbay if you separated the bird. / Londa sickbay bw'oba wayawudde enkoko.</div>
                         </div>
 
                         <div class="mb-3">
-                            <label for="image" class="form-label"><i class="bi bi-camera me-1"></i>Photo</label>
-                            <input id="image" name="image" class="form-control" type="file" accept="image/*">
+                            <label for="image" class="form-label"><i class="bi bi-camera me-1"></i>Take or upload photo <span class="luganda">Kwata oba teekako ekifaananyi</span></label>
+                            <input id="image" name="image" class="form-control" type="file" accept="image/*" capture="environment">
                         </div>
 
                         <div class="mb-3">
-                            <label for="notes" class="form-label"><i class="bi bi-chat-left-text me-1"></i>Supervisor Notes</label>
-                            <textarea id="notes" name="notes" class="form-control" rows="3" placeholder="Extra observations before the vet visit..."></textarea>
+                            <label for="notes" class="form-label"><i class="bi bi-chat-left-text me-1"></i>Note <span class="luganda">Eky'okwongerako</span></label>
+                            <textarea id="notes" name="notes" class="form-control" rows="3" placeholder="Optional"></textarea>
                         </div>
 
                         <div class="d-grid mt-4">
-                            <button type="submit" class="btn btn-danger">
-                                <i class="bi bi-check-circle me-1"></i>Save Bird Case
+                            <button type="submit" class="btn btn-danger field-submit">
+                                <i class="bi bi-check-circle me-1"></i>Send
+                                <span class="luganda text-white">Sindika</span>
                             </button>
                         </div>
                     </form>
@@ -86,9 +89,9 @@
         </div>
 
         <div class="col-lg-7">
-            <div class="card shadow-sm h-100">
+            <div class="card field-card h-100">
                 <div class="card-header d-flex align-items-center justify-content-between">
-                    <span><i class="bi bi-list-check me-2"></i>Recent Sickness Cases</span>
+                    <span><i class="bi bi-list-check me-2"></i>Recent sick bird records <span class="luganda">Ebiwandiiko by'endwadde</span></span>
                     <a href="{% url 'view_sickness' %}" class="btn btn-sm btn-light fw-semibold">View Full Register</a>
                 </div>
                 <div class="card-body p-0">
@@ -139,4 +142,16 @@
     </div>
 </div>
 
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.querySelectorAll('.js-confirm-submit').forEach((form) => {
+    form.addEventListener('submit', (event) => {
+        if (!confirm(form.dataset.confirmMessage || 'Send this record?')) {
+            event.preventDefault();
+        }
+    });
+});
+</script>
 {% endblock %}

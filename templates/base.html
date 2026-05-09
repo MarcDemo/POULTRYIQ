@@ -11,6 +11,9 @@
     <link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
     <link rel="stylesheet" href="{% static 'css/responsive-ui.css' %}">
     <link rel="stylesheet" href="{% static 'css/alerts-bell.css' %}">
+    {% if request.user.is_authenticated and request.user.is_worker %}
+    <link rel="stylesheet" href="{% static 'css/worker-field-ui.css' %}">
+    {% endif %}
     {% if request.user.is_authenticated and request.user.is_investor %}
     <link rel="stylesheet" href="{% static 'css/investor.css' %}">
     {% endif %}
@@ -131,33 +134,33 @@
         <ul class="nav flex-column">
             <li class="nav-item">
                 <a class="nav-link {% if request.resolver_match.url_name == 'workersdash' %}active{% endif %}" href="{% url 'workersdash' %}">
-                    <i class="bi bi-speedometer2"></i><span>Dashboard</span>
+                    <i class="bi bi-speedometer2"></i><span>Home / Awaka</span>
                 </a>
             </li>
             <li class="nav-item">
                 <a class="nav-link {% if request.resolver_match.url_name == 'record_egg' %}active{% endif %}" href="{% url 'record_egg' %}">
-                    <i class="bi bi-basket"></i><span>Record Eggs</span>
+                    <i class="bi bi-basket"></i><span>Eggs / Amagi</span>
                 </a>
             </li>
             <li class="nav-item">
                 <a class="nav-link {% if request.resolver_match.url_name == 'record_feed' %}active{% endif %}" href="{% url 'record_feed' %}">
-                    <i class="bi bi-bag-fill"></i><span>Record Feed</span>
+                    <i class="bi bi-bag-fill"></i><span>Feed / Emmere</span>
                 </a>
             </li>
             <li class="nav-item">
                 <a class="nav-link {% if request.resolver_match.url_name == 'record_cleaning' %}active{% endif %}" href="{% url 'record_cleaning' %}">
-                    <i class="bi bi-broom"></i><span>Cleaning Routine</span>
+                    <i class="bi bi-broom"></i><span>Clean / Okuyonja</span>
                 </a>
             </li>
             <li class="nav-item">
                 <a class="nav-link {% if request.resolver_match.url_name == 'sickbay' %}active{% endif %}" href="{% url 'sickbay' %}">
-                    <i class="bi bi-heart-pulse"></i><span>Sick Bay</span>
+                    <i class="bi bi-heart-pulse"></i><span>Sick / Obulwadde</span>
                 </a>
 
             </li>
             <li class="nav-item">
                 <a class="nav-link {% if request.resolver_match.url_name == 'mortality' %}active{% endif %}" href="{% url 'mortality' %}">
-                    <i class="bi bi-exclamation-triangle"></i><span>Mortality Log</span>
+                    <i class="bi bi-exclamation-triangle"></i><span>Deaths / Enkoko ezifudde</span>
                 </a>
             </li>
         </ul>
@@ -359,23 +362,23 @@
 <nav class="mobile-bottom-nav" id="mobileBottomNav">
     <a href="{% url 'workersdash' %}" class="mobile-nav-item {% if request.resolver_match.url_name == 'workersdash' %}active{% endif %}">
         <i class="bi bi-speedometer2"></i>
-        <span>Home</span>
+        <span>Awaka</span>
     </a>
     <a href="{% url 'record_egg' %}" class="mobile-nav-item {% if request.resolver_match.url_name == 'record_egg' %}active{% endif %}">
         <i class="bi bi-basket"></i>
-        <span>Eggs</span>
+        <span>Amagi</span>
     </a>
     <a href="{% url 'record_feed' %}" class="mobile-nav-item {% if request.resolver_match.url_name == 'record_feed' %}active{% endif %}">
         <i class="bi bi-bag-fill"></i>
-        <span>Feed</span>
+        <span>Emmere</span>
     </a>
     <a href="{% url 'record_cleaning' %}" class="mobile-nav-item {% if request.resolver_match.url_name == 'record_cleaning' %}active{% endif %}">
         <i class="bi bi-broom"></i>
-        <span>Clean</span>
+        <span>Yonja</span>
     </a>
     <a href="{% url 'mortality' %}" class="mobile-nav-item {% if request.resolver_match.url_name == 'mortality' %}active{% endif %}">
         <i class="bi bi-exclamation-triangle"></i>
-        <span>Deaths</span>
+        <span>Efudde</span>
     </a>
 </nav>
 {% endif %}

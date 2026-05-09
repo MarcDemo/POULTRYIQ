@@ -126,6 +126,14 @@ class SicknessReport(models.Model):
         db_index=True,
     )
     treatment_completed_at = models.DateTimeField(null=True, blank=True)
+    transferred_back_at = models.DateTimeField(null=True, blank=True)
+    transferred_back_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="sickness_cases_transferred_back",
+    )
 
     affected = models.IntegerField()
 
@@ -166,7 +174,15 @@ class SicknessReport(models.Model):
 
     @property
     def is_isolation_case(self) -> bool:
-        return self.action == "sickbay"
+        return self.action == "sickbay" and self.transferred_back_at is None
+
+    @property
+    def can_transfer_back(self) -> bool:
+        return (
+            self.action == "sickbay"
+            and self.transferred_back_at is None
+            and self.case_status == self.CaseStatus.TREATMENT_COMPLETED
+        )
 
     def _build_isolation_name(self) -> str:
         house_name = self.house_label or "House"

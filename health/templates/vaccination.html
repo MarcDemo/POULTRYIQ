@@ -1,9 +1,23 @@
 {% extends 'base.html' %}
 {% block extra_css %}
 <style>
-/* Allow horizontal scrolling for wide vaccination tables and improve spacing */
-.container-fluid { overflow-x: auto; }
-.vaccination-table { min-width: 1100px; }
+/* Keep wide vaccination records scrollable inside the records card. */
+.vaccination-records-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+.vaccination-table {
+    min-width: 1100px;
+    white-space: nowrap;
+}
+.vaccination-table td,
+.vaccination-table th {
+    vertical-align: middle;
+}
+.vaccination-table .vaccine-cell {
+    white-space: normal;
+    min-width: 180px;
+}
 .card-body .form-control.w-auto { min-width: 120px; display: inline-block; }
 .vaccination-controls { display:flex; gap:8px; align-items:center; }
 @media (max-width: 767px) {
@@ -105,7 +119,7 @@
 </div>
 <div class="card-body">
 
-<div class="table-responsive">
+<div class="table-responsive vaccination-records-scroll">
 <table class="table table-hover vaccination-table">
 
 <thead>
@@ -117,6 +131,7 @@
 <th>Method</th>
 <th>Vet</th>
 <th>Status</th>
+<th class="text-end">Action</th>
 </tr>
 </thead>
 
@@ -127,7 +142,7 @@
     <td><span class="badge bg-info">{{ s.house_ref.name|default:s.house_ref.house_code }}</span>
         {% if s.batch %}<small class="d-block text-muted">{{ s.batch.batch_code }}</small>{% endif %}
     </td>
-    <td>{{ s.vaccine_name }} <small class="text-muted">{{ s.brand }}</small></td>
+    <td class="vaccine-cell">{{ s.vaccine_name }} <small class="text-muted">{{ s.brand }}</small></td>
     <td>{{ s.dosage|default:'-' }}</td>
     <td>{{ s.administration_mode|default:'-' }}</td>
     <td>{{ s.vet_name|default:'-' }}</td>
