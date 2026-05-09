@@ -27,7 +27,7 @@
 </div>
 
 <div class="row g-4 mb-4">
-    <div class="col-12 col-md-4">
+    <div class="col-12 col-md-3">
         <div class="card text-center h-100">
             <div class="card-body">
                 <h6 class="text-muted text-uppercase small mb-2">Awaiting Vet</h6>
@@ -35,7 +35,7 @@
             </div>
         </div>
     </div>
-    <div class="col-12 col-md-4">
+    <div class="col-12 col-md-3">
         <div class="card text-center h-100">
             <div class="card-body">
                 <h6 class="text-muted text-uppercase small mb-2">Pending Doses</h6>
@@ -43,11 +43,19 @@
             </div>
         </div>
     </div>
-    <div class="col-12 col-md-4">
+    <div class="col-12 col-md-3">
         <div class="card text-center h-100">
             <div class="card-body">
                 <h6 class="text-muted text-uppercase small mb-2">Active Alerts</h6>
                 <h3 class="mb-0">{{ active_treatment_alerts }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-md-3">
+        <div class="card text-center h-100">
+            <div class="card-body">
+                <h6 class="text-muted text-uppercase small mb-2">Ready To Return</h6>
+                <h3 class="mb-0">{{ transferable_cases_count }}</h3>
             </div>
         </div>
     </div>
@@ -229,6 +237,55 @@
                             {% empty %}
                             <tr>
                                 <td colspan="7" class="text-center text-muted py-4">No pending treatment doses right now.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mb-4">
+            <div class="card-header d-flex align-items-center justify-content-between">
+                <span><i class="bi bi-house-check me-2"></i>Transfer Back To House</span>
+                <span class="badge bg-success">{{ transferable_cases_count }}</span>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Case</th>
+                                <th>House</th>
+                                <th>Diagnosis</th>
+                                <th>Completed</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for case in transferable_cases %}
+                            <tr>
+                                <td>
+                                    <div class="fw-semibold">{{ case.case_label }}</div>
+                                    <small class="text-muted">{{ case.affected }} bird{{ case.affected|pluralize }}</small>
+                                </td>
+                                <td>{{ case.house_label }}</td>
+                                <td>{{ case.diagnosis_label }}</td>
+                                <td>{{ case.treatment_completed_at|date:"M d, Y H:i" }}</td>
+                                <td>
+                                    <form method="POST" class="d-inline">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="form_action" value="transfer_back">
+                                        <input type="hidden" name="sickness_report_id" value="{{ case.pk }}">
+                                        <button type="submit" class="btn btn-sm btn-success">
+                                            <i class="bi bi-arrow-return-left me-1"></i>Transfer Back
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="5" class="text-center text-muted py-4">No completed sickbay cases are ready to transfer back.</td>
                             </tr>
                             {% endfor %}
                         </tbody>

@@ -1,26 +1,33 @@
 {% extends "base.html" %}
 {% block content %}
 
-<div class="container mt-4">
+<div class="container mt-4 worker-field-page">
+
+    <div class="worker-hero mb-4">
+        <h3 class="mb-1"><i class="bi bi-basket me-2 text-primary"></i>Eggs collected</h3>
+        <div class="worker-subtitle">Write the eggs collected today. <span class="luganda">Wandiika amagi agakuŋŋanyiziddwa leero.</span></div>
+    </div>
 
     <div class="row g-4">
         <div class="col-lg-6">
-            <div class="card shadow">
+            <div class="card field-card">
                 <div class="card-header">
-                    <i class="bi bi-basket me-2"></i>Record Eggs
+                    <i class="bi bi-basket me-2"></i>Egg form
+                    <span class="luganda">Foomu y'amagi</span>
                 </div>
 
                 <div class="card-body">
 
-                    <form method="POST" novalidate>
+                    <form method="POST" class="field-form js-confirm-submit" data-confirm-message="Send this egg record? / Osindike ekiwandiiko ky'amagi?" novalidate>
                         {% csrf_token %}
 
                         <div class="mb-3">
                             <label for="batch" class="form-label">
-                                <i class="bi bi-house-door me-2"></i>Batch
+                                <i class="bi bi-house-door me-2"></i>House
+                                <span class="luganda">Ennyumba</span>
                             </label>
                             <select id="batch" name="batch" class="form-select" required>
-                                <option value="">-- Select batch --</option>
+                                <option value="">-- Choose house --</option>
                                 {% for batch in batches %}
                                 <option value="{{ batch.pk }}">{{ batch.house.name|default:batch.house.house_code }} - {{ batch.batch_code }}</option>
                                 {% endfor %}
@@ -29,38 +36,43 @@
 
                         <div class="mb-3">
                             <label for="collection_date" class="form-label">
-                                <i class="bi bi-calendar me-2"></i>Date
+                                <i class="bi bi-calendar me-2"></i>Today
+                                <span class="luganda">Leero</span>
                             </label>
                             <input type="date" id="collection_date" name="collection_date" class="form-control" value="{{ today|date:'Y-m-d' }}" required>
                         </div>
 
                         <div class="mb-3">
                             <label for="total_eggs" class="form-label">
-                                <i class="bi bi-egg me-2"></i>Total Eggs Collected
+                                <i class="bi bi-egg me-2"></i>Good eggs
+                                <span class="luganda">Amagi amalungi</span>
                             </label>
-                            <input type="number" id="total_eggs" name="total_eggs" class="form-control" placeholder="Enter total eggs" required min="0">
-                            <small class="form-text text-muted">Total eggs collected today</small>
+                            <input type="number" id="total_eggs" name="total_eggs" class="form-control" placeholder="0" required min="0" inputmode="numeric">
+                            <small class="form-text text-muted">Count all good eggs collected today. / Bala amagi amalungi gonna aga leero.</small>
                         </div>
 
                         <div class="mb-3">
                             <label for="broken_eggs" class="form-label">
-                                <i class="bi bi-x-circle me-2"></i>Broken Eggs
+                                <i class="bi bi-x-circle me-2"></i>Broken eggs
+                                <span class="luganda">Amagi agamenyese</span>
                             </label>
-                            <input type="number" id="broken_eggs" name="broken_eggs" class="form-control" placeholder="Enter broken eggs" min="0" value="0">
-                            <small class="form-text text-muted">Number of eggs broken</small>
+                            <input type="number" id="broken_eggs" name="broken_eggs" class="form-control" placeholder="0" min="0" value="0" inputmode="numeric">
+                            <small class="form-text text-muted">Put 0 if none broke. / Teka 0 bwe watali agamenyese.</small>
                         </div>
 
                         <div class="mb-3">
                             <label for="notes" class="form-label">
-                                <i class="bi bi-chat-left-text me-2"></i>Comments
+                                <i class="bi bi-chat-left-text me-2"></i>Note
+                                <span class="luganda">Eky'okwongerako</span>
                             </label>
-                            <textarea id="notes" name="notes" class="form-control" placeholder="Add any comments..." rows="4"></textarea>
-                            <small class="form-text text-muted">Optional notes about the collection</small>
+                            <textarea id="notes" name="notes" class="form-control" placeholder="Optional" rows="4"></textarea>
+                            <small class="form-text text-muted">You can leave this empty. / Osobola okukireka nga kikalu.</small>
                         </div>
 
                         <div class="d-grid gap-2 mt-4">
-                            <button type="submit" class="btn btn-primary">
-                                <i class="bi bi-check-circle me-2"></i>Save Record
+                            <button type="submit" class="btn btn-primary field-submit">
+                                <i class="bi bi-check-circle me-2"></i>Send
+                                <span class="luganda text-white">Sindika</span>
                             </button>
                         </div>
 
@@ -71,9 +83,10 @@
         </div>
 
         <div class="col-lg-6">
-            <div class="card shadow">
+            <div class="card field-card">
                 <div class="card-header">
-                    <i class="bi bi-clock-history me-2"></i>Recent Egg Records
+                    <i class="bi bi-clock-history me-2"></i>Recent egg records
+                    <span class="luganda">Amagi agawandiikiddwa</span>
                 </div>
                 <div class="card-body p-0">
                     <div class="table-responsive">
@@ -117,4 +130,16 @@
 
 </div>
 
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.querySelectorAll('.js-confirm-submit').forEach((form) => {
+    form.addEventListener('submit', (event) => {
+        if (!confirm(form.dataset.confirmMessage || 'Send this record?')) {
+            event.preventDefault();
+        }
+    });
+});
+</script>
 {% endblock %}

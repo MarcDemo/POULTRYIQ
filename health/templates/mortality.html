@@ -1,21 +1,27 @@
 {% extends "base.html" %}
 {% block content %}
 
-<div class="container mt-4">
+<div class="container mt-4 worker-field-page">
+    <div class="worker-hero mb-4">
+        <h3 class="mb-1"><i class="bi bi-exclamation-triangle me-2 text-danger"></i>Dead birds</h3>
+        <div class="worker-subtitle">Record birds that died today. <span class="luganda">Wandiika enkoko ezifudde leero.</span></div>
+    </div>
+
     <div class="row g-4">
         <div class="col-lg-6">
-            <div class="card shadow-sm">
+            <div class="card field-card">
                 <div class="card-header" style="background: linear-gradient(135deg, #dc3545 0%, #b71c1c 100%);">
-                    <i class="bi bi-exclamation-triangle me-2"></i>Mortality Log
+                    <i class="bi bi-exclamation-triangle me-2"></i>Death form
+                    <span class="luganda">Foomu y'enkoko ezifudde</span>
                 </div>
                 <div class="card-body">
-                    <form method="POST" novalidate enctype="multipart/form-data">
+                    <form method="POST" class="field-form js-confirm-submit" data-confirm-message="Send this dead bird record? / Osindike ekiwandiiko ky'enkoko ezifudde?" novalidate enctype="multipart/form-data">
                         {% csrf_token %}
 
                         <div class="mb-3">
-                            <label for="batch" class="form-label">Batch</label>
+                            <label for="batch" class="form-label">House <span class="luganda">Ennyumba</span></label>
                             <select id="batch" name="batch" class="form-select" required>
-                                <option value="">-- Select batch --</option>
+                                <option value="">-- Choose house --</option>
                                 {% for batch in batches %}
                                 <option value="{{ batch.pk }}">{{ batch.house.name|default:batch.house.house_code }} - {{ batch.batch_code }}</option>
                                 {% endfor %}
@@ -23,44 +29,49 @@
                         </div>
 
                         <div class="mb-3">
-                            <label for="record_date" class="form-label">Date</label>
+                            <label for="record_date" class="form-label">Today <span class="luganda">Leero</span></label>
                             <input type="date" id="record_date" name="record_date" class="form-control" value="{{ today|date:'Y-m-d' }}" required>
                         </div>
 
                         <div class="mb-3">
-                            <label for="count" class="form-label">Number of Deaths</label>
-                            <input type="number" id="count" name="count" class="form-control" min="1" required>
+                            <label for="count" class="form-label">How many died? <span class="luganda">Zifudde mmeka?</span></label>
+                            <input type="number" id="count" name="count" class="form-control" min="1" required inputmode="numeric">
                         </div>
 
                         <div class="mb-3">
-                            <label for="cause" class="form-label">Cause of Death</label>
+                            <label for="cause" class="form-label">Why did they die? <span class="luganda">Lwaki zifudde?</span></label>
                             <select id="cause" name="cause" class="form-select">
-                                <option value="">-- Optional --</option>
+                                <option value="">-- Not sure / Simanyi --</option>
                                 {% for cause in causes %}
                                 <option value="{{ cause.pk }}">{{ cause.name }}</option>
                                 {% endfor %}
                             </select>
                         </div>
                         <div class="mb-3">
-                            <label for="photos" class="form-label">Proof of Death Photos</label>
-                            <input type="file" id="photos" name="photos" class="form-control" accept="image/*" multiple required>
+                            <label for="photos" class="form-label">Take or upload photos <span class="luganda">Kwata oba teekako ebifaananyi</span></label>
+                            <input type="file" id="photos" name="photos" class="form-control" accept="image/*" capture="environment" multiple required>
+                            <div class="form-text">Photo proof is required. / Ekifaananyi kyetaagisa.</div>
                         </div>
 
                         <div class="mb-3">
-                            <label for="notes" class="form-label">Notes</label>
-                            <textarea id="notes" name="notes" class="form-control" rows="3" placeholder="Optional notes..."></textarea>
+                            <label for="notes" class="form-label">Note <span class="luganda">Eky'okwongerako</span></label>
+                            <textarea id="notes" name="notes" class="form-control" rows="3" placeholder="Optional"></textarea>
                         </div>
 
-                        <button class="btn btn-danger w-100" type="submit">Save Mortality Record</button>
+                        <button class="btn btn-danger w-100 field-submit" type="submit">
+                            <i class="bi bi-check-circle me-2"></i>Send
+                            <span class="luganda text-white">Sindika</span>
+                        </button>
                     </form>
                 </div>
             </div>
         </div>
 
         <div class="col-lg-6">
-            <div class="card shadow-sm">
+            <div class="card field-card">
                 <div class="card-header" style="background: linear-gradient(135deg, #dc3545 0%, #b71c1c 100%);">
-                    <i class="bi bi-clock-history me-2"></i>Recent Mortality Records
+                    <i class="bi bi-clock-history me-2"></i>Recent death records
+                    <span class="luganda">Ebiwandiiko by'enkoko ezifudde</span>
                 </div>
                 <div class="card-body p-0">
                     <div class="table-responsive">
@@ -103,4 +114,16 @@
     </div>
 </div>
 
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.querySelectorAll('.js-confirm-submit').forEach((form) => {
+    form.addEventListener('submit', (event) => {
+        if (!confirm(form.dataset.confirmMessage || 'Send this record?')) {
+            event.preventDefault();
+        }
+    });
+});
+</script>
 {% endblock %}
