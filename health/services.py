@@ -69,3 +69,54 @@ def create_treatment_alert(plan_item, receiver):
             persist_until_resolved=True,
         )
     return None
+
+
+def get_vaccination_alert_receiver(schedule, fallback_user=None):
+    reporter = fallback_user
+    # prefer supervisors assigned to the house
+    supervisors = User.objects.filter(
+        is_active=True,
+        role__code__in=["SUPERVISOR", "MANAGER", "OWNER"],
+    )
+    if getattr(schedule, "house_ref_id", None):
+        supervisors = supervisors.filter(houses=schedule.house_ref)
+
+    return supervisors.distinct().first() or reporter
+
+
+def create_vaccination_alert(schedule, receiver):
+    """Create an Alert for a VaccinationSchedule only if it's due within 2 days.
+
+    Returns the created Alert instance or None.
+    """
+    due_dt = schedule.scheduled_for
+    if not due_dt:
+        return None
+
+    now = timezone.now()
+    if timezone.is_naive(due_dt):
+        try:
+            due_dt = timezone.make_aware(datetime.combine(due_dt.date(), due_dt.time()))
+        except Exception:
+            pass
+
+    if due_dt - now <= timedelta(days=2):
+        return Alert.objects.create(
+            alert_type=get_health_alert_type(),
+            title=f"Vaccination due: {schedule.vaccine_name}",
+            message=(
+                f"Vaccine: {schedule.vaccine_name}\n"
+                f"Brand: {schedule.brand or 'N/A'}\n"
+                f"Dosage: {schedule.dosage or 'N/A'}\n"
+                f"Administration: {schedule.administration_mode or 'N/A'}\n"
+                f"Scheduled for: {due_dt.strftime('%Y-%m-%d %H:%M')}"
+            ),
+            receiver=receiver,
+            sender=None,
+            priority=Alert.Priority.MEDIUM,
+            related_house=schedule.house_ref,
+            related_batch=schedule.batch,
+            due_date=due_dt,
+            persist_until_resolved=True,
+        )
+    return None

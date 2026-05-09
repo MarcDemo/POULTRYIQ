@@ -1,4 +1,18 @@
 {% extends 'base.html' %}
+{% block extra_css %}
+<style>
+/* Allow horizontal scrolling for wide vaccination tables and improve spacing */
+.container-fluid { overflow-x: auto; }
+.vaccination-table { min-width: 1100px; }
+.card-body .form-control.w-auto { min-width: 120px; display: inline-block; }
+.vaccination-controls { display:flex; gap:8px; align-items:center; }
+@media (max-width: 767px) {
+    .vaccination-table { min-width: 900px; }
+    .card-body .form-control.w-auto { min-width: 90px; }
+}
+</style>
+{% endblock %}
+
 {% block content %}
 
 <div class="container-fluid">
@@ -19,43 +33,63 @@
 <div class="card-body">
 <form method="POST" novalidate>
 {% csrf_token %}
+<input type="hidden" name="form_action" value="create_schedule">
 
 <div class="mb-3">
-<label for="date" class="form-label">
-    <i class="bi bi-calendar me-1"></i>Date
-</label>
-<input type="date" id="date" name="date" class="form-control" required>
+    <label for="scheduled_date" class="form-label"><i class="bi bi-calendar me-1"></i>Date</label>
+    <input type="date" id="scheduled_date" name="scheduled_date" class="form-control" required>
+    <input type="time" id="scheduled_time" name="scheduled_time" class="form-control mt-2" placeholder="Optional time">
 </div>
 
 <div class="mb-3">
-<label for="house" class="form-label">
-    <i class="bi bi-building me-1"></i>House
-</label>
-<select id="house" name="house" class="form-select">
-<option>House A</option>
-<option>House B</option>
-<option>House C</option>
-</select>
+    <label for="house" class="form-label"><i class="bi bi-building me-1"></i>House</label>
+    <select id="house" name="house" class="form-select" required>
+        <option value="">-- Select house --</option>
+        {% for h in houses %}
+        <option value="{{ h.pk }}">{{ h.name|default:h.house_code }}</option>
+        {% endfor %}
+    </select>
+</div>
+
+
+
+<div class="mb-3">
+    <label for="vaccine_name" class="form-label"><i class="bi bi-capsule me-1"></i>Vaccine Name</label>
+    <input type="text" id="vaccine_name" name="vaccine_name" class="form-control" required>
 </div>
 
 <div class="mb-3">
-<label for="vaccine" class="form-label">
-    <i class="bi bi-capsule me-1"></i>Vaccine Name
-</label>
-<input type="text" id="vaccine" name="vaccine" class="form-control" placeholder="e.g., Newcastle vaccine" required>
+    <label for="brand" class="form-label"><i class="bi bi-box-seam me-1"></i>Brand</label>
+    <input type="text" id="brand" name="brand" class="form-control">
 </div>
 
 <div class="mb-3">
-<label for="dosage" class="form-label">
-    <i class="bi bi-eyedropper me-1"></i>Dosage
-</label>
-<input type="text" id="dosage" name="dosage" class="form-control" placeholder="e.g., 1 drop per bird">
+    <label for="dosage" class="form-label"><i class="bi bi-eyedropper me-1"></i>Dosage</label>
+    <input type="text" id="dosage" name="dosage" class="form-control">
+</div>
+
+<div class="mb-3">
+    <label for="administration_mode" class="form-label"><i class="bi bi-hand-index me-1"></i>Administration Mode</label>
+    <input type="text" id="administration_mode" name="administration_mode" class="form-control">
+</div>
+
+<div class="mb-3">
+    <label for="frequency_days" class="form-label"><i class="bi bi-repeat me-1"></i>Frequency (days, optional)</label>
+    <input type="number" id="frequency_days" name="frequency_days" class="form-control" min="1">
+</div>
+
+<div class="mb-3">
+    <label for="vet_name" class="form-label"><i class="bi bi-person-badge me-1"></i>Vet</label>
+    <input type="text" id="vet_name" name="vet_name" class="form-control">
+</div>
+
+<div class="mb-3">
+    <label for="brand_expiry_date" class="form-label"><i class="bi bi-calendar-x me-1"></i>Brand Expiry Date</label>
+    <input type="date" id="brand_expiry_date" name="brand_expiry_date" class="form-control">
 </div>
 
 <div class="d-grid">
-<button class="btn btn-success" type="submit">
-    <i class="bi bi-check-circle me-2"></i>Save
-</button>
+    <button class="btn btn-success" type="submit"><i class="bi bi-check-circle me-2"></i>Save</button>
 </div>
 
 </form>
@@ -72,7 +106,7 @@
 <div class="card-body">
 
 <div class="table-responsive">
-<table class="table table-hover">
+<table class="table table-hover vaccination-table">
 
 <thead>
 <tr>
@@ -87,19 +121,46 @@
 </thead>
 
 <tbody>
-
+{% for s in schedules %}
 <tr>
-<td>4 April 2026</td>
-<td><span class="badge bg-info">House B</span></td>
-<td>Newcastle vaccine</td>
-<td>1 drop/bird</td>
-<td>Eye drop</td>
-<td>Dr. Smith</td>
-<td>
-<span class="badge bg-warning">Scheduled</span>
-</td>
+    <td>{{ s.scheduled_for|date:'d M Y H:i' }}</td>
+    <td><span class="badge bg-info">{{ s.house_ref.name|default:s.house_ref.house_code }}</span>
+        {% if s.batch %}<small class="d-block text-muted">{{ s.batch.batch_code }}</small>{% endif %}
+    </td>
+    <td>{{ s.vaccine_name }} <small class="text-muted">{{ s.brand }}</small></td>
+    <td>{{ s.dosage|default:'-' }}</td>
+    <td>{{ s.administration_mode|default:'-' }}</td>
+    <td>{{ s.vet_name|default:'-' }}</td>
+    <td>
+        {% if s.status == s.Status.ADMINISTERED %}
+            <span class="badge bg-success">Administered</span>
+        {% else %}
+            {% if s.is_overdue %}
+                <span class="badge bg-danger">Overdue</span>
+            {% elif s.is_due %}
+                <span class="badge bg-warning text-dark">Due</span>
+            {% else %}
+                <span class="badge bg-secondary">Scheduled</span>
+            {% endif %}
+        {% endif %}
+    </td>
+    <td class="text-end">
+        {% if s.status == s.Status.SCHEDULED %}
+            <form method="POST" class="d-inline">
+                {% csrf_token %}
+                <input type="hidden" name="form_action" value="mark_administered">
+                <input type="hidden" name="schedule_id" value="{{ s.pk }}">
+                <input type="number" name="number_vaccinated" min="0" placeholder="# vaccinated" class="form-control d-inline w-auto me-2">
+                <button class="btn btn-sm btn-primary" type="submit" {% if not s.is_due %}disabled{% endif %}>Mark Administered</button>
+            </form>
+        {% else %}
+            <small class="text-muted">{{ s.administered_at|date:'d M Y H:i' }} by {{ s.administered_by.get_full_name|default:s.administered_by.username }}</small>
+        {% endif %}
+    </td>
 </tr>
-
+{% empty %}
+<tr><td colspan="8" class="text-center text-muted py-4">No vaccination schedules found.</td></tr>
+{% endfor %}
 </tbody>
 
 </table>
@@ -112,5 +173,31 @@
 </div>
 
 </div>
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function(){
+    // fetch batches for selected house (simple client-side fetch to an endpoint if available)
+    const houseSelect = document.getElementById('house');
+    const batchSelect = document.getElementById('batch');
+    if(!houseSelect || !batchSelect) return;
 
+    houseSelect.addEventListener('change', function(){
+        const houseId = houseSelect.value;
+        // clear
+        batchSelect.innerHTML = '<option value="">-- Select batch --</option>';
+        if(!houseId) return;
+        fetch(`/api/house/${houseId}/batches/`)
+            .then(r => r.json())
+            .then(data => {
+                data.forEach(b => {
+                    const o = document.createElement('option');
+                    o.value = b.id; o.textContent = b.display;
+                    o.setAttribute('data-house', houseId);
+                    batchSelect.appendChild(o);
+                });
+            }).catch(()=>{});
+    });
+});
+</script>
+{% endblock %}
 {% endblock %}

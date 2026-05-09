@@ -265,3 +265,80 @@ class TreatmentPlanItem(models.Model):
 
     def __str__(self) -> str:
         return f"{self.sickness_report.case_label} - {self.medicine_name}"
+
+
+class VaccinationSchedule(models.Model):
+    class Status(models.TextChoices):
+        SCHEDULED = "SCHEDULED", "Scheduled"
+        ADMINISTERED = "ADMINISTERED", "Administered"
+
+    schedule_id = models.BigAutoField(primary_key=True)
+    house_ref = models.ForeignKey(
+        "poultry.PoultryHouse",
+        on_delete=models.PROTECT,
+        related_name="vaccination_schedules",
+        null=True,
+        blank=True,
+    )
+    batch = models.ForeignKey(
+        "poultry.PoultryBatch",
+        on_delete=models.PROTECT,
+        related_name="vaccination_schedules",
+        null=True,
+        blank=True,
+    )
+    vaccine_name = models.CharField(max_length=150)
+    brand = models.CharField(max_length=150, blank=True)
+    dosage = models.CharField(max_length=120, blank=True)
+    administration_mode = models.CharField(max_length=120, blank=True)
+    frequency_days = models.PositiveIntegerField(null=True, blank=True)
+    scheduled_for = models.DateTimeField(db_index=True)
+    vet_name = models.CharField(max_length=120, blank=True)
+    brand_expiry_date = models.DateField(null=True, blank=True)
+    number_vaccinated = models.PositiveIntegerField(null=True, blank=True)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.SCHEDULED, db_index=True)
+    administered_at = models.DateTimeField(null=True, blank=True)
+    administered_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="vaccinations_administered",
+    )
+    alert = models.ForeignKey(
+        "alerts.Alert",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="vaccination_schedules",
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="vaccination_schedules_created",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-scheduled_for", "-created_at"]
+        indexes = [
+            models.Index(fields=["scheduled_for"]),
+            models.Index(fields=["status", "scheduled_for"]),
+        ]
+
+    def is_due(self):
+        from django.utils import timezone
+
+        if not self.scheduled_for:
+            return False
+        return self.scheduled_for <= timezone.now()
+
+    def is_overdue(self):
+        from django.utils import timezone
+
+        if not self.scheduled_for:
+            return False
+        return self.scheduled_for < timezone.now() and self.status == self.Status.SCHEDULED
+
+    def __str__(self) -> str:
+        return f"{self.vaccine_name} for {self.house_ref or self.batch} on {self.scheduled_for.date()}"
