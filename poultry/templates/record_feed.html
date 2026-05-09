@@ -1,26 +1,33 @@
 {% extends "base.html" %}
 {% block content %}
 
-<div class="container mt-4">
+<div class="container mt-4 worker-field-page">
+
+    <div class="worker-hero mb-4">
+        <h3 class="mb-1"><i class="bi bi-bag-fill me-2 text-warning"></i>Feed given</h3>
+        <div class="worker-subtitle">Write the feed given today. <span class="luganda">Wandiika emmere eweeredwa leero.</span></div>
+    </div>
 
     <div class="row g-4">
         <div class="col-lg-6">
-            <div class="card shadow">
+            <div class="card field-card">
                 <div class="card-header" style="background: linear-gradient(135deg, #ff9800 0%, #fb8c00 100%);">
-                    <i class="bi bi-bag-fill me-2"></i>Record Feed
+                    <i class="bi bi-bag-fill me-2"></i>Feed form
+                    <span class="luganda">Foomu y'emmere</span>
                 </div>
 
                 <div class="card-body">
 
-                    <form method="POST" novalidate>
+                    <form method="POST" class="field-form js-confirm-submit" data-confirm-message="Send this feed record? / Osindike ekiwandiiko ky'emmere?" novalidate>
                         {% csrf_token %}
 
                         <div class="mb-3">
                             <label for="batch" class="form-label">
-                                <i class="bi bi-house-door me-1"></i>Batch
+                                <i class="bi bi-house-door me-1"></i>House
+                                <span class="luganda">Ennyumba</span>
                             </label>
                             <select id="batch" name="batch" class="form-select" required>
-                                <option value="">-- Select batch --</option>
+                                <option value="">-- Choose house --</option>
                                 {% for batch in batches %}
                                 <option value="{{ batch.pk }}">{{ batch.house.name|default:batch.house.house_code }} - {{ batch.batch_code }}</option>
                                 {% endfor %}
@@ -29,14 +36,16 @@
 
                         <div class="mb-3">
                             <label for="record_date" class="form-label">
-                                <i class="bi bi-calendar me-1"></i>Date
+                                <i class="bi bi-calendar me-1"></i>Today
+                                <span class="luganda">Leero</span>
                             </label>
                             <input type="date" id="record_date" name="record_date" class="form-control" value="{{ today|date:'Y-m-d' }}" required>
                         </div>
 
                         <div class="mb-3">
                             <label for="feed_type" class="form-label">
-                                <i class="bi bi-bag me-1"></i>Feed Type
+                                <i class="bi bi-bag me-1"></i>Feed type
+                                <span class="luganda">Ekika ky'emmere</span>
                             </label>
                             <select id="feed_type" name="feed_type" class="form-select">
                                 {% for code, label in feed_types %}
@@ -47,29 +56,33 @@
 
                         <div class="mb-3">
                             <label for="quantity" class="form-label">
-                                <i class="bi bi-box me-1"></i>Quantity Given (kg)
+                                <i class="bi bi-box me-1"></i>Kilos given
+                                <span class="luganda">Kiro eziweereddwa</span>
                             </label>
-                            <input type="number" id="quantity" step="0.1" name="quantity" class="form-control" placeholder="0.0" required min="0">
+                            <input type="number" id="quantity" step="0.1" name="quantity" class="form-control" placeholder="0.0" required min="0" inputmode="decimal">
                         </div>
 
                         <div class="mb-3">
                             <label for="time_given" class="form-label">
-                                <i class="bi bi-clock me-1"></i>Time Given
+                                <i class="bi bi-clock me-1"></i>Time
+                                <span class="luganda">Essaawa</span>
                             </label>
                             <input type="time" id="time_given" name="time_given" class="form-control">
-                            <small class="form-text text-muted">Leave empty for current time</small>
+                            <small class="form-text text-muted">You can leave this empty. / Osobola okukireka nga kikalu.</small>
                         </div>
 
                         <div class="mb-3">
                             <label for="notes" class="form-label">
-                                <i class="bi bi-chat-left-text me-1"></i>Notes
+                                <i class="bi bi-chat-left-text me-1"></i>Note
+                                <span class="luganda">Eky'okwongerako</span>
                             </label>
-                            <textarea id="notes" name="notes" class="form-control" rows="3" placeholder="Optional notes..."></textarea>
+                            <textarea id="notes" name="notes" class="form-control" rows="3" placeholder="Optional"></textarea>
                         </div>
 
                         <div class="d-grid gap-2 mt-4">
-                            <button type="submit" class="btn btn-warning">
-                                <i class="bi bi-check-circle me-2"></i>Save Feed Record
+                            <button type="submit" class="btn btn-warning field-submit">
+                                <i class="bi bi-check-circle me-2"></i>Send
+                                <span class="luganda">Sindika</span>
                             </button>
                         </div>
 
@@ -79,9 +92,10 @@
         </div>
 
         <div class="col-lg-6">
-            <div class="card shadow">
+            <div class="card field-card">
                 <div class="card-header" style="background: linear-gradient(135deg, #ff9800 0%, #fb8c00 100%);">
-                    <i class="bi bi-clock-history me-2"></i>Recent Feed Records
+                    <i class="bi bi-clock-history me-2"></i>Recent feed records
+                    <span class="luganda">Emmere ewandikiddwa</span>
                 </div>
                 <div class="card-body p-0">
                     <div class="table-responsive">
@@ -125,4 +139,16 @@
 
 </div>
 
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.querySelectorAll('.js-confirm-submit').forEach((form) => {
+    form.addEventListener('submit', (event) => {
+        if (!confirm(form.dataset.confirmMessage || 'Send this record?')) {
+            event.preventDefault();
+        }
+    });
+});
+</script>
 {% endblock %}

@@ -3,108 +3,431 @@
 
 {% block content %}
 
-<div class="container-fluid">
+<style>
+	:root {
+		--sales-ink: #14322f;
+		--sales-muted: #5f6f6d;
+		--sales-card: #ffffff;
+		--sales-line: #e5eeeb;
+		--sales-good: #2f9f74;
+		--sales-bg-a: #f4faf8;
+		--sales-bg-b: #f9f4eb;
+	}
 
-<h2 class="mb-4">Make Sale</h2>
+	.sales-wrap {
+		background:
+			radial-gradient(1200px 400px at 0% 0%, #d9efe7 0%, transparent 70%),
+			radial-gradient(1000px 380px at 100% 0%, #f5e2c8 0%, transparent 70%),
+			linear-gradient(180deg, var(--sales-bg-a), var(--sales-bg-b));
+		border-radius: 18px;
+		padding: 24px;
+	}
 
-<div class="card shadow-sm">
-	<div class="card-body">
+	.sales-title {
+		color: var(--sales-ink);
+		font-weight: 800;
+		letter-spacing: 0.2px;
+	}
 
-		<form method="POST" id="salesForm">
+	.sales-sub {
+		color: var(--sales-muted);
+	}
+
+	.stock-card,
+	.sale-card {
+		border: 1px solid var(--sales-line);
+		border-radius: 14px;
+		background: var(--sales-card);
+		box-shadow: 0 10px 30px rgba(24, 52, 45, 0.08);
+	}
+
+	.stock-chip {
+		display: inline-flex;
+		align-items: center;
+		gap: 8px;
+		font-size: 12px;
+		font-weight: 700;
+		letter-spacing: 0.6px;
+		text-transform: uppercase;
+		padding: 7px 12px;
+		border-radius: 999px;
+		background: #eef7f3;
+		color: #2b7661;
+	}
+
+	.stock-big {
+		font-size: 30px;
+		font-weight: 800;
+		color: var(--sales-ink);
+		line-height: 1;
+	}
+
+	.stock-meta {
+		font-size: 13px;
+		color: var(--sales-muted);
+	}
+
+	.sale-card .card-header {
+		border-bottom: 1px solid var(--sales-line);
+		background: linear-gradient(135deg, #ffffff, #f8fdfb);
+		border-radius: 14px 14px 0 0;
+	}
+
+	.form-label {
+		font-weight: 700;
+		color: var(--sales-ink);
+	}
+
+	.form-control,
+	.form-select {
+		border-radius: 10px;
+		border: 1px solid #d7e3de;
+	}
+
+	.kpi-pill {
+		border-radius: 12px;
+		background: #f4faf8;
+		border: 1px solid #dcebe5;
+		padding: 12px;
+	}
+
+	.kpi-pill .value {
+		font-size: 21px;
+		font-weight: 800;
+		color: var(--sales-ink);
+		line-height: 1;
+	}
+
+	.kpi-pill .label {
+		font-size: 12px;
+		color: var(--sales-muted);
+		text-transform: uppercase;
+		letter-spacing: 0.6px;
+	}
+
+	.btn-sale {
+		border: 0;
+		border-radius: 12px;
+		padding: 11px 16px;
+		font-weight: 700;
+		color: #fff;
+		background: linear-gradient(135deg, var(--sales-good), #267d5d);
+	}
+
+	.table thead th {
+		font-size: 12px;
+		text-transform: uppercase;
+		letter-spacing: 0.6px;
+		color: var(--sales-muted);
+	}
+
+	.pending-side .card-header {
+		background: linear-gradient(135deg, #e2f3ec, #f2f9f6);
+		border-left: 5px solid #2f9f74;
+	}
+
+	.pending-side .card-header h6 {
+		font-size: 20px;
+		font-weight: 900;
+		letter-spacing: 0.3px;
+		color: #12342f;
+	}
+
+	.pending-side-title {
+		line-height: 1.1;
+	}
+
+	.pending-side-subtitle {
+		font-size: 11px;
+		font-weight: 700;
+		letter-spacing: 0.4px;
+		text-transform: uppercase;
+		color: #2b7661;
+	}
+
+	.pending-mini {
+		border: 1px solid #dcebe5;
+		border-radius: 10px;
+		padding: 9px;
+		background: #f6fbf9;
+	}
+
+	.pending-mini .label {
+		font-size: 11px;
+		text-transform: uppercase;
+		letter-spacing: 0.5px;
+		color: var(--sales-muted);
+	}
+
+	.pending-mini .value {
+		font-size: 18px;
+		font-weight: 800;
+		line-height: 1;
+		color: var(--sales-ink);
+	}
+
+	.pending-list {
+		max-height: 420px;
+		overflow-y: auto;
+	}
+
+	@media (max-width: 768px) {
+		.sales-wrap {
+			padding: 14px;
+		}
+
+		.stock-big {
+			font-size: 24px;
+		}
+
+		.pending-list {
+			max-height: none;
+		}
+	}
+</style>
+
+<div class="container-fluid sales-wrap">
+
+<div class="d-flex flex-wrap align-items-start justify-content-between gap-3 mb-4">
+	<div>
+		<h2 class="sales-title mb-1"><i class="bi bi-cart-check me-2"></i>Make Sale</h2>
+		<div class="sales-sub">Live inventory, live valuation, and direct invoice posting.</div>
+	</div>
+	<a href="{% url 'orders' %}" class="btn btn-outline-dark rounded-3 fw-semibold">
+		<i class="bi bi-clock-history me-1"></i>View Orders
+	</a>
+</div>
+
+<div class="row g-3 mb-4">
+	{% for p in stock_cards %}
+	<div class="col-md-4">
+		<div class="stock-card h-100 p-3">
+			<div class="d-flex align-items-center justify-content-between mb-2">
+				<span class="stock-chip"><i class="bi bi-box-seam"></i>{{ p.label }}</span>
+				<span class="badge bg-light text-dark border">{{ p.unit }}</span>
+			</div>
+			<div class="stock-big">{% if p.key == 'eggs' %}{{ p.available_display }}{% else %}{{ p.available_qty }}{% endif %}</div>
+			<div class="stock-meta mb-2">Available in store</div>
+			<div class="d-flex justify-content-between stock-meta"><span>Stored/Collected</span><strong>{% if p.key == 'eggs' %}{{ p.source_display }}{% else %}{{ p.source_qty }}{% endif %}</strong></div>
+			<div class="d-flex justify-content-between stock-meta"><span>Sold</span><strong>{% if p.key == 'eggs' %}{{ p.sold_display }}{% else %}{{ p.sold_qty }}{% endif %}</strong></div>
+			<hr class="my-2">
+			<div class="d-flex justify-content-between align-items-center">
+				<span class="stock-meta">Stock Value</span>
+				<strong class="text-success">UGX {{ p.available_value }}</strong>
+			</div>
+		</div>
+	</div>
+	{% endfor %}
+</div>
+
+<div class="row g-4 align-items-start">
+	<div class="col-xl-8">
+		<div class="sale-card card">
+			<div class="card-header d-flex align-items-center justify-content-between py-3">
+				<h5 class="mb-0 fw-bold text-dark"><i class="bi bi-receipt me-2"></i>Capture Sale</h5>
+				<small class="text-muted">Stock checked before save</small>
+			</div>
+			<div class="card-body">
+				<form method="POST" id="salesForm">
 			{% csrf_token %}
 
-			<div class="row">
-
-				<!-- CUSTOMER INFO -->
-				<div class="col-md-6 mb-3">
+			<div class="row g-3">
+				<div class="col-md-6">
 					<label class="form-label">Customer Name</label>
 					<input type="text" class="form-control" name="customer" required>
 				</div>
 
-				<div class="col-md-6 mb-3">
+				<div class="col-md-6">
 					<label class="form-label">Phone</label>
 					<input type="text" class="form-control" name="phone">
 				</div>
 
-				<!-- PRODUCT -->
-				<div class="col-md-4 mb-3">
+				<div class="col-md-4">
 					<label class="form-label">Product</label>
-					<select class="form-select" name="product" id="product">
+					<select class="form-select" name="product" id="product" required>
 						<option value="">Select Product</option>
-						<option value="eggs">Eggs</option>
-						<option value="birds">Off Layer Birds</option>
-						<option value="manure">Manure</option>
+						{% for p in stock_cards %}
+						<option value="{{ p.key }}" data-available="{{ p.available_qty }}" data-unit="{{ p.unit }}" data-price="{{ p.suggested_price }}">{{ p.label }}</option>
+						{% endfor %}
 					</select>
+					<small class="text-muted" id="availabilityHint">Pick a product to view stock.</small>
 				</div>
 
-				<div class="col-md-4 mb-3">
+				<div class="col-md-4">
 					<label class="form-label">Quantity</label>
-					<input type="number" class="form-control" id="quantity" name="quantity" min="0" step="1" value="0">
+					<input type="number" class="form-control" id="quantity" name="quantity" min="0" step="0.001" value="0" required>
 				</div>
 
-				<div class="col-md-4 mb-3">
+				<div class="col-md-4">
 					<label class="form-label">Price per Unit</label>
-					<input type="number" class="form-control" id="price" name="price" min="0" step="0.01" value="0">
+					<input type="number" class="form-control" id="price" name="price" min="0" step="0.01" value="0" required>
 				</div>
 
-				<!-- CALCULATIONS -->
-				<div class="col-md-4 mb-3">
+				<div class="col-md-4">
 					<label class="form-label">Total Amount</label>
 					<input type="text" class="form-control" id="total" name="total" readonly value="0.00">
 				</div>
 
-				<div class="col-md-4 mb-3">
+				<div class="col-md-4">
 					<label class="form-label">Deposit Paid</label>
 					<input type="number" class="form-control" id="deposit" name="deposit" min="0" step="0.01" value="0">
 				</div>
 
-				<div class="col-md-4 mb-3">
+				<div class="col-md-4">
 					<label class="form-label">Balance</label>
 					<input type="text" class="form-control" id="balance" name="balance" readonly value="0.00">
 				</div>
 
-				<!-- PAYMENT TYPE -->
-				<div class="col-md-6 mb-3">
+				<div class="col-md-6">
 					<label class="form-label">Payment Method</label>
 					<select class="form-select" name="payment_method">
-						<option>Cash</option>
-						<option>Mobile Money</option>
-						<option>Bank</option>
+						<option value="CASH">Cash</option>
+						<option value="MOMO">Mobile Money</option>
+						<option value="BANK">Bank</option>
 					</select>
 				</div>
 
-				<div class="col-md-6 mb-3">
+				<div class="col-md-6">
 					<label class="form-label">Sale Type</label>
-					<select class="form-select" name="sale_type">
+					<select class="form-select" name="sale_type" id="saleType">
 						<option value="instant">Instant Sale</option>
 						<option value="booking">Booking (Future Delivery)</option>
 					</select>
 				</div>
 
-				<!-- BOOKING DATE -->
-				<div class="col-md-6 mb-3">
+				<div class="col-md-6" id="deliveryWrap" style="display:none;">
 					<label class="form-label">Delivery Date (For Bookings)</label>
 					<input type="date" class="form-control" name="delivery_date">
 				</div>
 
-				<div class="col-md-12 mb-3">
+				<div class="col-md-12">
 					<label class="form-label">Notes</label>
 					<textarea class="form-control" name="notes"></textarea>
 				</div>
 
+				<div class="col-md-4">
+					<div class="kpi-pill">
+						<div class="label">Computed Total</div>
+						<div class="value" id="kpiTotal">UGX 0.00</div>
+					</div>
+				</div>
+				<div class="col-md-4">
+					<div class="kpi-pill">
+						<div class="label">Amount Paid</div>
+						<div class="value" id="kpiPaid">UGX 0.00</div>
+					</div>
+				</div>
+				<div class="col-md-4">
+					<div class="kpi-pill">
+						<div class="label">Outstanding</div>
+						<div class="value" id="kpiBalance">UGX 0.00</div>
+					</div>
+				</div>
 			</div>
 
-			<button type="submit" class="btn btn-success w-100" id="completeSaleBtn">
-				Complete Sale
-			</button>
+					<button type="submit" class="btn btn-sale w-100 mt-3" id="completeSaleBtn">
+						Complete Sale
+					</button>
+				</form>
+			</div>
+		</div>
+	</div>
 
-		</form>
+	<div class="col-xl-4">
+		<div class="sale-card card pending-side">
+			<div class="card-header d-flex align-items-center justify-content-between py-3">
+				<div class="pending-side-title">
+					<h6 class="mb-0"><i class="bi bi-hourglass-split me-2"></i>Upcoming Orders</h6>
+					<div class="pending-side-subtitle">Priority Pickup Queue</div>
+				</div>
+				<a href="{% url 'orders' %}" class="btn btn-sm btn-outline-dark rounded-3">Open</a>
+			</div>
+			<div class="card-body">
+				<div class="row g-2 mb-3">
+					<div class="col-6"><div class="pending-mini"><div class="label">Pending</div><div class="value">{{ pending_orders_count }}</div></div></div>
+					<div class="col-6"><div class="pending-mini"><div class="label">Due Today</div><div class="value">{{ pending_due_today_count }}</div></div></div>
+					<div class="col-6"><div class="pending-mini"><div class="label">Value</div><div class="value" style="font-size:15px;">UGX {{ pending_orders_total_value }}</div></div></div>
+					<div class="col-6"><div class="pending-mini"><div class="label">Outstanding</div><div class="value" style="font-size:15px;">UGX {{ pending_orders_outstanding_value }}</div></div></div>
+				</div>
 
+				<div class="pending-list">
+					{% for order in pending_orders_preview %}
+					<div class="border rounded-3 p-2 mb-2 bg-light-subtle">
+						<div class="d-flex justify-content-between">
+							<strong>{{ order.invoice_no }}</strong>
+							<span class="badge bg-warning text-dark">UGX {{ order.receivable.balance|default:"0.00" }}</span>
+						</div>
+						<div class="small text-muted">{{ order.customer.name }}</div>
+						<div class="small">Pickup: {{ order.due_date|default:"Instant" }} | Total: UGX {{ order.total_amount }}</div>
+					</div>
+					{% empty %}
+					<div class="text-center py-3 text-muted">No pending orders right now.</div>
+					{% endfor %}
+				</div>
+			</div>
+		</div>
+	</div>
+</div>
+
+<div class="sale-card card mt-4">
+	<div class="card-header py-3">
+		<h6 class="mb-0 fw-bold"><i class="bi bi-journal-text me-2"></i>Recent Sales</h6>
+	</div>
+	<div class="card-body p-0">
+		<div class="table-responsive">
+			<table class="table table-hover mb-0">
+				<thead>
+					<tr>
+						<th>Invoice</th>
+						<th>Customer</th>
+						<th>Product</th>
+						<th>Qty</th>
+						<th>Unit Price</th>
+						<th>Total</th>
+						<th>Status</th>
+					</tr>
+				</thead>
+				<tbody>
+					{% for row in recent_sales %}
+					<tr>
+						<td>{{ row.invoice.invoice_no }}</td>
+						<td>{{ row.invoice.customer.name }}</td>
+						<td>{{ row.product_name }}</td>
+						<td>{{ row.quantity }} {{ row.unit }}</td>
+						<td>UGX {{ row.unit_price }}</td>
+						<td>UGX {{ row.line_total }}</td>
+						<td>
+							{% if row.invoice.status == 'PAID' %}
+							<span class="badge bg-success">Paid</span>
+							{% elif row.invoice.status == 'ISSUED' %}
+								{% if row.invoice.receivable.amount_paid > 0 %}
+								<span class="badge bg-warning text-dark">Part Paid</span>
+								{% else %}
+								<span class="badge bg-danger">Unpaid</span>
+								{% endif %}
+							{% elif row.invoice.status == 'DRAFT' %}
+								{% if 'Sale type: Booking' in row.invoice.notes %}
+								<span class="badge bg-info text-dark">Booked</span>
+								{% else %}
+								<span class="badge bg-secondary">Draft</span>
+								{% endif %}
+							{% else %}
+							<span class="badge bg-secondary">{{ row.invoice.status }}</span>
+							{% endif %}
+						</td>
+					</tr>
+					{% empty %}
+					<tr>
+						<td colspan="7" class="text-center py-4 text-muted">No sales recorded yet.</td>
+					</tr>
+					{% endfor %}
+				</tbody>
+			</table>
+		</div>
 	</div>
 </div>
 
 </div>
-
 
 {% endblock %}
 
@@ -115,26 +438,70 @@
 	const qEl = $('quantity');
 	const pEl = $('price');
 	const dEl = $('deposit');
+	const productEl = $('product');
+	const saleTypeEl = $('saleType');
+	const deliveryWrapEl = $('deliveryWrap');
+	const availabilityHintEl = $('availabilityHint');
 	const totalEl = $('total');
 	const balanceEl = $('balance');
+	const kpiTotalEl = $('kpiTotal');
+	const kpiPaidEl = $('kpiPaid');
+	const kpiBalanceEl = $('kpiBalance');
 
-	function toNum(v){ return isNaN(v) ? 0 : Number(v); }
-
-	function recalc(){
-		const q = toNum(qEl.value);
-		const p = toNum(pEl.value);
-		const d = toNum(dEl.value);
-		const total = q * p;
-		const balance = total - d;
-		totalEl.value = total.toFixed(2);
-		// show negative balances as negative (manager may allow credit)
-		balanceEl.value = balance.toFixed(2);
+	function money(v) {
+		return Number(v || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 	}
 
-	[qEl,pEl,dEl].forEach(el => el && el.addEventListener('input', recalc));
+	function updateProductMeta() {
+		const opt = productEl.options[productEl.selectedIndex];
+		const available = parseFloat(opt && opt.dataset.available ? opt.dataset.available : '0');
+		const unit = opt && opt.dataset.unit ? opt.dataset.unit : 'units';
+		const suggestedPrice = parseFloat(opt && opt.dataset.price ? opt.dataset.price : '0');
 
-	// init
-	document.addEventListener('DOMContentLoaded', recalc);
+		qEl.max = available;
+		if (!Number.isNaN(suggestedPrice) && suggestedPrice > 0 && parseFloat(pEl.value || '0') === 0) {
+			pEl.value = suggestedPrice.toFixed(2);
+		}
+
+		availabilityHintEl.textContent = `Available: ${available} ${unit}`;
+	}
+
+	function recalc() {
+		const q = parseFloat(qEl.value || 0) || 0;
+		const p = parseFloat(pEl.value || 0) || 0;
+		const d = parseFloat(dEl.value || 0) || 0;
+
+		const total = q * p;
+		const paid = d;
+		const bal = total - paid;
+
+		totalEl.value = total.toFixed(2);
+		balanceEl.value = bal.toFixed(2);
+		kpiTotalEl.textContent = `UGX ${money(total)}`;
+		kpiPaidEl.textContent = `UGX ${money(paid)}`;
+		kpiBalanceEl.textContent = `UGX ${money(bal)}`;
+	}
+
+	function toggleDelivery() {
+		deliveryWrapEl.style.display = saleTypeEl.value === 'booking' ? '' : 'none';
+	}
+
+	['input', 'change'].forEach(evt => {
+		qEl.addEventListener(evt, recalc);
+		pEl.addEventListener(evt, recalc);
+		dEl.addEventListener(evt, recalc);
+	});
+
+	productEl.addEventListener('change', () => {
+		updateProductMeta();
+		recalc();
+	});
+
+	saleTypeEl.addEventListener('change', toggleDelivery);
+
+	updateProductMeta();
+	toggleDelivery();
+	recalc();
 })();
 </script>
 {% endblock %}

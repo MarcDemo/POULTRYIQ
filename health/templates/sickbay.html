@@ -161,8 +161,8 @@
     <div class="sickbay-banner d-flex align-items-center mb-3">
         <div class="s-badge me-3">+</div>
         <div>
-            <h4 class="mb-0">Sickbay Dashboard</h4>
-            <small class="text-muted">Care & isolation — monitor cases today</small>
+            <h4 class="mb-0">Sickbay</h4>
+            <small class="text-muted">Care for separated sick birds <span class="luganda">Labirira enkoko endwadde ezayawuddwa</span></small>
         </div>
     </div>
 
@@ -175,32 +175,37 @@
     <!-- ── Quick Actions ── -->
     <div class="card shadow-sm mb-4">
         <div class="card-header">
-            <i class="bi bi-lightning-charge me-2"></i>youre in the sickbay dashbord, here are some quick actions to get you started!
+            <i class="bi bi-hand-index-thumb me-2"></i>Tap what you want to record
+            <span class="luganda">Koona ku ky'ogenda okuwandiika</span>
         </div>
         <div class="card-body">
             <div class="row g-3">
                 <div class="col-6 col-md-3">
-                    <a href="{% url 'sick_record_egg' %}" class="btn btn-primary w-100 action-btn btn-eggs d-flex flex-column align-items-center justify-content-center gap-2">
+                    <a href="{% url 'sick_record_egg' %}" class="btn btn-primary w-100 action-btn worker-action-btn btn-eggs d-flex flex-column align-items-center justify-content-center gap-2">
                         <i class="bi bi-basket fs-2"></i>
-                        <span class="fw-semibold">Record Eggs</span>
+                        <span class="action-title">Eggs</span>
+                        <span class="action-subtitle">Amagi</span>
                     </a>
                 </div>
                 <div class="col-6 col-md-3">
-                    <a href="{% url 'sick_record_feed' %}" class="btn btn-warning w-100 action-btn btn-feed d-flex flex-column align-items-center justify-content-center gap-2">
+                    <a href="{% url 'sick_record_feed' %}" class="btn btn-warning w-100 action-btn worker-action-btn btn-feed d-flex flex-column align-items-center justify-content-center gap-2">
                         <i class="bi bi-bag-fill fs-2"></i>
-                        <span class="fw-semibold">Record Feed</span>
+                        <span class="action-title">Feed</span>
+                        <span class="action-subtitle">Emmere</span>
                     </a>
                 </div>
                 <div class="col-6 col-md-3">
-                    <a href="{% url 'sick_record_cleaning' %}" class="btn btn-success w-100 action-btn btn-clean d-flex flex-column align-items-center justify-content-center gap-2">
+                    <a href="{% url 'sick_record_cleaning' %}" class="btn btn-success w-100 action-btn worker-action-btn btn-clean d-flex flex-column align-items-center justify-content-center gap-2">
                         <i class="bi bi-broom fs-2"></i>
-                        <span class="fw-semibold">Clean sickbay</span>
+                        <span class="action-title">Clean</span>
+                        <span class="action-subtitle">Okuyonja</span>
                     </a>
                 </div>
                 <div class="col-6 col-md-3">
-                    <a href="{% url 'sick_mortality' %}" class="btn btn-danger w-100 action-btn btn-mortality d-flex flex-column align-items-center justify-content-center gap-2">
+                    <a href="{% url 'sick_mortality' %}" class="btn btn-danger w-100 action-btn worker-action-btn btn-mortality d-flex flex-column align-items-center justify-content-center gap-2">
                         <i class="bi bi-exclamation-triangle fs-2"></i>
-                        <span class="fw-semibold">Log Mortality</span>
+                        <span class="action-title">Dead birds</span>
+                        <span class="action-subtitle">Enkoko ezifudde</span>
                     </a>
                 </div>
             </div>

@@ -145,6 +145,11 @@ def treatment(request):
     role_code = _role_code(request.user)
     sickness_cases = _scoped_sickness_cases(request.user)
     open_cases = sickness_cases.exclude(case_status=SicknessReport.CaseStatus.TREATMENT_COMPLETED)
+    transferable_cases = sickness_cases.filter(
+        action="sickbay",
+        case_status=SicknessReport.CaseStatus.TREATMENT_COMPLETED,
+        transferred_back_at__isnull=True,
+    ).order_by("-treatment_completed_at", "-date", "-created_at")
     treatment_items = _scoped_treatment_items(request.user).order_by("is_given", "scheduled_for", "-created_at")
     pending_treatment_items = treatment_items.filter(is_given=False)
     completed_treatment_items = treatment_items.filter(is_given=True)[:10]
@@ -340,6 +345,30 @@ def treatment(request):
                 messages.success(request, "Treatment dose marked as given.")
                 return redirect("treatment")
 
+        elif form_action == "transfer_back":
+            sickness_report_id = request.POST.get("sickness_report_id", "").strip()
+            selected_report = transferable_cases.filter(pk=sickness_report_id).first() if sickness_report_id else None
+
+            if not selected_report:
+                messages.error(request, "Only completed sickbay treatment cases can be transferred back.")
+            elif selected_report.treatment_items.filter(is_given=False).exists():
+                messages.error(request, "Complete all treatment doses before transferring birds back.")
+            else:
+                selected_report.transferred_back_at = timezone.now()
+                selected_report.transferred_back_by = request.user
+                selected_report.isolated = False
+                selected_report.isolation_name = ""
+                selected_report.save(
+                    update_fields=[
+                        "transferred_back_at",
+                        "transferred_back_by",
+                        "isolated",
+                        "isolation_name",
+                    ]
+                )
+                messages.success(request, "Birds transferred back to their house.")
+                return redirect("treatment")
+
         else:
             messages.error(request, "Unknown treatment action.")
 
@@ -350,6 +379,8 @@ def treatment(request):
             "base_template": "supbase.html" if role_code == "SUPERVISOR" else "base.html",
             "today": date.today(),
             "open_cases": open_cases.order_by("-date", "-created_at")[:20],
+            "transferable_cases": transferable_cases[:20],
+            "transferable_cases_count": transferable_cases.count(),
             "pending_vet_cases_count": open_cases.filter(case_status=SicknessReport.CaseStatus.REPORTED).count(),
             "pending_treatment_items": pending_treatment_items,
             "completed_treatment_items": completed_treatment_items,
@@ -363,7 +394,132 @@ def treatment(request):
     )
 
 def vaccination(request):
-    return render(request, 'vaccination.html')
+    role_code = _role_code(request.user)
+    houses = _scoped_health_houses(request.user)
+
+    if request.method == "POST":
+        action = request.POST.get("form_action", "").strip()
+        if action == "create_schedule":
+            house_id = request.POST.get("house", "").strip()
+            batch_id = request.POST.get("batch", "").strip()
+            vaccine_name = request.POST.get("vaccine_name", "").strip()
+            brand = request.POST.get("brand", "").strip()
+            dosage = request.POST.get("dosage", "").strip()
+            administration_mode = request.POST.get("administration_mode", "").strip()
+            scheduled_date_raw = request.POST.get("scheduled_date", "").strip()
+            scheduled_time_raw = request.POST.get("scheduled_time", "").strip()
+            frequency_days_raw = request.POST.get("frequency_days", "").strip()
+            vet_name = request.POST.get("vet_name", "").strip()
+            brand_expiry_raw = request.POST.get("brand_expiry_date", "").strip()
+
+            errors = []
+            selected_house = houses.filter(pk=house_id).first() if house_id else None
+            selected_batch = None
+            if batch_id:
+                from poultry.models import PoultryBatch
+
+                selected_batch = PoultryBatch.objects.filter(pk=batch_id, house__in=houses).first()
+
+            if not selected_house:
+                errors.append("Please select a valid house from your assignment.")
+            if not vaccine_name:
+                errors.append("Please provide the vaccine name.")
+
+            from datetime import datetime
+            scheduled_for = None
+            if scheduled_date_raw:
+                try:
+                    if scheduled_time_raw:
+                        scheduled_for = datetime.fromisoformat(f"{scheduled_date_raw}T{scheduled_time_raw}")
+                    else:
+                        scheduled_for = datetime.fromisoformat(f"{scheduled_date_raw}T00:00:00")
+                except ValueError:
+                    errors.append("Please provide a valid scheduled date/time.")
+
+            frequency_days = None
+            if frequency_days_raw:
+                try:
+                    frequency_days = int(frequency_days_raw)
+                    if frequency_days < 1:
+                        errors.append("Frequency must be at least 1 day.")
+                except ValueError:
+                    errors.append("Please provide a valid integer frequency in days.")
+
+            brand_expiry = None
+            if brand_expiry_raw:
+                try:
+                    brand_expiry = datetime.fromisoformat(brand_expiry_raw).date()
+                except ValueError:
+                    errors.append("Please provide a valid brand expiry date.")
+
+            if errors:
+                for e in errors:
+                    messages.error(request, e)
+            else:
+                from health.models import VaccinationSchedule
+                schedule = VaccinationSchedule.objects.create(
+                    house_ref=selected_house,
+                    batch=selected_batch,
+                    vaccine_name=vaccine_name,
+                    brand=brand,
+                    dosage=dosage,
+                    administration_mode=administration_mode,
+                    frequency_days=frequency_days,
+                    scheduled_for=scheduled_for,
+                    vet_name=vet_name,
+                    brand_expiry_date=brand_expiry,
+                    created_by=request.user,
+                )
+                # create alert if within 2 days
+                from .services import get_vaccination_alert_receiver, create_vaccination_alert
+
+                receiver = get_vaccination_alert_receiver(schedule, request.user)
+                alert_obj = create_vaccination_alert(schedule, receiver)
+                if alert_obj:
+                    schedule.alert = alert_obj
+                    schedule.save(update_fields=["alert"])
+
+                messages.success(request, "Vaccination schedule saved.")
+                return redirect("vaccination")
+
+        elif action == "mark_administered":
+            sched_id = request.POST.get("schedule_id", "").strip()
+            from health.models import VaccinationSchedule
+
+            selected = VaccinationSchedule.objects.filter(pk=sched_id, status=VaccinationSchedule.Status.SCHEDULED).first() if sched_id else None
+            if not selected:
+                messages.error(request, "Please select a valid scheduled vaccination to mark as administered.")
+            else:
+                from django.utils import timezone
+                now = timezone.now()
+                if selected.scheduled_for and selected.scheduled_for > now:
+                    messages.error(request, "Cannot mark administered before the scheduled time.")
+                else:
+                    selected.status = VaccinationSchedule.Status.ADMINISTERED
+                    selected.administered_at = now
+                    selected.administered_by = request.user
+                    num_raw = request.POST.get("number_vaccinated", "").strip()
+                    num = None
+                    if num_raw:
+                        try:
+                            num = int(num_raw)
+                            if num < 0:
+                                raise ValueError()
+                        except ValueError:
+                            messages.error(request, "Please enter a valid non-negative integer for number vaccinated.")
+                            return redirect("vaccination")
+                    selected.number_vaccinated = num
+
+                    selected.save(update_fields=["status", "administered_at", "administered_by", "number_vaccinated"])
+                    if selected.alert_id:
+                        selected.alert.mark_as_resolved()
+                    messages.success(request, "Vaccination marked as administered.")
+                return redirect("vaccination")
+
+    # GET - show form and existing schedules for supervisor's houses
+    from health.models import VaccinationSchedule
+    schedules = VaccinationSchedule.objects.filter(house_ref__in=houses).select_related("house_ref", "batch", "created_by", "administered_by").order_by("-scheduled_for")
+    return render(request, 'vaccination.html', {"houses": houses, "schedules": schedules, "base_template": "supbase.html" if role_code == "SUPERVISOR" else "base.html"})
 
 def vaccine_report(request):
     vaccinations = [

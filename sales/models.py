@@ -42,6 +42,11 @@ class SaleInvoice(models.Model):
         PAID = "PAID", "Paid"
         CANCELLED = "CANCELLED", "Cancelled"
 
+    class DeliveryStatus(models.TextChoices):
+        PENDING = "PENDING", "Pending"
+        DELIVERED = "DELIVERED", "Delivered"
+        CANCELLED = "CANCELLED", "Cancelled"
+
     invoice_id = models.BigAutoField(primary_key=True)
     invoice_no = models.CharField(max_length=60, unique=True, db_index=True)  # e.g. INV-2026-0001
 
@@ -67,6 +72,12 @@ class SaleInvoice(models.Model):
     )
 
     status = models.CharField(max_length=12, choices=Status.choices, default=Status.DRAFT, db_index=True)
+    delivery_status = models.CharField(
+        max_length=12,
+        choices=DeliveryStatus.choices,
+        default=DeliveryStatus.PENDING,
+        db_index=True,
+    )
 
     notes = models.TextField(blank=True)
 

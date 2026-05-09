@@ -8,6 +8,7 @@ from decimal import Decimal, InvalidOperation
 
 from accounts.decorators import worker_required, supervisor_required
 from health.models import SicknessReport, TreatmentPlanItem
+from sales.views import _build_product_stock
 from .models import (
     PoultryBatch,
     DailyProduction,
@@ -410,6 +411,12 @@ def workersdash(request):
 @supervisor_required
 def supdash(request):
     today = date.today()
+    role_code = _role_code(request.user)
+    if role_code == "SUPERVISOR":
+        assigned_houses = request.user.houses.filter(is_active=True).order_by("house_code", "name")
+    else:
+        assigned_houses = PoultryHouse.objects.filter(is_active=True).order_by("house_code", "name")
+
     egg_records = _scope_to_supervisor_houses(egg_collection.objects.all(), request.user, "batch__house")
     feed_records = _scope_to_supervisor_houses(FeedRecord.objects.all(), request.user, "batch__house")
     cleaning_records = _scope_to_supervisor_houses(CleaningRecord.objects.all(), request.user, "batch__house")
@@ -443,6 +450,7 @@ def supdash(request):
     today_sickness_cases = sickness_records.filter(date=today).count()
     isolated_sickness_cases = sickness_records.filter(isolated=True).count()
     pending_treatment_doses = treatment_plan_items.filter(is_given=False).count()
+    eggs_stock = _build_product_stock()["eggs"]
 
     # Recent pending items for quick view
     recent_pending_eggs = egg_records.filter(
@@ -480,12 +488,16 @@ def supdash(request):
 
     context = {
         "today": today,
+        "assigned_houses": assigned_houses,
+        "assigned_houses_count": assigned_houses.count(),
         "pending_eggs": pending_eggs,
         "pending_feed": pending_feed,
         "pending_cleaning": pending_cleaning,
         "pending_mortality": pending_mortality,
         "total_pending": total_pending,
         "today_eggs": today_eggs,
+        "eggs_in_stock": eggs_stock["available_qty"],
+        "eggs_in_stock_display": eggs_stock["available_display"],
         "today_deaths": today_deaths,
         "today_feed_kg": today_feed_kg,
         "houses_cleaned_today": houses_cleaned_today,
@@ -589,6 +601,11 @@ def sup_approve_mortality(request, pk):
 @supervisor_required
 def supapproval(request):
     tab = request.GET.get("tab", "eggs")
+    role_code = _role_code(request.user)
+    if role_code == "SUPERVISOR":
+        assigned_houses = request.user.houses.filter(is_active=True).order_by("house_code", "name")
+    else:
+        assigned_houses = PoultryHouse.objects.filter(is_active=True).order_by("house_code", "name")
 
     pending_eggs = _scope_to_supervisor_houses(
         egg_collection.objects.filter(
@@ -624,6 +641,8 @@ def supapproval(request):
 
     context = {
         "tab": tab,
+        "assigned_houses": assigned_houses,
+        "assigned_houses_count": assigned_houses.count(),
         "pending_eggs": pending_eggs,
         "pending_feed": pending_feed,
         "pending_cleaning": pending_cleaning,
