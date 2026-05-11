@@ -1,0 +1,42 @@
+<aside class="sickbay-side-nav" aria-label="Sickbay navigation">
+    <div class="sickbay-side-head">
+        <div class="sickbay-side-icon">+</div>
+        <div>
+            <div class="sickbay-mode">Sickbay Mode</div>
+            <div class="sickbay-mode-sub">Separated sick birds</div>
+            <div class="sickbay-mode-sub">Enkoko endwadde ezayawuddwa</div>
+        </div>
+    </div>
+
+    <div class="sickbay-side-note">
+        <strong>Today only</strong>
+        <span>Record care, feed, eggs, cleaning, or deaths for birds currently in sickbay.</span>
+    </div>
+
+    <nav class="sickbay-task-list">
+        <a class="sickbay-task-link {% if request.resolver_match.url_name == 'sickbay' %}active{% endif %}" href="{% url 'sickbay' %}">
+            <i class="bi bi-hospital"></i>
+            <span>Sickbay home</span>
+        </a>
+        <a class="sickbay-task-link {% if request.resolver_match.url_name == 'sick_record_egg' %}active{% endif %}" href="{% url 'sick_record_egg' %}">
+            <i class="bi bi-basket"></i>
+            <span>Eggs / Amagi</span>
+        </a>
+        <a class="sickbay-task-link {% if request.resolver_match.url_name == 'sick_record_feed' %}active{% endif %}" href="{% url 'sick_record_feed' %}">
+            <i class="bi bi-bag-fill"></i>
+            <span>Feed / Emmere</span>
+        </a>
+        <a class="sickbay-task-link {% if request.resolver_match.url_name == 'sick_record_cleaning' %}active{% endif %}" href="{% url 'sick_record_cleaning' %}">
+            <i class="bi bi-broom"></i>
+            <span>Clean / Okuyonja</span>
+        </a>
+        <a class="sickbay-task-link {% if request.resolver_match.url_name == 'sick_mortality' %}active{% endif %}" href="{% url 'sick_mortality' %}">
+            <i class="bi bi-exclamation-triangle"></i>
+            <span>Deaths / Ezifudde</span>
+        </a>
+    </nav>
+
+    <a class="btn btn-outline-danger w-100 mt-3" href="{% url 'workersdash' %}">
+        <i class="bi bi-arrow-left-circle me-1"></i>Back to worker home
+    </a>
+</aside>
