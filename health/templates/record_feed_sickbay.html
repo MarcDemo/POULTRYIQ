@@ -10,9 +10,23 @@
 .wrapper { margin-left: 0 !important; }
 .main-content { padding-left: 0 !important; }
 .sickbay-back { margin-left: auto; }
+.sickbay-page-shell{display:grid;grid-template-columns:280px minmax(0,1fr);gap:20px;align-items:start}
+.sickbay-side-nav{position:sticky;top:16px;background:#fff;border:1px solid rgba(220,53,69,.18);border-left:5px solid #dc3545;border-radius:10px;padding:16px;box-shadow:0 12px 28px rgba(15,23,42,.08)}
+.sickbay-side-head{display:flex;gap:12px;align-items:center;padding-bottom:14px;border-bottom:1px solid #f1c2c7}
+.sickbay-side-icon{width:46px;height:46px;border-radius:10px;background:#dc3545;color:#fff;display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:800}
+.sickbay-mode{font-size:1rem;font-weight:800;text-transform:uppercase;color:#b02a37}
+.sickbay-mode-sub{font-size:.9rem;color:#495057}
+.sickbay-side-note{background:#fff5f5;border-radius:8px;padding:12px;margin:14px 0;color:#842029;font-size:.95rem}
+.sickbay-side-note span{display:block;color:#6c2d34;margin-top:4px}
+.sickbay-task-list{display:flex;flex-direction:column;gap:8px}
+.sickbay-task-link{display:flex;align-items:center;gap:10px;padding:12px;border-radius:8px;color:#343a40;text-decoration:none;font-weight:700;background:#f8f9fa}
+.sickbay-task-link:hover,.sickbay-task-link.active{background:#dc3545;color:#fff}
+.sickbay-page-main{min-width:0}
 
 .card-header { display:flex; align-items:center; justify-content:space-between; }
 @media (max-width: 767px) {
+    .sickbay-page-shell{grid-template-columns:1fr}
+    .sickbay-side-nav{position:static}
     .sickbay-banner { flex-direction:column; align-items:flex-start }
     .sickbay-back { margin-left: 0; margin-top:8px }
 }
@@ -21,6 +35,9 @@
 {% comment %}extra_js consolidated below{% endcomment %}
 {% block content %}
 <div class="container mt-4">
+    <div class="sickbay-page-shell">
+    {% include "partials/sickbay_sidebar.html" %}
+    <main class="sickbay-page-main">
     <div class="sickbay-banner d-flex align-items-center justify-content-between">
         <div class="s-badge me-3">+</div>
         <div>
@@ -170,6 +187,8 @@ document.addEventListener('DOMContentLoaded', function(){
         </div>
 
         
+    </div>
+    </main>
     </div>
 
 </div>
