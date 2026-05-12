@@ -50,7 +50,7 @@
 <input type="hidden" name="form_action" value="create_schedule">
 
 <div class="mb-3">
-    <label for="scheduled_date" class="form-label"><i class="bi bi-calendar me-1"></i>Date</label>
+    <label for="scheduled_date" class="form-label"><i class="bi bi-calendar me-1"></i>Schedule vaccination Date</label>
     <input type="date" id="scheduled_date" name="scheduled_date" class="form-control" required>
     <input type="time" id="scheduled_time" name="scheduled_time" class="form-control mt-2" placeholder="Optional time">
 </div>
@@ -69,37 +69,37 @@
 
 <div class="mb-3">
     <label for="vaccine_name" class="form-label"><i class="bi bi-capsule me-1"></i>Vaccine Name</label>
-    <input type="text" id="vaccine_name" name="vaccine_name" class="form-control" required>
+    <input type="text" id="vaccine_name" name="vaccine_name" placeholder="input the name of the vaccine" class="form-control" required>
 </div>
 
 <div class="mb-3">
     <label for="brand" class="form-label"><i class="bi bi-box-seam me-1"></i>Brand</label>
-    <input type="text" id="brand" name="brand" class="form-control">
+    <input type="text" id="brand" name="brand" placeholder="Vaccination brand name" class="form-control">
 </div>
 
 <div class="mb-3">
     <label for="dosage" class="form-label"><i class="bi bi-eyedropper me-1"></i>Dosage</label>
-    <input type="text" id="dosage" name="dosage" class="form-control">
+    <input type="text" id="dosage" name="dosage" placeholder="Dosage amount eg 2mls, 2 drops etc" class="form-control">
 </div>
 
 <div class="mb-3">
     <label for="administration_mode" class="form-label"><i class="bi bi-hand-index me-1"></i>Administration Mode</label>
-    <input type="text" id="administration_mode" name="administration_mode" class="form-control">
+    <input type="text" id="administration_mode" name="administration_mode" placeholder="Administration mode eg:put in water, eyedrop etc" class="form-control">
 </div>
 
 <div class="mb-3">
     <label for="frequency_days" class="form-label"><i class="bi bi-repeat me-1"></i>Frequency (days, optional)</label>
-    <input type="number" id="frequency_days" name="frequency_days" class="form-control" min="1">
+    <input type="number" id="frequency_days" name="frequency_days" placeholder="number of times the vaccine has to be administered" class="form-control" min="1">
 </div>
 
 <div class="mb-3">
     <label for="vet_name" class="form-label"><i class="bi bi-person-badge me-1"></i>Vet</label>
-    <input type="text" id="vet_name" name="vet_name" class="form-control">
+    <input type="text" id="vet_name" name="vet_name" placeholder="Vet name" class="form-control">
 </div>
 
 <div class="mb-3">
     <label for="brand_expiry_date" class="form-label"><i class="bi bi-calendar-x me-1"></i>Brand Expiry Date</label>
-    <input type="date" id="brand_expiry_date" name="brand_expiry_date" class="form-control">
+    <input type="date" id="brand_expiry_date"  name="brand_expiry_date" placeholder="Vaccine expiry date" class="form-control">
 </div>
 
 <div class="d-grid">

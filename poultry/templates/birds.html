@@ -1,111 +1,235 @@
 {% extends 'base.html' %}
 {% block content %}
 
+<style>
+    .cycle-bar {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(92px, 1fr));
+        gap: 6px;
+        min-width: 410px;
+    }
+
+    .cycle-step {
+        border: 1px solid #dfe6ee;
+        border-radius: 8px;
+        padding: 7px 8px;
+        background: #f8f9fa;
+        color: #6c757d;
+        font-size: 12px;
+        font-weight: 700;
+        text-align: center;
+        white-space: nowrap;
+    }
+
+    .cycle-step.complete {
+        color: #fff;
+        border-color: transparent;
+    }
+
+    .cycle-step.active {
+        color: #fff;
+        border-color: transparent;
+        box-shadow: 0 4px 12px rgba(31, 60, 136, 0.18);
+    }
+
+    .cycle-blue {
+        background: #0d6efd;
+    }
+
+    .cycle-green {
+        background: #198754;
+    }
+
+    .cycle-orange {
+        background: #fd7e14;
+    }
+
+    .cycle-red {
+        background: #dc3545;
+    }
+
+    .cycle-badge {
+        display: inline-block;
+        border-radius: 20px;
+        color: #fff;
+        font-size: 12px;
+        font-weight: 700;
+        padding: 6px 10px;
+    }
+
+    .assignment-list {
+        min-width: 150px;
+    }
+
+    .assignment-list .badge {
+        margin: 0 4px 4px 0;
+        text-transform: none;
+        letter-spacing: 0;
+    }
+
+    .birds-table th,
+    .birds-table td {
+        vertical-align: middle;
+    }
+</style>
+
 <div class="container-fluid">
 
     <div class="page-header-row mb-4">
         <h2>
             <i class="bi bi-egg me-2"></i>Birds Inventory
         </h2>
-      <a href="{% url 'add_batch' %}" class="btn btn-primary">
-    <i class="bi bi-plus-circle me-2"></i>Add Batch
-</a>
+        <a href="{% url 'add_batch' %}" class="btn btn-primary">
+            <i class="bi bi-plus-circle me-2"></i>Add Batch
+        </a>
     </div>
+
     <form method="GET" class="row g-2 mb-3">
+        <div class="col-md-3">
+            <input type="text" name="search" value="{{ search_query }}" class="form-control" placeholder="Search batch code...">
+        </div>
 
-    <div class="col-md-3">
-        <input type="text" name="search" value="{{ search_query }}" 
-               class="form-control" placeholder="Search batch code...">
-    </div>
+        <div class="col-md-3">
+            <select name="status" class="form-select">
+                <option value="">All Status</option>
+                <option value="ACTIVE" {% if selected_status == "ACTIVE" %}selected{% endif %}>Active</option>
+                <option value="CLOSED" {% if selected_status == "CLOSED" %}selected{% endif %}>Closed</option>
+            </select>
+        </div>
 
-    <div class="col-md-3">
-        <select name="status" class="form-select">
-            <option value="">All Status</option>
-            <option value="ACTIVE" {% if selected_status == "ACTIVE" %}selected{% endif %}>Active</option>
-            <option value="CLOSED" {% if selected_status == "CLOSED" %}selected{% endif %}>Closed</option>
-        </select>
-    </div>
+        <div class="col-md-3">
+            <select name="house" class="form-select">
+                <option value="">All Houses</option>
+                {% for h in houses %}
+                    <option value="{{ h.pk }}" {% if selected_house == h.pk|stringformat:"s" %}selected{% endif %}>
+                        {{ h.house_code }}
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
 
-    <div class="col-md-3">
-        <select name="house" class="form-select">
-            <option value="">All Houses</option>
-            {% for h in houses %}
-                <option value="{{ h.id }}" {% if selected_house == h.id|stringformat:"s" %}selected{% endif %}>
-                    {{ h.house_code }}
-                </option>
-            {% endfor %}
-        </select>
-    </div>
-
-    <div class="col-md-3">
-        <button class="btn btn-dark w-100">Filter</button>
-    </div>
-
-</form>
+        <div class="col-md-3">
+            <button class="btn btn-dark w-100">Filter</button>
+        </div>
+    </form>
 
     <div class="card">
         <div class="card-body">
             <div class="table-responsive">
-                <table class="table table-hover">
+                <table class="table table-hover birds-table">
                     <thead>
                         <tr>
+                            <th>Batch</th>
                             <th>House</th>
-<th>Breed</th>
-<th>Birds Alive</th>
-<th>Age</th>
-<th>Health</th>
-<th>First lay on</th>
-<th>Total Eggs</th>
+                            <th>Breed</th>
+                            <th>Age</th>
+                            <th>Cycle Status</th>
+                            <th>Initial Birds</th>
+                            <th>Birds Alive</th>
+                            <th>Predicted First Lay</th>
+                            <th>Died</th>
+                            <th>Sick Now</th>
+                            <th>Sick Cases</th>
+                            <th>Sold</th>
+                            <th>Eggs</th>
+                            <th>Worker</th>
+                            <th>Supervisor</th>
                         </tr>
                     </thead>
-  <tbody>
-{% for item in batch_data %}
-<tr>
+                    <tbody>
+                        {% for item in batch_data %}
+                        <tr>
+                            <td>
+                                <div class="fw-semibold">{{ item.batch.batch_code }}</div>
+                                <small class="text-muted">{{ item.batch.status|title }}</small>
+                            </td>
 
-    <td>
-        <span class="badge bg-info">
-            {{ item.batch.house.name }}
-        </span>
-    </td>
+                            <td>
+                                <span class="badge bg-info">
+                                    {{ item.batch.house.name|default:item.batch.house.house_code }}
+                                </span>
+                            </td>
 
-    <td>
-        {{ item.batch.breed|default:"-" }}
-    </td>
+                            <td>{{ item.batch.breed|default:"-" }}</td>
 
-    <td>
-        <strong>{{ item.current_birds }}</strong>
-    </td>
+                            <td>{{ item.batch.current_age_days }} days</td>
 
-    <td>
-        {{ item.batch.current_age_days }} days
-    </td>
+                            <td>
+                                <div class="mb-2">
+                                    <span class="cycle-badge {{ item.cycle.color }}">{{ item.cycle.label }}</span>
+                                    <small class="text-muted ms-1">Auto predicted</small>
+                                </div>
+                                <div class="cycle-bar">
+                                    {% for segment in item.cycle.segments %}
+                                    <div class="cycle-step {% if segment.complete %}complete {{ segment.color }}{% endif %} {% if segment.active %}active {{ segment.color }}{% endif %}">
+                                        {{ segment.label }}
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                            </td>
 
-    <td>
-        {% if item.health_status == "excellent" %}
-            <span class="badge bg-success">Excellent</span>
-        {% elif item.health_status == "warning" %}
-            <span class="badge bg-warning text-dark">Warning</span>
-        {% else %}
-            <span class="badge bg-danger">Critical</span>
-        {% endif %}
-    </td>
-    <td>
-     {% if item.batch.expected_lay_date %}
-        <span class="badge bg-primary">
-            {{ item.batch.expected_lay_date }}
-        </span>
-    {% else %}
-        <span class="badge bg-secondary">N/A</span>
-    {% endif %}
-    </td>
+                            <td>{{ item.batch.initial_quantity }}</td>
 
-    <td>
-        {{ item.total_eggs }}
-    </td>
+                            <td><strong>{{ item.current_birds }}</strong></td>
 
-</tr>
-{% endfor %}
-</tbody>
+                            <td>
+                                {% if item.batch.expected_lay_date %}
+                                <span class="badge bg-success">{{ item.batch.expected_lay_date }}</span>
+                                {% else %}
+                                <span class="text-muted">Not available</span>
+                                {% endif %}
+                            </td>
+
+                            <td>
+                                {% if item.total_deaths > 0 %}
+                                <span class="badge bg-danger">{{ item.total_deaths }}</span>
+                                {% else %}
+                                <span class="text-muted">0</span>
+                                {% endif %}
+                            </td>
+
+                            <td>
+                                {% if item.current_sick_birds > 0 %}
+                                <span class="badge bg-warning text-dark">{{ item.current_sick_birds }}</span>
+                                {% else %}
+                                <span class="text-muted">0</span>
+                                {% endif %}
+                            </td>
+
+                            <td>{{ item.total_sick_cases }}</td>
+
+                            <td>{{ item.birds_sold|floatformat:0 }}</td>
+
+                            <td>{{ item.total_eggs }}</td>
+
+                            <td>
+                                <div class="assignment-list">
+                                    {% for worker in item.assigned_workers %}
+                                    <span class="badge bg-light text-dark border">{{ worker.get_full_name|default:worker.username }}</span>
+                                    {% empty %}
+                                    <span class="text-muted small">Unassigned</span>
+                                    {% endfor %}
+                                </div>
+                            </td>
+
+                            <td>
+                                <div class="assignment-list">
+                                    {% for supervisor in item.assigned_supervisors %}
+                                    <span class="badge bg-light text-dark border">{{ supervisor.get_full_name|default:supervisor.username }}</span>
+                                    {% empty %}
+                                    <span class="text-muted small">Unassigned</span>
+                                    {% endfor %}
+                                </div>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="15" class="text-center text-muted py-4">
+                                No batches found.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
                 </table>
             </div>
         </div>
