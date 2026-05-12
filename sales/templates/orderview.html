@@ -1,0 +1,212 @@
+{% extends 'base.html' %}
+{% block content %}
+
+<style>
+    .orders-view-wrap {
+        background: #f7faf9;
+        border-radius: 12px;
+        padding: 24px;
+    }
+
+    .orders-view-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 16px;
+        flex-wrap: wrap;
+        margin-bottom: 22px;
+    }
+
+    .orders-view-title {
+        color: #1f3c88;
+        font-weight: 700;
+        margin-bottom: 4px;
+    }
+
+    .orders-view-card {
+        border: 1px solid #e6ecea;
+        border-radius: 8px;
+        background: #fff;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    }
+
+    .orders-view-summary {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 14px;
+        margin-bottom: 20px;
+    }
+
+    .orders-view-metric {
+        padding: 16px;
+    }
+
+    .orders-view-metric span {
+        display: block;
+        color: #6c7785;
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.5px;
+        text-transform: uppercase;
+        margin-bottom: 6px;
+    }
+
+    .orders-view-metric strong {
+        color: #1f3c88;
+        font-size: 22px;
+    }
+
+    .orders-view-table th {
+        white-space: nowrap;
+    }
+
+    .orders-view-items {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+
+    .orders-view-item {
+        display: inline-flex;
+        justify-content: space-between;
+        gap: 10px;
+        border: 1px solid #dfe9e5;
+        border-radius: 8px;
+        padding: 5px 8px;
+        background: #f8fbfa;
+        max-width: 260px;
+    }
+
+    .orders-view-item-name {
+        font-weight: 700;
+        color: #24544c;
+    }
+
+    .orders-view-empty {
+        padding: 42px 20px;
+        text-align: center;
+        color: #6c7785;
+    }
+
+    @media (max-width: 992px) {
+        .orders-view-summary {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+
+    @media (max-width: 576px) {
+        .orders-view-wrap {
+            padding: 16px;
+        }
+
+        .orders-view-summary {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+
+<div class="container-fluid orders-view-wrap">
+    <div class="orders-view-header">
+        <div>
+            <h2 class="orders-view-title">
+                <i class="bi bi-box-seam me-2"></i>Available Orders
+            </h2>
+            <small class="text-muted">Read-only view of orders awaiting delivery.</small>
+        </div>
+        <a href="{% url 'dashboard' %}" class="btn btn-light">
+            <i class="bi bi-arrow-left me-2"></i>Back to Dashboard
+        </a>
+    </div>
+
+    <div class="orders-view-summary">
+        <div class="orders-view-card orders-view-metric">
+            <span>Pending Orders</span>
+            <strong>{{ pending_orders_count }}</strong>
+        </div>
+        <div class="orders-view-card orders-view-metric">
+            <span>Order Value</span>
+            <strong>UGX {{ pending_orders_total_value|floatformat:0 }}</strong>
+        </div>
+        <div class="orders-view-card orders-view-metric">
+            <span>Outstanding</span>
+            <strong>UGX {{ pending_orders_outstanding_value|floatformat:0 }}</strong>
+        </div>
+        <div class="orders-view-card orders-view-metric">
+            <span>Overdue</span>
+            <strong>{{ pending_overdue_count }}</strong>
+        </div>
+    </div>
+
+    <div class="orders-view-card">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0 orders-view-table">
+                <thead>
+                    <tr>
+                        <th>Invoice</th>
+                        <th>Customer</th>
+                        <th>Order Date</th>
+                        <th>Delivery Date</th>
+                        <th>Items</th>
+                        <th>Total</th>
+                        <th>Paid</th>
+                        <th>Balance</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for order in pending_orders %}
+                    <tr>
+                        <td class="fw-semibold">{{ order.invoice_no }}</td>
+                        <td>
+                            <div class="fw-semibold">{{ order.customer.name }}</div>
+                            <small class="text-muted">Taken by {{ order.created_by.get_full_name|default:order.created_by.username }}</small>
+                        </td>
+                        <td>{{ order.invoice_date }}</td>
+                        <td>{{ order.due_date|default:"Not set" }}</td>
+                        <td>
+                            <div class="orders-view-items">
+                                {% for item in order.items.all %}
+                                <div class="orders-view-item">
+                                    <span class="orders-view-item-name">{{ item.product_name }}</span>
+                                    <span>{{ item.qty_display }}</span>
+                                </div>
+                                {% empty %}
+                                <span class="text-muted">No items</span>
+                                {% endfor %}
+                            </div>
+                        </td>
+                        <td>UGX {{ order.total_amount|floatformat:0 }}</td>
+                        <td>UGX {{ order.receivable.amount_paid|default:"0"|floatformat:0 }}</td>
+                        <td>
+                            {% if order.receivable.balance > 0 %}
+                            <span class="badge bg-warning text-dark">UGX {{ order.receivable.balance|floatformat:0 }}</span>
+                            {% else %}
+                            <span class="badge bg-success">UGX 0</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if order.receivable.balance <= 0 %}
+                            <span class="badge bg-success">Ready for delivery</span>
+                            {% elif order.receivable.amount_paid > 0 %}
+                            <span class="badge bg-warning text-dark">Part paid</span>
+                            {% else %}
+                            <span class="badge bg-danger">Awaiting payment</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="9">
+                            <div class="orders-view-empty">
+                                <i class="bi bi-check-circle text-success me-2"></i>No available orders at the moment.
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

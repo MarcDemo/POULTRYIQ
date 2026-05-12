@@ -1,14 +1,20 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
-from django.db.models import Count, Max, Sum
+from django.db.models import Count, DecimalField, Max, Q, Sum, Value
+from django.db.models.functions import Coalesce
 from django.utils.timezone import now
 from datetime import date
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 
 from accounts.decorators import worker_required, supervisor_required
-from health.models import SicknessReport, TreatmentPlanItem
+from accounts.models import User
+from alerts.models import Alert
+from finance.models import ExpenseTransaction, SalaryPayment
+from health.models import SicknessReport, TreatmentPlanItem, VaccinationSchedule
 from sales.views import _build_product_stock
+from inventory.models import InventoryTransaction, ReorderRule
+from sales.models import ReceivableLedger, SaleInvoice, SaleItem
 from .models import (
     PoultryBatch,
     DailyProduction,
@@ -22,9 +28,212 @@ from .models import (
 )
 from .forms import PoultryBatchForm
 
+
+def _batch_cycle_stage(batch):
+    age_days = batch.current_age_days
+    stages = [
+        {"key": "first_lay", "label": "First lay", "color": "cycle-blue"},
+        {"key": "peak_laying", "label": "Peak laying", "color": "cycle-green"},
+        {"key": "reduced_laying", "label": "Reduced laying", "color": "cycle-orange"},
+        {"key": "off_laying", "label": "Off laying", "color": "cycle-red"},
+    ]
+
+    if batch.status == PoultryBatch.Status.CLOSED or age_days > 560:
+        active_index = 3
+    elif age_days > 350:
+        active_index = 2
+    elif age_days > 154:
+        active_index = 1
+    else:
+        active_index = 0
+
+    return {
+        "label": stages[active_index]["label"],
+        "color": stages[active_index]["color"],
+        "segments": [
+            {
+                **stage,
+                "active": index == active_index,
+                "complete": index < active_index,
+            }
+            for index, stage in enumerate(stages)
+        ],
+    }
+
+
 # Create your views here.
 def dashboard(request):
-    return render(request, 'dashboard.html')
+    today = date.today()
+    current_time = now()
+
+    active_batches = PoultryBatch.objects.filter(status=PoultryBatch.Status.ACTIVE)
+    total_birds = 0
+    for batch in active_batches:
+        approved_deaths = batch.mortality_records.filter(
+            status=ApprovalStatus.APPROVED
+        ).aggregate(total=Sum("number_dead"))["total"] or 0
+        total_birds += max(batch.initial_quantity - approved_deaths, 0)
+
+    eggs_today = egg_collection.objects.filter(
+        collection_date=today,
+        status=ApprovalStatus.APPROVED,
+    ).aggregate(total=Sum("eggs_collected"))["total"] or 0
+
+    eggs_stock = _build_product_stock()["eggs"]
+
+    feed_used_today = FeedRecord.objects.filter(
+        record_date=today,
+        status=ApprovalStatus.APPROVED,
+    ).aggregate(total=Sum("quantity_kg"))["total"] or 0
+
+    feed_inventory = InventoryTransaction.objects.filter(
+        item__category__code__iexact="FEED"
+    )
+    feed_stock_in = feed_inventory.filter(tx_type=InventoryTransaction.TxType.IN_).aggregate(
+        total=Coalesce(
+            Sum("quantity"),
+            Value(0),
+            output_field=DecimalField(max_digits=14, decimal_places=3),
+        )
+    )["total"]
+    feed_stock_out = feed_inventory.filter(tx_type=InventoryTransaction.TxType.OUT).aggregate(
+        total=Coalesce(
+            Sum("quantity"),
+            Value(0),
+            output_field=DecimalField(max_digits=14, decimal_places=3),
+        )
+    )["total"]
+    feed_adjustments = feed_inventory.filter(tx_type=InventoryTransaction.TxType.ADJUST).aggregate(
+        total=Coalesce(
+            Sum("quantity"),
+            Value(0),
+            output_field=DecimalField(max_digits=14, decimal_places=3),
+        )
+    )["total"]
+    feed_stock = feed_stock_in - feed_stock_out + feed_adjustments
+
+    pending_eggs = egg_collection.objects.filter(status=ApprovalStatus.PENDING).count()
+    pending_feed = FeedRecord.objects.filter(status=ApprovalStatus.PENDING).count()
+    pending_cleaning = CleaningRecord.objects.filter(status=ApprovalStatus.PENDING).count()
+    pending_mortality = MortalityRecord.objects.filter(status=ApprovalStatus.PENDING).count()
+
+    active_alerts = (
+        Alert.objects.filter(
+            Q(status=Alert.Status.UNREAD)
+            | Q(
+                persist_until_resolved=True,
+                status__in=[Alert.Status.READ, Alert.Status.ACKNOWLEDGED],
+            )
+        )
+        .select_related("receiver", "sender", "alert_type", "related_house", "related_batch")
+        .order_by("-created_at")
+    )
+
+    supervisor_alerts = active_alerts.filter(
+        receiver__role__code__in=["SUPERVISOR", "MANAGER", "OWNER"]
+    )
+    upcoming_treatment_items = (
+        TreatmentPlanItem.objects.filter(is_given=False)
+        .select_related("sickness_report__house_ref", "sickness_report__batch", "alert")
+        .order_by("scheduled_for", "-created_at")[:5]
+    )
+    upcoming_vaccinations = (
+        VaccinationSchedule.objects.filter(status=VaccinationSchedule.Status.SCHEDULED)
+        .select_related("house_ref", "batch", "alert")
+        .order_by("scheduled_for", "-created_at")[:5]
+    )
+
+    low_stock_items = 0
+    for rule in ReorderRule.objects.filter(alerts_enabled=True).select_related("store", "item"):
+        item_transactions = InventoryTransaction.objects.filter(
+            store=rule.store,
+            item=rule.item,
+        )
+        item_stock_in = item_transactions.filter(tx_type=InventoryTransaction.TxType.IN_).aggregate(
+            total=Coalesce(
+                Sum("quantity"),
+                Value(0),
+                output_field=DecimalField(max_digits=14, decimal_places=3),
+            )
+        )["total"]
+        item_stock_out = item_transactions.filter(tx_type=InventoryTransaction.TxType.OUT).aggregate(
+            total=Coalesce(
+                Sum("quantity"),
+                Value(0),
+                output_field=DecimalField(max_digits=14, decimal_places=3),
+            )
+        )["total"]
+        item_adjustments = item_transactions.filter(tx_type=InventoryTransaction.TxType.ADJUST).aggregate(
+            total=Coalesce(
+                Sum("quantity"),
+                Value(0),
+                output_field=DecimalField(max_digits=14, decimal_places=3),
+            )
+        )["total"]
+        if item_stock_in - item_stock_out + item_adjustments <= rule.reorder_level:
+            low_stock_items += 1
+
+    context = {
+        "today": today,
+        "total_birds": total_birds,
+        "active_batches_count": active_batches.count(),
+        "active_houses_count": PoultryHouse.objects.filter(is_active=True).count(),
+        "eggs_today": eggs_today,
+        "eggs_in_stock_display": eggs_stock["available_display"],
+        "feed_used_today": feed_used_today,
+        "feed_stock": feed_stock,
+        "deaths_today": MortalityRecord.objects.filter(
+            record_date=today,
+            status=ApprovalStatus.APPROVED,
+        ).aggregate(total=Sum("number_dead"))["total"] or 0,
+        "houses_cleaned_today": CleaningRecord.objects.filter(
+            record_date=today,
+            status=ApprovalStatus.APPROVED,
+            house_cleaned=True,
+        ).count(),
+        "sickbay_cases": SicknessReport.objects.filter(isolated=True).count(),
+        "pending_treatment_doses": TreatmentPlanItem.objects.filter(is_given=False).count(),
+        "pending_vaccinations": VaccinationSchedule.objects.filter(
+            status=VaccinationSchedule.Status.SCHEDULED
+        ).count(),
+        "low_stock_items": low_stock_items,
+        "pending_approvals": pending_eggs + pending_feed + pending_cleaning + pending_mortality,
+        "pending_orders": SaleInvoice.objects.filter(
+            delivery_status=SaleInvoice.DeliveryStatus.PENDING
+        ).exclude(status=SaleInvoice.Status.CANCELLED).count(),
+        "outstanding_balance": ReceivableLedger.objects.aggregate(
+            total=Coalesce(
+                Sum("balance"),
+                Value(0),
+                output_field=DecimalField(max_digits=14, decimal_places=2),
+            )
+        )["total"],
+        "today_expenses": ExpenseTransaction.objects.filter(expense_date=today).aggregate(
+            total=Coalesce(
+                Sum("total_amount"),
+                Value(0),
+                output_field=DecimalField(max_digits=14, decimal_places=2),
+            )
+        )["total"],
+        "pending_salaries": SalaryPayment.objects.filter(status=SalaryPayment.Status.PENDING).count(),
+        "active_alerts_count": active_alerts.count(),
+        "supervisor_alerts_count": supervisor_alerts.count(),
+        "urgent_alerts_count": active_alerts.filter(priority=Alert.Priority.URGENT).count(),
+        "overdue_alerts_count": active_alerts.filter(due_date__lt=current_time).count(),
+        "recent_supervisor_alerts": supervisor_alerts[:5],
+        "upcoming_treatment_items": upcoming_treatment_items,
+        "due_treatment_items_count": TreatmentPlanItem.objects.filter(
+            is_given=False,
+            scheduled_for__isnull=False,
+            scheduled_for__lte=current_time,
+        ).count(),
+        "upcoming_vaccinations": upcoming_vaccinations,
+        "due_vaccinations_count": VaccinationSchedule.objects.filter(
+            status=VaccinationSchedule.Status.SCHEDULED,
+            scheduled_for__lte=current_time,
+        ).count(),
+    }
+    return render(request, 'dashboard.html', context)
 
 def birds(request):
     batches = PoultryBatch.objects.select_related("house")
@@ -38,7 +247,7 @@ def birds(request):
         batches = batches.filter(status=status)
 
     if house:
-        batches = batches.filter(house__id=house)
+        batches = batches.filter(house__pk=house)
 
     if search:
         batches = batches.filter(batch_code__icontains=search)
@@ -58,7 +267,34 @@ def birds(request):
             total=Sum("eggs_collected")
         )["total"] or 0
 
-        current_birds = batch.initial_quantity - total_mortality
+        current_sick_birds = SicknessReport.objects.filter(
+            batch=batch,
+            transferred_back_at__isnull=True,
+        ).exclude(
+            case_status=SicknessReport.CaseStatus.TREATMENT_COMPLETED
+        ).aggregate(total=Sum("affected"))["total"] or 0
+
+        total_sick_cases = SicknessReport.objects.filter(batch=batch).count()
+
+        birds_sold = SaleItem.objects.filter(
+            batch=batch
+        ).filter(
+            Q(product_name__icontains="bird") | Q(product_name__icontains="off layer")
+        ).aggregate(total=Sum("quantity"))["total"] or 0
+
+        assigned_workers = User.objects.filter(
+            houses=batch.house,
+            role__code="WORKER",
+            is_active=True,
+        ).order_by("first_name", "username")
+
+        assigned_supervisors = User.objects.filter(
+            houses=batch.house,
+            role__code="SUPERVISOR",
+            is_active=True,
+        ).order_by("first_name", "username")
+
+        current_birds = max(batch.initial_quantity - total_mortality - int(birds_sold), 0)
 
         # 🧠 performance logic
         if batch.initial_quantity > 0:
@@ -80,6 +316,13 @@ def birds(request):
             "mortality_rate": round(mortality_rate, 2),
             "health_status": health_status,
             "total_eggs": total_eggs,
+            "total_deaths": total_mortality,
+            "current_sick_birds": current_sick_birds,
+            "total_sick_cases": total_sick_cases,
+            "birds_sold": birds_sold,
+            "cycle": _batch_cycle_stage(batch),
+            "assigned_workers": assigned_workers,
+            "assigned_supervisors": assigned_supervisors,
         })
 
     context = {
