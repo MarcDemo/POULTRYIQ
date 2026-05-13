@@ -3,66 +3,129 @@
 
 <div class="container-fluid">
 
-<h3 class="mb-4">Vaccination Report</h3>
+<h3 class="mb-4"><i class="bi bi-capsule me-2"></i>Vaccination Records</h3>
 
 <!-- FILTER -->
 <div class="card mb-3">
-<div class="card-body">
+<div class="card-body py-2">
+<form method="GET" data-auto-filter="true" class="row g-2 align-items-end">
 
-<form class="row g-3">
+    <div class="col-md-3">
+        <label class="form-label fw-semibold small mb-1">Vaccine Name</label>
+        <input type="text" name="vaccine" value="{{ f_vaccine }}" class="form-control form-control-sm" placeholder="Search vaccine...">
+    </div>
 
-<div class="col-md-3">
-<input type="date" class="form-control" name="start">
-</div>
+    <div class="col-md-2">
+        <label class="form-label fw-semibold small mb-1">House</label>
+        <select name="house" class="form-select form-select-sm">
+            <option value="">All Houses</option>
+            {% for h in houses %}
+                <option value="{{ h.pk }}" {% if f_house == h.pk|stringformat:"s" %}selected{% endif %}>
+                    {{ h.house_code }}{% if h.name %} – {{ h.name }}{% endif %}
+                </option>
+            {% endfor %}
+        </select>
+    </div>
 
-<div class="col-md-3">
-<input type="date" class="form-control" name="end">
-</div>
+    <div class="col-md-2">
+        <label class="form-label fw-semibold small mb-1">Status</label>
+        <select name="status" class="form-select form-select-sm">
+            <option value="">All Statuses</option>
+            {% for val, label in vac_status_choices %}
+                <option value="{{ val }}" {% if f_status == val %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+        </select>
+    </div>
 
-<div class="col-md-3">
-<select class="form-control" name="status">
-<option value="">All</option>
-<option value="scheduled">Scheduled</option>
-<option value="done">Completed</option>
-</select>
-</div>
+    <div class="col-md-2">
+        <label class="form-label fw-semibold small mb-1">From Date</label>
+        <input type="date" name="date_from" value="{{ f_date_from }}" class="form-control form-control-sm">
+    </div>
 
-<div class="col-md-3">
-<button class="btn btn-primary w-100">Filter</button>
-</div>
+    <div class="col-md-2">
+        <label class="form-label fw-semibold small mb-1">To Date</label>
+        <input type="date" name="date_to" value="{{ f_date_to }}" class="form-control form-control-sm">
+    </div>
+
+    <div class="col-md-1">
+        <button type="submit" class="btn btn-outline-secondary btn-sm w-100 mt-3">
+            <i class="bi bi-funnel"></i>
+        </button>
+    </div>
 
 </form>
-
 </div>
 </div>
 
 <!-- TABLE -->
 <div class="card">
-<div class="card-body">
+<div class="card-body p-0">
 
-<table class="table table-striped">
+<div class="table-responsive">
+<table class="table table-hover table-striped mb-0">
 
-<thead>
+<thead class="table-light">
 <tr>
-<th>Date</th>
-<th>House</th>
-<th>Vaccine</th>
-<th>Status</th>
+    <th>Scheduled Date</th>
+    <th>House</th>
+    <th>Batch</th>
+    <th>Vaccine</th>
+    <th>Brand</th>
+    <th>Dosage</th>
+    <th>Method</th>
+    <th>Vet</th>
+    <th>Status</th>
+    <th>Administered By</th>
 </tr>
 </thead>
 
 <tbody>
-{% for v in vaccinations %}
+{% for s in schedules %}
 <tr>
-<td>{{ v.date }}</td>
-<td>{{ v.house }}</td>
-<td>{{ v.vaccine }}</td>
-<td>{{ v.status }}</td>
+    <td>{{ s.scheduled_for|date:'d M Y' }}</td>
+    <td>
+        {% if s.house_ref %}
+            <span class="badge bg-info text-dark">{{ s.house_ref.house_code }}</span>
+        {% else %}
+            <span class="text-muted">—</span>
+        {% endif %}
+    </td>
+    <td>
+        {% if s.batch %}
+            <small>{{ s.batch.batch_code }}</small>
+        {% else %}
+            <span class="text-muted">—</span>
+        {% endif %}
+    </td>
+    <td><strong>{{ s.vaccine_name }}</strong></td>
+    <td>{{ s.brand|default:'—' }}</td>
+    <td>{{ s.dosage|default:'—' }}</td>
+    <td>{{ s.administration_mode|default:'—' }}</td>
+    <td>{{ s.vet_name|default:'—' }}</td>
+    <td>
+        {% if s.status == 'ADMINISTERED' %}
+            <span class="badge bg-success">Administered</span>
+        {% else %}
+            <span class="badge bg-secondary">Scheduled</span>
+        {% endif %}
+    </td>
+    <td>
+        {% if s.administered_by %}
+            {{ s.administered_by.get_full_name|default:s.administered_by.username }}
+        {% else %}
+            <span class="text-muted">—</span>
+        {% endif %}
+    </td>
+</tr>
+{% empty %}
+<tr>
+    <td colspan="10" class="text-center text-muted py-4">No vaccination records found.</td>
 </tr>
 {% endfor %}
 </tbody>
 
 </table>
+</div>
 
 </div>
 </div>

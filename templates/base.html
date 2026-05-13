@@ -371,6 +371,23 @@
 {% if request.user.is_authenticated and request.user.is_supervisor %}
 <script src="{% static 'sales/js/sales.js' %}"></script>
 {% endif %}
+<script>
+(function () {
+    function initAutoFilter(form) {
+        var timer;
+        form.querySelectorAll('select, input[type="date"]').forEach(function (el) {
+            el.addEventListener('change', function () { form.submit(); });
+        });
+        form.querySelectorAll('input[type="text"], input[type="search"]').forEach(function (el) {
+            el.addEventListener('input', function () {
+                clearTimeout(timer);
+                timer = setTimeout(function () { form.submit(); }, 400);
+            });
+        });
+    }
+    document.querySelectorAll('form[data-auto-filter="true"]').forEach(initAutoFilter);
+})();
+</script>
 {% block extra_js %}{% endblock %}
 </body>
 </html>

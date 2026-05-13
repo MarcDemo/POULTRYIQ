@@ -519,14 +519,73 @@ def vaccination(request):
     # GET - show form and existing schedules for supervisor's houses
     from health.models import VaccinationSchedule
     schedules = VaccinationSchedule.objects.filter(house_ref__in=houses).select_related("house_ref", "batch", "created_by", "administered_by").order_by("-scheduled_for")
-    return render(request, 'vaccination.html', {"houses": houses, "schedules": schedules, "base_template": "supbase.html" if role_code == "SUPERVISOR" else "base.html"})
+
+    f_house = request.GET.get("house", "").strip()
+    f_vac_status = request.GET.get("vac_status", "").strip()
+    f_vaccine = request.GET.get("vaccine", "").strip()
+    f_date_from = request.GET.get("date_from", "").strip()
+    f_date_to = request.GET.get("date_to", "").strip()
+
+    if f_house:
+        schedules = schedules.filter(house_ref__pk=f_house)
+    if f_vac_status:
+        schedules = schedules.filter(status=f_vac_status)
+    if f_vaccine:
+        schedules = schedules.filter(vaccine_name__icontains=f_vaccine)
+    if f_date_from:
+        schedules = schedules.filter(scheduled_for__date__gte=f_date_from)
+    if f_date_to:
+        schedules = schedules.filter(scheduled_for__date__lte=f_date_to)
+
+    return render(request, 'vaccination.html', {
+        "houses": houses,
+        "schedules": schedules,
+        "base_template": "supbase.html" if role_code == "SUPERVISOR" else "base.html",
+        "f_house": f_house,
+        "f_vac_status": f_vac_status,
+        "f_vaccine": f_vaccine,
+        "f_date_from": f_date_from,
+        "f_date_to": f_date_to,
+        "vac_status_choices": VaccinationSchedule.Status.choices,
+    })
 
 def vaccine_report(request):
-    vaccinations = [
-        {'date': '5th april', 'house': 'house B', 'vaccine': 'newcastle vaccine', 'status': 'scheduled'},
-        {'date': '4th april', 'house': 'house A', 'vaccine': 'gumboro vaccine', 'status': 'done'},
-    ]
-    return render(request, 'vaccine_report.html', {'vaccinations': vaccinations})
+    from health.models import VaccinationSchedule
+    from poultry.models import PoultryHouse
+
+    schedules = VaccinationSchedule.objects.select_related(
+        "house_ref", "batch", "created_by", "administered_by"
+    ).order_by("-scheduled_for")
+
+    houses = PoultryHouse.objects.filter(is_active=True).order_by("house_code", "name")
+
+    f_house = request.GET.get("house", "").strip()
+    f_vaccine = request.GET.get("vaccine", "").strip()
+    f_status = request.GET.get("status", "").strip()
+    f_date_from = request.GET.get("date_from", "").strip()
+    f_date_to = request.GET.get("date_to", "").strip()
+
+    if f_house:
+        schedules = schedules.filter(house_ref__pk=f_house)
+    if f_vaccine:
+        schedules = schedules.filter(vaccine_name__icontains=f_vaccine)
+    if f_status:
+        schedules = schedules.filter(status=f_status)
+    if f_date_from:
+        schedules = schedules.filter(scheduled_for__date__gte=f_date_from)
+    if f_date_to:
+        schedules = schedules.filter(scheduled_for__date__lte=f_date_to)
+
+    return render(request, 'vaccine_report.html', {
+        "schedules": schedules,
+        "houses": houses,
+        "vac_status_choices": VaccinationSchedule.Status.choices,
+        "f_house": f_house,
+        "f_vaccine": f_vaccine,
+        "f_status": f_status,
+        "f_date_from": f_date_from,
+        "f_date_to": f_date_to,
+    })
 
 
 def _role_code(user) -> str:

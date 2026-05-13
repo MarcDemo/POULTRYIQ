@@ -252,6 +252,11 @@ def birds(request):
     if search:
         batches = batches.filter(batch_code__icontains=search)
 
+    # also filter by breed if a breed filter is present
+    breed_filter = request.GET.get("breed", "").strip()
+    if breed_filter:
+        batches = batches.filter(breed__icontains=breed_filter)
+
     batches = batches.order_by("-created_at")
 
     houses = PoultryHouse.objects.filter(is_active=True)
@@ -328,11 +333,14 @@ def birds(request):
     context = {
         "batch_data": batch_data,
         "houses": PoultryHouse.objects.filter(is_active=True),
+        "breeds": PoultryBatch.objects.exclude(breed="").values_list("breed", flat=True).distinct().order_by("breed"),
         "selected_status": status,
         "selected_house": house,
         "search_query": search,
+        "selected_breed": breed_filter,
     }
     return render(request, 'birds.html', context)
+
 
 def _get_worker_active_batches(user):
     return PoultryBatch.objects.filter(
@@ -902,10 +910,84 @@ def login(request):
     return render(request, 'login.html')
 
 def eggrec(request):
-    return render(request, 'eggrec.html')
+    records = egg_collection.objects.select_related(
+        "batch__house", "collected_by", "reviewed_by"
+    ).filter(sickness_report__isnull=True)
+
+    # filters
+    f_date = request.GET.get("date", "").strip()
+    f_house = request.GET.get("house", "").strip()
+    f_status = request.GET.get("status", "").strip()
+    f_breed = request.GET.get("breed", "").strip()
+
+    if f_date:
+        try:
+            records = records.filter(collection_date=date.fromisoformat(f_date))
+        except ValueError:
+            pass
+    if f_house:
+        records = records.filter(batch__house__pk=f_house)
+    if f_status:
+        records = records.filter(status=f_status)
+    if f_breed:
+        records = records.filter(batch__breed__icontains=f_breed)
+
+    records = records.order_by("-collection_date", "-collection_id")
+    houses = PoultryHouse.objects.filter(is_active=True).order_by("house_code")
+    breeds = (
+        PoultryBatch.objects.exclude(breed="")
+        .values_list("breed", flat=True)
+        .distinct()
+        .order_by("breed")
+    )
+
+    return render(request, 'eggrec.html', {
+        "records": records,
+        "houses": houses,
+        "breeds": breeds,
+        "f_date": f_date,
+        "f_house": f_house,
+        "f_status": f_status,
+        "f_breed": f_breed,
+        "approval_statuses": ApprovalStatus.choices,
+    })
 
 def feedrec(request):
-    return render(request, 'feed_rec.html')
+    records = FeedRecord.objects.select_related(
+        "batch__house", "recorded_by", "reviewed_by"
+    ).filter(sickness_report__isnull=True)
+
+    # filters
+    f_date = request.GET.get("date", "").strip()
+    f_house = request.GET.get("house", "").strip()
+    f_feed_type = request.GET.get("feed_type", "").strip()
+    f_status = request.GET.get("status", "").strip()
+
+    if f_date:
+        try:
+            records = records.filter(record_date=date.fromisoformat(f_date))
+        except ValueError:
+            pass
+    if f_house:
+        records = records.filter(batch__house__pk=f_house)
+    if f_feed_type:
+        records = records.filter(feed_type=f_feed_type)
+    if f_status:
+        records = records.filter(status=f_status)
+
+    records = records.order_by("-record_date", "-feed_id")
+    houses = PoultryHouse.objects.filter(is_active=True).order_by("house_code")
+
+    return render(request, 'feed_rec.html', {
+        "records": records,
+        "houses": houses,
+        "feed_types": FeedRecord.FeedType.choices,
+        "f_date": f_date,
+        "f_house": f_house,
+        "f_feed_type": f_feed_type,
+        "f_status": f_status,
+        "approval_statuses": ApprovalStatus.choices,
+    })
 
 
 def investor(request):
