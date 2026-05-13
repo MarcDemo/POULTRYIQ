@@ -2,138 +2,126 @@
 {% load static %}
 
 {% block content %}
-
 <div class="container-fluid">
 
-<h3 class="mb-4">Feed Records</h3>
+    <div class="page-header-row mb-4">
+        <h2><i class="bi bi-bag-fill me-2"></i>Feed Records</h2>
+    </div>
 
-<!-- FILTERS -->
-<div class="card mb-4">
-<div class="card-body">
+    <!-- FILTERS -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <form method="GET" data-auto-filter="true" class="row g-2 align-items-end">
 
-<form class="row g-3">
+                <div class="col-md-2">
+                    <label class="form-label fw-semibold small">Date</label>
+                    <input type="date" name="date" value="{{ f_date }}" class="form-control">
+                </div>
 
-<div class="col-md-3">
-<label>Date</label>
-<input type="date" class="form-control" name="date">
-</div>
+                <div class="col-md-3">
+                    <label class="form-label fw-semibold small">House</label>
+                    <select name="house" class="form-select">
+                        <option value="">All Houses</option>
+                        {% for h in houses %}
+                            <option value="{{ h.pk }}" {% if f_house == h.pk|stringformat:"s" %}selected{% endif %}>
+                                {{ h.house_code }}{% if h.name %} – {{ h.name }}{% endif %}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
 
-<div class="col-md-3">
-<label>House</label>
-<select class="form-control" name="house">
-<option value="">All Houses</option>
-<option>House A</option>
-<option>House B</option>
-</select>
-</div>
+                <div class="col-md-2">
+                    <label class="form-label fw-semibold small">Feed Type</label>
+                    <select name="feed_type" class="form-select">
+                        <option value="">All Types</option>
+                        {% for val, label in feed_types %}
+                            <option value="{{ val }}" {% if f_feed_type == val %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
 
-<div class="col-md-3">
-<label>Hour</label>
-<select class="form-control" name="hour">
-<option value="">All</option>
-<option>Morning</option>
-<option>Midday</option>
-<option>Evening</option>
-</select>
-</div>
+                <div class="col-md-2">
+                    <label class="form-label fw-semibold small">Status</label>
+                    <select name="status" class="form-select">
+                        <option value="">All Statuses</option>
+                        {% for val, label in approval_statuses %}
+                            <option value="{{ val }}" {% if f_status == val %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
 
-<div class="col-md-3 d-flex align-items-end">
-<button class="btn btn-primary w-100">Filter</button>
-</div>
+                <div class="col-md-3">
+                    <button type="submit" class="btn btn-outline-secondary w-100">
+                        <i class="bi bi-funnel me-1"></i>Filter
+                    </button>
+                </div>
 
-</form>
+            </form>
+        </div>
+    </div>
 
-</div>
-</div>
-
-<!-- TABLE -->
-<div class="card">
-<div class="card-body">
-
-<table class="table table-bordered table-hover">
-
-<thead class="table-light">
-<tr>
-<th>Date</th>
-<th>House</th>
-<th>Feeding Time</th>
-<th>Feeding Amount</th>
-<th>Feed Type</th>
-<th>Fed By</th>
-<th>Action</th>
-</tr>
-</thead>
-
-<tbody>
-
-
-<tr>
-<td>27th march 2026</td>
-<td>House A</td>
-<td>11:30am</td>
-<td>20kgs </td>
-<td>layer mash</td>
-<td>shanitah</td>
-
-<td>
-<button 
-class="btn btn-sm btn-warning edit-btn">
-Edit
-</button>
-</td>
-
-</tr>
-
-
-</tbody>
-
-</table>
-
-</div>
-</div>
-
-</div>
-
-
-<!-- EDIT MODAL -->
-
-<div class="modal fade" id="editModal">
-<div class="modal-dialog">
-<div class="modal-content">
-
-<div class="modal-header">
-<h5 class="modal-title">Edit Feed Record</h5>
-</div>
-
-<div class="modal-body">
-
-<form method="POST">
-{% csrf_token %}
-
-<input type="hidden" name="record_id" id="record_id">
-
-<div class="mb-3">
-<label>Feeding Amount</label>
-<input type="number" class="form-control" name="feeding_amount" id="edit_feeding_amount">
-</div>
-
-<div class="mb-3">
-<label>Reason for Edit</label>
-<textarea class="form-control" name="reason" required></textarea>
-</div>
-
-<button class="btn btn-danger w-100">
-Save Changes
-</button>
-
-</form>
+    <!-- TABLE -->
+    <div class="card">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Date</th>
+                            <th>House</th>
+                            <th>Breed</th>
+                            <th>Feed Type</th>
+                            <th>Amount (kg)</th>
+                            <th>Time Given</th>
+                            <th>Recorded By</th>
+                            <th>Status</th>
+                            <th>Approved By</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for r in records %}
+                        <tr>
+                            <td>{{ r.record_date|date:"d M Y" }}</td>
+                            <td>
+                                <span class="badge bg-info text-dark">
+                                    {{ r.batch.house.house_code }}
+                                </span>
+                            </td>
+                            <td>{{ r.batch.breed|default:"—" }}</td>
+                            <td>{{ r.get_feed_type_display }}</td>
+                            <td><strong>{{ r.quantity_kg }} kg</strong></td>
+                            <td>
+                                {% if r.time_given %}
+                                    {{ r.time_given|time:"H:i" }}
+                                {% else %}
+                                    <span class="text-muted">—</span>
+                                {% endif %}
+                            </td>
+                            <td>{% if r.recorded_by %}{{ r.recorded_by.get_full_name|default:r.recorded_by.username }}{% else %}—{% endif %}</td>
+                            <td>
+                                {% if r.status == "APPROVED" %}
+                                    <span class="badge bg-success">Approved</span>
+                                {% elif r.status == "REJECTED" %}
+                                    <span class="badge bg-danger">Rejected</span>
+                                {% else %}
+                                    <span class="badge bg-warning text-dark">Pending</span>
+                                {% endif %}
+                            </td>
+                            <td>{% if r.reviewed_by %}{{ r.reviewed_by.get_full_name|default:r.reviewed_by.username }}{% else %}—{% endif %}</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="9" class="text-center text-muted py-5">
+                                <i class="bi bi-bag fs-3 d-block mb-2"></i>
+                                No feed records found.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
 
 </div>
-
-</div>
-</div>
-</div>
-
-<script src="{% static 'js/feedrec.js' %}"></script>
-
 {% endblock %}

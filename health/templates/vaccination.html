@@ -113,6 +113,52 @@
 
 <!-- TABLE -->
 <div class="col-lg-8">
+
+<!-- Filter bar -->
+<div class="card mb-3">
+<div class="card-body py-2">
+<form method="GET" data-auto-filter="true" class="row g-2 align-items-end">
+    <div class="col-md-3">
+        <label class="form-label fw-semibold small mb-1">Vaccine Name</label>
+        <input type="text" name="vaccine" value="{{ f_vaccine }}" class="form-control form-control-sm" placeholder="Search vaccine...">
+    </div>
+    <div class="col-md-2">
+        <label class="form-label fw-semibold small mb-1">House</label>
+        <select name="house" class="form-select form-select-sm">
+            <option value="">All Houses</option>
+            {% for h in houses %}
+                <option value="{{ h.pk }}" {% if f_house == h.pk|stringformat:"s" %}selected{% endif %}>
+                    {{ h.house_code }}
+                </option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="col-md-2">
+        <label class="form-label fw-semibold small mb-1">Status</label>
+        <select name="vac_status" class="form-select form-select-sm">
+            <option value="">All Statuses</option>
+            {% for val, label in vac_status_choices %}
+                <option value="{{ val }}" {% if f_vac_status == val %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="col-md-2">
+        <label class="form-label fw-semibold small mb-1">From Date</label>
+        <input type="date" name="date_from" value="{{ f_date_from }}" class="form-control form-control-sm">
+    </div>
+    <div class="col-md-2">
+        <label class="form-label fw-semibold small mb-1">To Date</label>
+        <input type="date" name="date_to" value="{{ f_date_to }}" class="form-control form-control-sm">
+    </div>
+    <div class="col-md-1">
+        <button type="submit" class="btn btn-outline-secondary btn-sm w-100 mt-3">
+            <i class="bi bi-funnel"></i> Filter
+        </button>
+    </div>
+</form>
+</div>
+</div>
+
 <div class="card">
 <div class="card-header">
     <i class="bi bi-table me-2"></i>Vaccination Records

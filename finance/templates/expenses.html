@@ -7,6 +7,56 @@
         <span class="fs-5 fw-bold text-danger">Total: {{ total_amount|floatformat:0 }} UGX</span>
     </div>
 
+    <!-- FILTERS -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <form method="GET" data-auto-filter="true" class="row g-2 align-items-end">
+                <div class="col-md-2">
+                    <label class="form-label fw-semibold small">From Date</label>
+                    <input type="date" name="date_from" value="{{ f_date_from }}" class="form-control">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label fw-semibold small">To Date</label>
+                    <input type="date" name="date_to" value="{{ f_date_to }}" class="form-control">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label fw-semibold small">Category</label>
+                    <select name="category" class="form-select">
+                        <option value="">All Categories</option>
+                        {% for cat in categories %}
+                            <option value="{{ cat.pk }}" {% if f_category == cat.pk|stringformat:"s" %}selected{% endif %}>
+                                {{ cat.name }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label fw-semibold small">Status</label>
+                    <select name="status" class="form-select">
+                        <option value="">All Statuses</option>
+                        {% for val, label in status_choices %}
+                            <option value="{{ val }}" {% if f_status == val %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label fw-semibold small">Payment Method</label>
+                    <select name="payment_method" class="form-select">
+                        <option value="">All Methods</option>
+                        {% for val, label in payment_method_choices %}
+                            <option value="{{ val }}" {% if f_payment_method == val %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-1">
+                    <button type="submit" class="btn btn-outline-secondary w-100">
+                        <i class="bi bi-funnel"></i>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <div class="card">
         <div class="card-body">
             <div class="table-responsive">
@@ -56,4 +106,5 @@
 </div>
 
 {% endblock %}
+
 

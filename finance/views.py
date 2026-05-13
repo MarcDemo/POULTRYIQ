@@ -100,16 +100,51 @@ def expense_form(request):
 
 
 def expenses(request):
-    all_expenses = (
+    qs = (
         ExpenseTransaction.objects
         .select_related("category", "created_by", "approved_by")
         .order_by("-expense_date", "-expense_id")
     )
-    total_amount = all_expenses.aggregate(total=Sum("total_amount"))["total"] or Decimal("0")
+
+    f_date_from = request.GET.get("date_from", "").strip()
+    f_date_to = request.GET.get("date_to", "").strip()
+    f_category = request.GET.get("category", "").strip()
+    f_status = request.GET.get("status", "").strip()
+    f_payment_method = request.GET.get("payment_method", "").strip()
+
+    if f_date_from:
+        try:
+            from datetime import date as _date
+            qs = qs.filter(expense_date__gte=_date.fromisoformat(f_date_from))
+        except ValueError:
+            pass
+    if f_date_to:
+        try:
+            from datetime import date as _date
+            qs = qs.filter(expense_date__lte=_date.fromisoformat(f_date_to))
+        except ValueError:
+            pass
+    if f_category:
+        qs = qs.filter(category__pk=f_category)
+    if f_status:
+        qs = qs.filter(status=f_status)
+    if f_payment_method:
+        qs = qs.filter(payment_method=f_payment_method)
+
+    total_amount = qs.aggregate(total=Sum("total_amount"))["total"] or Decimal("0")
+    categories = ExpenseCategory.objects.filter(is_active=True).order_by("name")
 
     context = {
-        "expenses": all_expenses,
+        "expenses": qs,
         "total_amount": total_amount,
+        "categories": categories,
+        "payment_method_choices": ExpenseTransaction.PAYMENT_METHOD_CHOICES,
+        "status_choices": ExpenseTransaction.Status.choices,
+        "f_date_from": f_date_from,
+        "f_date_to": f_date_to,
+        "f_category": f_category,
+        "f_status": f_status,
+        "f_payment_method": f_payment_method,
     }
     return render(request, "expenses.html", context)
 

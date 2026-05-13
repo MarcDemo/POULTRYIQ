@@ -32,21 +32,10 @@
         box-shadow: 0 4px 12px rgba(31, 60, 136, 0.18);
     }
 
-    .cycle-blue {
-        background: #0d6efd;
-    }
-
-    .cycle-green {
-        background: #198754;
-    }
-
-    .cycle-orange {
-        background: #fd7e14;
-    }
-
-    .cycle-red {
-        background: #dc3545;
-    }
+    .cycle-blue { background: #0d6efd; }
+    .cycle-green { background: #198754; }
+    .cycle-orange { background: #fd7e14; }
+    .cycle-red { background: #dc3545; }
 
     .cycle-badge {
         display: inline-block;
@@ -57,20 +46,9 @@
         padding: 6px 10px;
     }
 
-    .assignment-list {
-        min-width: 150px;
-    }
-
-    .assignment-list .badge {
-        margin: 0 4px 4px 0;
-        text-transform: none;
-        letter-spacing: 0;
-    }
-
-    .birds-table th,
-    .birds-table td {
-        vertical-align: middle;
-    }
+    .assignment-list { min-width: 150px; }
+    .assignment-list .badge { margin: 0 4px 4px 0; text-transform: none; letter-spacing: 0; }
+    .birds-table th, .birds-table td { vertical-align: middle; }
 </style>
 
 <div class="container-fluid">
@@ -84,12 +62,22 @@
         </a>
     </div>
 
-    <form method="GET" class="row g-2 mb-3">
+    <!-- FILTERS -->
+    <form method="GET" data-auto-filter="true" class="row g-2 mb-3">
         <div class="col-md-3">
-            <input type="text" name="search" value="{{ search_query }}" class="form-control" placeholder="Search batch code...">
+            <input type="text" name="search" value="{{ search_query }}" class="form-control" placeholder="Search batch or breed...">
         </div>
 
         <div class="col-md-3">
+            <select name="breed" class="form-select">
+                <option value="">All Breeds</option>
+                {% for b in breeds %}
+                    <option value="{{ b }}" {% if selected_breed == b %}selected{% endif %}>{{ b }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="col-md-2">
             <select name="status" class="form-select">
                 <option value="">All Status</option>
                 <option value="ACTIVE" {% if selected_status == "ACTIVE" %}selected{% endif %}>Active</option>
@@ -97,7 +85,7 @@
             </select>
         </div>
 
-        <div class="col-md-3">
+        <div class="col-md-2">
             <select name="house" class="form-select">
                 <option value="">All Houses</option>
                 {% for h in houses %}
@@ -108,8 +96,10 @@
             </select>
         </div>
 
-        <div class="col-md-3">
-            <button class="btn btn-dark w-100">Filter</button>
+        <div class="col-md-2">
+            <button class="btn btn-outline-secondary w-100">
+                <i class="bi bi-funnel me-1"></i>Filter
+            </button>
         </div>
     </form>
 
