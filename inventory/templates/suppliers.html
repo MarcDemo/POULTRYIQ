@@ -83,13 +83,19 @@
 
 <tbody>
 
+{% for supplier in suppliers %}
 <tr>
-<td>Biyinzika</td>
-<td>0700123456</td>
-<td>Kampala</td>
-<td>Chicken Feed</td>
-
+<td>{{ supplier.name }}</td>
+<td>{{ supplier.phone|default:"-" }}</td>
+<td>{{ supplier.location|default:"-" }}</td>
+<td>{{ supplier.product|default:"-" }}</td>
+<td><span class="badge bg-success">Active</span></td>
 </tr>
+{% empty %}
+<tr>
+<td colspan="5" class="text-center text-muted py-3">No suppliers recorded yet.</td>
+</tr>
+{% endfor %}
 
 </tbody>
 

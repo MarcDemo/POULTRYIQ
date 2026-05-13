@@ -6,6 +6,21 @@ from django.core.validators import MinValueValidator
 # Create your models here.
 
 
+class Supplier(models.Model):
+    name = models.CharField(max_length=150, unique=True)
+    phone = models.CharField(max_length=30, blank=True)
+    location = models.CharField(max_length=150, blank=True)
+    product = models.CharField(max_length=150, blank=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self) -> str:
+        return self.name
+
+
 
 class Store(models.Model):
     """

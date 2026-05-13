@@ -4,117 +4,489 @@
 <div class="container-fluid">
 
     <div class="page-header-row mb-4">
-        <h2>
-            <i class="bi bi-speedometer2 me-2"></i>Dashboard Overview
-        </h2>
-        <small class="text-muted">Last updated: Today</small>
+        <div>
+            <h2 class="mb-1">
+                <i class="bi bi-speedometer2 me-2"></i>Manager Dashboard
+            </h2>
+            <small class="text-muted">{{ today|date:"l, F j, Y" }}</small>
+        </div>
+        <a href="{% url 'orderview' %}" class="btn btn-primary">
+            <i class="bi bi-box-seam me-2"></i>View Available Orders
+        </a>
     </div>
 
-    <!-- Summary Cards -->
-    <div class="row g-4">
-
+    <div class="row g-3 mb-4">
         <div class="col-md-3">
-            <div class="card dashboard-card">
+            <div class="alert alert-info h-100 mb-0">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div>
+                        <strong>Active Alerts</strong>
+                        <div class="fs-4 fw-bold">{{ active_alerts_count|default:"0" }}</div>
+                    </div>
+                    <i class="bi bi-bell-fill fs-2"></i>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="alert alert-danger h-100 mb-0">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div>
+                        <strong>Overdue Alerts</strong>
+                        <div class="fs-4 fw-bold">{{ overdue_alerts_count|default:"0" }}</div>
+                    </div>
+                    <i class="bi bi-exclamation-triangle-fill fs-2"></i>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="alert alert-warning h-100 mb-0">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div>
+                        <strong>Treatment Due</strong>
+                        <div class="fs-4 fw-bold">{{ due_treatment_items_count|default:"0" }}</div>
+                    </div>
+                    <i class="bi bi-capsule-pill fs-2"></i>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="alert alert-success h-100 mb-0">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div>
+                        <strong>Vaccines Due</strong>
+                        <div class="fs-4 fw-bold">{{ due_vaccinations_count|default:"0" }}</div>
+                    </div>
+                    <i class="bi bi-shield-plus fs-2"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% if pending_approvals > 0 %}
+    <div class="alert alert-warning border-0 rounded-3 d-flex align-items-center gap-3 mb-4">
+        <i class="bi bi-clipboard-check fs-3"></i>
+        <div>
+            <div class="fw-bold">{{ pending_approvals }} worker submission{{ pending_approvals|pluralize }} awaiting review</div>
+            <small class="text-muted">Includes egg, feed, cleaning, and mortality records from supervisors' workflow.</small>
+        </div>
+        <a href="{% url 'supapproval' %}" class="btn btn-warning btn-sm ms-auto fw-semibold">
+            Review
+        </a>
+    </div>
+    {% endif %}
+
+    <div class="row g-4 mb-4">
+        <div class="col-lg-4">
+            <div class="card h-100">
+                <div class="card-header d-flex align-items-center justify-content-between">
+                    <span><i class="bi bi-capsule-pill me-2"></i>Treatment Plan Alerts</span>
+                    <a href="{% url 'treatment' %}" class="btn btn-sm btn-light">Open</a>
+                </div>
+                <div class="card-body p-0">
+                    <div class="list-group list-group-flush">
+                        {% for item in upcoming_treatment_items %}
+                        <div class="list-group-item">
+                            <div class="d-flex justify-content-between gap-2">
+                                <div>
+                                    <div class="fw-semibold">{{ item.medicine_name }}</div>
+                                    <small class="text-muted">{{ item.sickness_report.case_label }} - {{ item.sickness_report.house_label }}</small>
+                                </div>
+                                {% if item.alert and item.alert.status != "RESOLVED" %}
+                                <span class="badge bg-danger align-self-start">Alert</span>
+                                {% endif %}
+                            </div>
+                            <small class="text-muted d-block mt-1">Scheduled: {{ item.scheduled_for|date:"M d, H:i"|default:"Not set" }}</small>
+                        </div>
+                        {% empty %}
+                        <div class="list-group-item text-muted text-center py-4">No pending treatment plan alerts.</div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="card h-100">
+                <div class="card-header d-flex align-items-center justify-content-between">
+                    <span><i class="bi bi-shield-plus me-2"></i>Vaccination Schedule Alerts</span>
+                    <a href="{% url 'vaccination' %}" class="btn btn-sm btn-light">Open</a>
+                </div>
+                <div class="card-body p-0">
+                    <div class="list-group list-group-flush">
+                        {% for schedule in upcoming_vaccinations %}
+                        <div class="list-group-item">
+                            <div class="d-flex justify-content-between gap-2">
+                                <div>
+                                    <div class="fw-semibold">{{ schedule.vaccine_name }}</div>
+                                    <small class="text-muted">{{ schedule.house_ref.name|default:schedule.house_ref.house_code|default:"No house" }}</small>
+                                </div>
+                                {% if schedule.alert and schedule.alert.status != "RESOLVED" %}
+                                <span class="badge bg-warning text-dark align-self-start">Alert</span>
+                                {% endif %}
+                            </div>
+                            <small class="text-muted d-block mt-1">Scheduled: {{ schedule.scheduled_for|date:"M d, H:i" }}</small>
+                        </div>
+                        {% empty %}
+                        <div class="list-group-item text-muted text-center py-4">No scheduled vaccination alerts.</div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="card h-100">
+                <div class="card-header d-flex align-items-center justify-content-between">
+                    <span><i class="bi bi-bell me-2"></i>Supervisor Alerts</span>
+                    <a href="{% url 'alerts:inbox' %}" class="btn btn-sm btn-light">Inbox</a>
+                </div>
+                <div class="card-body p-0">
+                    <div class="list-group list-group-flush">
+                        {% for alert in recent_supervisor_alerts %}
+                        <div class="list-group-item">
+                            <div class="d-flex justify-content-between gap-2">
+                                <div>
+                                    <div class="fw-semibold">{{ alert.title }}</div>
+                                    <small class="text-muted">{{ alert.alert_type.name }} for {{ alert.receiver.get_full_name|default:alert.receiver.username }}</small>
+                                </div>
+                                <span class="badge {% if alert.priority == 'URGENT' %}bg-danger{% elif alert.priority == 'HIGH' %}bg-warning text-dark{% else %}bg-info text-dark{% endif %} align-self-start">
+                                    {{ alert.get_priority_display }}
+                                </span>
+                            </div>
+                            <small class="text-muted d-block mt-1">
+                                {% if alert.due_date %}Due: {{ alert.due_date|date:"M d, H:i" }}{% else %}Created: {{ alert.created_at|date:"M d, H:i" }}{% endif %}
+                            </small>
+                        </div>
+                        {% empty %}
+                        <div class="list-group-item text-muted text-center py-4">No active supervisor alerts.</div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4 mb-4">
+
+        <div class="col-sm-6 col-xl-3">
+            <div class="card dashboard-card h-100">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-start">
                         <div>
                             <h6>Total Birds</h6>
-                            <h3>5,200</h3>
+                            <h3>{{ total_birds|default:"0" }}</h3>
                         </div>
-                        <div class="text-primary" style="font-size: 28px;">
-                            <i class="bi bi-egg"></i>
+                        <div class="text-primary fs-3">
+                            <i class="bi bi-feather"></i>
                         </div>
                     </div>
-                    <small class="text-muted">+2.5% from last week</small>
+                    <small class="text-muted">Live birds in active batches</small>
                 </div>
             </div>
         </div>
 
-        <div class="col-md-3">
-            <div class="card dashboard-card">
+        <div class="col-sm-6 col-xl-3">
+            <div class="card dashboard-card h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <h6>Active Batches</h6>
+                            <h3>{{ active_batches_count|default:"0" }}</h3>
+                        </div>
+                        <div class="text-info fs-3">
+                            <i class="bi bi-collection"></i>
+                        </div>
+                    </div>
+                    <small class="text-muted">Current production groups</small>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-sm-6 col-xl-3">
+            <div class="card dashboard-card h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <h6>Active Houses</h6>
+                            <h3>{{ active_houses_count|default:"0" }}</h3>
+                        </div>
+                        <div class="text-success fs-3">
+                            <i class="bi bi-house-door"></i>
+                        </div>
+                    </div>
+                    <small class="text-muted">Operational poultry houses</small>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-sm-6 col-xl-3">
+            <div class="card dashboard-card h-100">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-start">
                         <div>
                             <h6>Eggs Today</h6>
-                            <h3>1,750</h3>
+                            <h3>{{ eggs_today|default:"0" }}</h3>
                         </div>
-                        <div class="text-success" style="font-size: 28px;">
+                        <div class="text-warning fs-3">
                             <i class="bi bi-basket"></i>
                         </div>
                     </div>
-                    <small class="text-muted">+5.2% from yesterday</small>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-md-3">
-            <div class="card dashboard-card">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-start">
-                        <div>
-                            <h6>Feed in Stock</h6>
-                            <h3>3,200 kg</h3>
-                        </div>
-                        <div class="text-info" style="font-size: 28px;">
-                            <i class="bi bi-bag-fill"></i>
-                        </div>
-                    </div>
-                    <small class="text-muted">-12% from last month</small>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-md-3">
-            <div class="card dashboard-card">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-start">
-                        <div>
-                            <h6>Mortality (Today)</h6>
-                            <h3>12</h3>
-                        </div>
-                        <div class="text-danger" style="font-size: 28px;">
-                            <i class="bi bi-exclamation-triangle"></i>
-                        </div>
-                    </div>
-                    <small class="text-muted">2.3 per 1000</small>
+                    <small class="text-muted">Approved collections today</small>
                 </div>
             </div>
         </div>
 
     </div>
 
-    <!-- Charts -->
-    <div class="row mt-5 g-4">
+    <div class="row g-4 mb-4">
 
-        <div class="col-md-6">
-            <div class="card">
-                <div class="card-header">
-                    <i class="bi bi-graph-up me-2"></i>Egg Production (Last 7 Days)
-                </div>
+        <div class="col-sm-6 col-xl-3">
+            <div class="card dashboard-card h-100">
                 <div class="card-body">
-                    <canvas id="eggChart"></canvas>
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <h6>Egg Stock</h6>
+                            <h3>{{ eggs_in_stock_display|default:"0 trays" }}</h3>
+                        </div>
+                        <div class="text-success fs-3">
+                            <i class="bi bi-egg"></i>
+                        </div>
+                    </div>
+                    <small class="text-muted">Available for sale</small>
                 </div>
             </div>
         </div>
 
-        <div class="col-md-6">
-            <div class="card">
-                <div class="card-header">
-                    <i class="bi bi-speedometer me-2"></i>Average Egg Weight (Last 7 Weighs)
-                </div>
+        <div class="col-sm-6 col-xl-3">
+            <div class="card dashboard-card h-100">
                 <div class="card-body">
-                    <canvas id="weightChart"></canvas>
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <h6>Feed Used Today</h6>
+                            <h3>{{ feed_used_today|floatformat:0 }} kg</h3>
+                        </div>
+                        <div class="text-info fs-3">
+                            <i class="bi bi-bag-check"></i>
+                        </div>
+                    </div>
+                    <small class="text-muted">Approved feed records</small>
                 </div>
             </div>
         </div>
 
-        <div class="col-md-6">
-            <div class="card">
-                <div class="card-header">
-                    <i class="bi bi-bag-fill me-2"></i>Feed Consumption
-                </div>
+        <div class="col-sm-6 col-xl-3">
+            <div class="card dashboard-card h-100">
                 <div class="card-body">
-                    <canvas id="feedChart"></canvas>
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <h6>Feed Stock</h6>
+                            <h3>{{ feed_stock|floatformat:0 }} kg</h3>
+                        </div>
+                        <div class="text-primary fs-3">
+                            <i class="bi bi-box-seam"></i>
+                        </div>
+                    </div>
+                    <small class="text-muted">Inventory feed balance</small>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-sm-6 col-xl-3">
+            <div class="card dashboard-card h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <h6>Low Stock Items</h6>
+                            <h3>{{ low_stock_items|default:"0" }}</h3>
+                        </div>
+                        <div class="text-danger fs-3">
+                            <i class="bi bi-exclamation-circle"></i>
+                        </div>
+                    </div>
+                    <small class="text-muted">Items with reorder rules</small>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <div class="row g-4 mb-4">
+
+        <div class="col-sm-6 col-xl-3">
+            <div class="card dashboard-card h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <h6>Deaths Today</h6>
+                            <h3>{{ deaths_today|default:"0" }}</h3>
+                        </div>
+                        <div class="text-danger fs-3">
+                            <i class="bi bi-heartbreak"></i>
+                        </div>
+                    </div>
+                    <small class="text-muted">Approved mortality records</small>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-sm-6 col-xl-3">
+            <div class="card dashboard-card h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <h6>Sickbay Cases</h6>
+                            <h3>{{ sickbay_cases|default:"0" }}</h3>
+                        </div>
+                        <div class="text-danger fs-3">
+                            <i class="bi bi-heart-pulse"></i>
+                        </div>
+                    </div>
+                    <small class="text-muted">Current isolation cases</small>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-sm-6 col-xl-3">
+            <div class="card dashboard-card h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <h6>Pending Doses</h6>
+                            <h3>{{ pending_treatment_doses|default:"0" }}</h3>
+                        </div>
+                        <div class="text-info fs-3">
+                            <i class="bi bi-capsule-pill"></i>
+                        </div>
+                    </div>
+                    <small class="text-muted">Treatment items not yet given</small>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-sm-6 col-xl-3">
+            <div class="card dashboard-card h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <h6>Pending Vaccinations</h6>
+                            <h3>{{ pending_vaccinations|default:"0" }}</h3>
+                        </div>
+                        <div class="text-success fs-3">
+                            <i class="bi bi-shield-plus"></i>
+                        </div>
+                    </div>
+                    <small class="text-muted">Scheduled vaccinations</small>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <div class="row g-4">
+
+        <div class="col-sm-6 col-xl-3">
+            <div class="card dashboard-card h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <h6>Cleaned Today</h6>
+                            <h3>{{ houses_cleaned_today|default:"0" }}</h3>
+                        </div>
+                        <div class="text-success fs-3">
+                            <i class="bi bi-broom"></i>
+                        </div>
+                    </div>
+                    <small class="text-muted">Approved cleaning records</small>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-sm-6 col-xl-3">
+            <div class="card dashboard-card h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <h6>Pending Approvals</h6>
+                            <h3>{{ pending_approvals|default:"0" }}</h3>
+                        </div>
+                        <div class="text-warning fs-3">
+                            <i class="bi bi-clipboard-check"></i>
+                        </div>
+                    </div>
+                    <small class="text-muted">Worker submissions to review</small>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-sm-6 col-xl-3">
+            <div class="card dashboard-card h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <h6>Pending Orders</h6>
+                            <h3>{{ pending_orders|default:"0" }}</h3>
+                        </div>
+                        <div class="text-primary fs-3">
+                            <i class="bi bi-truck"></i>
+                        </div>
+                    </div>
+                    <small class="text-muted">Orders awaiting delivery</small>
+                    <div class="mt-3">
+                        <a href="{% url 'orderview' %}" class="btn btn-sm btn-light">
+                            <i class="bi bi-eye me-1"></i>Open Orders
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-sm-6 col-xl-3">
+            <div class="card dashboard-card h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <h6>Customer Balance</h6>
+                            <h3>{{ outstanding_balance|floatformat:0 }} UGX</h3>
+                        </div>
+                        <div class="text-danger fs-3">
+                            <i class="bi bi-wallet2"></i>
+                        </div>
+                    </div>
+                    <small class="text-muted">Outstanding receivables</small>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-sm-6 col-xl-3">
+            <div class="card dashboard-card h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <h6>Expenses Today</h6>
+                            <h3>{{ today_expenses|floatformat:0 }} UGX</h3>
+                        </div>
+                        <div class="text-danger fs-3">
+                            <i class="bi bi-cash-coin"></i>
+                        </div>
+                    </div>
+                    <small class="text-muted">Recorded farm spending</small>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-sm-6 col-xl-3">
+            <div class="card dashboard-card h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <h6>Pending Salaries</h6>
+                            <h3>{{ pending_salaries|default:"0" }}</h3>
+                        </div>
+                        <div class="text-info fs-3">
+                            <i class="bi bi-people"></i>
+                        </div>
+                    </div>
+                    <small class="text-muted">Salary payments awaiting completion</small>
                 </div>
             </div>
         </div>
