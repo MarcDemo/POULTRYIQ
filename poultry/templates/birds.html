@@ -2,34 +2,78 @@
 {% block content %}
 
 <style>
-    .cycle-bar {
-        display: grid;
-        grid-template-columns: repeat(4, minmax(92px, 1fr));
-        gap: 6px;
-        min-width: 410px;
+    .table-responsive {
+        max-width: 100%;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
     }
 
-    .cycle-step {
-        border: 1px solid #dfe6ee;
-        border-radius: 8px;
-        padding: 7px 8px;
-        background: #f8f9fa;
-        color: #6c757d;
-        font-size: 12px;
+    .birds-table {
+        width: 100%;
+        min-width: 100%;
+        font-size: 0.92rem;
+    }
+
+    .cycle-progress-wrap {
+        min-width: 220px;
+        max-width: 320px;
+    }
+
+    .cycle-progress-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        margin-bottom: 8px;
+    }
+
+    .cycle-progress-track {
+        height: 10px;
+        background: #e9edf3;
+        border-radius: 999px;
+        overflow: hidden;
+        box-shadow: inset 0 1px 2px rgba(16, 24, 40, 0.12);
+    }
+
+    .cycle-progress-fill {
+        height: 100%;
+        border-radius: 999px;
+        transition: width 0.35s ease;
+    }
+
+    .cycle-progress-percent {
         font-weight: 700;
-        text-align: center;
+        font-size: 12px;
+        color: #495057;
         white-space: nowrap;
     }
 
-    .cycle-step.complete {
+    .cycle-markers {
+        margin-top: 8px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+
+    .cycle-marker {
+        border-radius: 14px;
+        border: 1px solid #d9e2ec;
+        background: #f8f9fa;
+        color: #6c757d;
+        font-size: 11px;
+        font-weight: 700;
+        line-height: 1;
+        padding: 5px 8px;
+    }
+
+    .cycle-marker.complete,
+    .cycle-marker.active {
         color: #fff;
         border-color: transparent;
     }
 
-    .cycle-step.active {
-        color: #fff;
-        border-color: transparent;
-        box-shadow: 0 4px 12px rgba(31, 60, 136, 0.18);
+    .cycle-marker.active {
+        box-shadow: 0 4px 10px rgba(15, 23, 42, 0.18);
     }
 
     .cycle-blue { background: #0d6efd; }
@@ -46,9 +90,24 @@
         padding: 6px 10px;
     }
 
-    .assignment-list { min-width: 150px; }
-    .assignment-list .badge { margin: 0 4px 4px 0; text-transform: none; letter-spacing: 0; }
+    .assignment-list {
+        max-width: 190px;
+    }
+
+    .assignment-list .badge {
+        margin: 0 4px 4px 0;
+        text-transform: none;
+        letter-spacing: 0;
+        white-space: normal;
+    }
+
     .birds-table th, .birds-table td { vertical-align: middle; }
+
+    @media (max-width: 992px) {
+        .cycle-progress-wrap {
+            min-width: 200px;
+        }
+    }
 </style>
 
 <div class="container-fluid">
@@ -65,7 +124,12 @@
     <!-- FILTERS -->
     <form method="GET" data-auto-filter="true" class="row g-2 mb-3">
         <div class="col-md-3">
-            <input type="text" name="search" value="{{ search_query }}" class="form-control" placeholder="Search batch or breed...">
+            <select name="cycle_filter" class="form-select">
+                <option value="">All Cycles</option>
+                <option value="laying" {% if selected_cycle_filter == "laying" %}selected{% endif %}>Laying</option>
+                <option value="off_layers" {% if selected_cycle_filter == "off_layers" %}selected{% endif %}>Off Layers</option>
+                <option value="closed_batch" {% if selected_cycle_filter == "closed_batch" %}selected{% endif %}>Closed Batch</option>
+            </select>
         </div>
 
         <div class="col-md-3">
@@ -145,16 +209,23 @@
                             <td>{{ item.batch.current_age_days }} days</td>
 
                             <td>
-                                <div class="mb-2">
-                                    <span class="cycle-badge {{ item.cycle.color }}">{{ item.cycle.label }}</span>
-                                    <small class="text-muted ms-1">Auto predicted</small>
-                                </div>
-                                <div class="cycle-bar">
-                                    {% for segment in item.cycle.segments %}
-                                    <div class="cycle-step {% if segment.complete %}complete {{ segment.color }}{% endif %} {% if segment.active %}active {{ segment.color }}{% endif %}">
-                                        {{ segment.label }}
+                                <div class="cycle-progress-wrap">
+                                    <div class="cycle-progress-top">
+                                        <span class="cycle-badge {{ item.cycle.color }}">{{ item.cycle.label }}</span>
+                                        <span class="cycle-progress-percent">{{ item.cycle.progress_percent }}%</span>
                                     </div>
-                                    {% endfor %}
+
+                                    <div class="cycle-progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ item.cycle.progress_percent }}" aria-label="Cycle progress for {{ item.batch.batch_code }}">
+                                        <div class="cycle-progress-fill {{ item.cycle.color }}" style="width: {{ item.cycle.progress_percent }}%;"></div>
+                                    </div>
+
+                                    <div class="cycle-markers">
+                                        {% for segment in item.cycle.segments %}
+                                        <span class="cycle-marker {% if segment.complete %}complete {{ segment.color }}{% endif %} {% if segment.active %}active {{ segment.color }}{% endif %}">
+                                            {{ segment.label }}
+                                        </span>
+                                        {% endfor %}
+                                    </div>
                                 </div>
                             </td>
 

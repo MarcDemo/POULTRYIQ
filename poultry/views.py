@@ -31,6 +31,7 @@ from .forms import PoultryBatchForm
 
 def _batch_cycle_stage(batch):
     age_days = batch.current_age_days
+    lifecycle_days = 560
     stages = [
         {"key": "first_lay", "label": "First lay", "color": "cycle-blue"},
         {"key": "peak_laying", "label": "Peak laying", "color": "cycle-green"},
@@ -47,9 +48,16 @@ def _batch_cycle_stage(batch):
     else:
         active_index = 0
 
+    if batch.status == PoultryBatch.Status.CLOSED:
+        progress_percent = 100
+    else:
+        bounded_age = max(0, min(age_days, lifecycle_days))
+        progress_percent = int(round((bounded_age / lifecycle_days) * 100))
+
     return {
         "label": stages[active_index]["label"],
         "color": stages[active_index]["color"],
+        "progress_percent": progress_percent,
         "segments": [
             {
                 **stage,
@@ -241,16 +249,13 @@ def birds(request):
     # 🔍 filters
     status = request.GET.get("status")
     house = request.GET.get("house")
-    search = request.GET.get("search")
+    cycle_filter = request.GET.get("cycle_filter", "").strip()
 
     if status:
         batches = batches.filter(status=status)
 
     if house:
         batches = batches.filter(house__pk=house)
-
-    if search:
-        batches = batches.filter(batch_code__icontains=search)
 
     # also filter by breed if a breed filter is present
     breed_filter = request.GET.get("breed", "").strip()
@@ -264,6 +269,19 @@ def birds(request):
     batch_data = []
 
     for batch in batches:
+        cycle_data = _batch_cycle_stage(batch)
+
+        if cycle_filter == "laying" and not (
+            batch.status == PoultryBatch.Status.ACTIVE and cycle_data["label"] != "Off laying"
+        ):
+            continue
+        if cycle_filter == "off_layers" and not (
+            batch.status == PoultryBatch.Status.ACTIVE and cycle_data["label"] == "Off laying"
+        ):
+            continue
+        if cycle_filter == "closed_batch" and batch.status != PoultryBatch.Status.CLOSED:
+            continue
+
         total_mortality = batch.mortality_records.aggregate(
             total=Sum("number_dead")
         )["total"] or 0
@@ -325,7 +343,7 @@ def birds(request):
             "current_sick_birds": current_sick_birds,
             "total_sick_cases": total_sick_cases,
             "birds_sold": birds_sold,
-            "cycle": _batch_cycle_stage(batch),
+            "cycle": cycle_data,
             "assigned_workers": assigned_workers,
             "assigned_supervisors": assigned_supervisors,
         })
@@ -336,7 +354,7 @@ def birds(request):
         "breeds": PoultryBatch.objects.exclude(breed="").values_list("breed", flat=True).distinct().order_by("breed"),
         "selected_status": status,
         "selected_house": house,
-        "search_query": search,
+        "selected_cycle_filter": cycle_filter,
         "selected_breed": breed_filter,
     }
     return render(request, 'birds.html', context)
