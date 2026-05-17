@@ -29,6 +29,7 @@ class PoultryBatch(models.Model):
 
     breed = models.CharField(max_length=100, blank=True)
     supplier_name = models.CharField(max_length=150, blank=True)
+    amount_paid = models.DecimalField(max_digits=10, decimal_places=2, validators=[MinValueValidator(Decimal("0.00"))], null=True, blank=True)
 
     date_stocked = models.DateField(db_index=True)
     initial_quantity = models.PositiveIntegerField(validators=[MinValueValidator(1)])

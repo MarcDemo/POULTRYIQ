@@ -123,7 +123,7 @@
 
     <!-- FILTERS -->
     <form method="GET" data-auto-filter="true" class="row g-2 mb-3">
-        <div class="col-md-3">
+        <div class="col-md-6 col-lg-4">
             <select name="cycle_filter" class="form-select">
                 <option value="">All Cycles</option>
                 <option value="laying" {% if selected_cycle_filter == "laying" %}selected{% endif %}>Laying</option>
@@ -132,7 +132,7 @@
             </select>
         </div>
 
-        <div class="col-md-3">
+        <div class="col-md-6 col-lg-4">
             <select name="breed" class="form-select">
                 <option value="">All Breeds</option>
                 {% for b in breeds %}
@@ -141,7 +141,7 @@
             </select>
         </div>
 
-        <div class="col-md-2">
+        <div class="col-md-6 col-lg-4">
             <select name="status" class="form-select">
                 <option value="">All Status</option>
                 <option value="ACTIVE" {% if selected_status == "ACTIVE" %}selected{% endif %}>Active</option>
@@ -149,7 +149,7 @@
             </select>
         </div>
 
-        <div class="col-md-2">
+        <div class="col-md-6 col-lg-4">
             <select name="house" class="form-select">
                 <option value="">All Houses</option>
                 {% for h in houses %}
@@ -160,7 +160,7 @@
             </select>
         </div>
 
-        <div class="col-md-2">
+        <div class="col-md-6 col-lg-4">
             <button class="btn btn-outline-secondary w-100">
                 <i class="bi bi-funnel me-1"></i>Filter
             </button>
@@ -179,6 +179,7 @@
                             <th>Age</th>
                             <th>Cycle Status</th>
                             <th>Initial Birds</th>
+                            <th>Amount Paid</th>
                             <th>Birds Alive</th>
                             <th>Predicted First Lay</th>
                             <th>Died</th>
@@ -230,6 +231,14 @@
                             </td>
 
                             <td>{{ item.batch.initial_quantity }}</td>
+
+                            <td>
+                                {% if item.batch.amount_paid %}
+                                {{ item.batch.amount_paid|floatformat:0 }}
+                                {% else %}
+                                <span class="text-muted">0</span>
+                                {% endif %}
+                            </td>
 
                             <td><strong>{{ item.current_birds }}</strong></td>
 
@@ -285,7 +294,7 @@
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="15" class="text-center text-muted py-4">
+                            <td colspan="16" class="text-center text-muted py-4">
                                 No batches found.
                             </td>
                         </tr>
