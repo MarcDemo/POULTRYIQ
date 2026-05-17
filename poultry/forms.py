@@ -19,11 +19,13 @@ class PoultryBatchForm(forms.ModelForm):
             "initial_quantity",
             "initial_age_days",
             "notes",
+            "amount_paid",
         ]
 
         widgets = {
             "date_stocked": forms.DateInput(attrs={"type": "date"}),
             "initial_age_days": forms.NumberInput(attrs={"type": "number"}),
+            "amount_paid": forms.NumberInput(attrs={"type": "number", "step": "0.01"}),
             "expected_lay_start": forms.DateInput(attrs={"type": "date"}),
             "notes": forms.Textarea(attrs={"rows": 3}),
         }
