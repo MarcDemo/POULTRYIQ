@@ -13,7 +13,7 @@ from .models import Role, User, validate_house_assignment
 
 def get_post_login_redirect(user):
     if not user.role:
-        return "dashboard"
+        return "login"
 
     role_code = (user.role.code or "").upper()
     role_name = (user.role.name or "").strip().lower()
@@ -23,17 +23,22 @@ def get_post_login_redirect(user):
     if role_code == "SUPERVISOR":
         return "supdash"
     if role_code == "MANAGER":
-        return "dashboard"
+        return "managerdash"
     if role_code in {"OWNER", "INVESTOR"} or "investor" in role_name:
         return "investor"
 
-    return "dashboard"
+    return "login"
 
 
 def login_view(request):
     """Handle user login."""
     if request.user.is_authenticated:
-        return redirect(get_post_login_redirect(request.user))
+        redirect_target = get_post_login_redirect(request.user)
+        if redirect_target == "login":
+            logout(request)
+            messages.error(request, "Your account has no assigned role. Please contact administrator.")
+            return render(request, "login.html")
+        return redirect(redirect_target)
     
     if request.method == 'POST':
         username = request.POST.get('username', '').strip()
@@ -50,6 +55,10 @@ def login_view(request):
                 if user.is_locked:
                     messages.error(request, 'Your account has been locked. Please contact administrator.')
                     return render(request, 'login.html')
+
+                if not user.role:
+                    messages.error(request, 'Your account has no assigned role. Please contact administrator.')
+                    return render(request, 'login.html')
                 
                 login(request, user)
                 messages.success(request, f'Welcome back, {user.first_name or user.username}!')
@@ -65,7 +74,12 @@ def login_view(request):
 def signup_view(request):
     """Handle user registration."""
     if request.user.is_authenticated:
-        return redirect('dashboard')
+        redirect_target = get_post_login_redirect(request.user)
+        if redirect_target == "login":
+            logout(request)
+            messages.error(request, "Your account has no assigned role. Please contact administrator.")
+            return redirect("login")
+        return redirect(redirect_target)
     
     roles = Role.objects.filter(is_active=True).order_by("name")
     houses = PoultryHouse.objects.filter(is_active=True).order_by("house_code", "name")

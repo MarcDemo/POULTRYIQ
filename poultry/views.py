@@ -1,5 +1,6 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
+from django.contrib.auth.decorators import login_required
 from django.db.models import Count, DecimalField, Max, Q, Sum, Value
 from django.db.models.functions import Coalesce
 from django.utils.timezone import now
@@ -10,7 +11,7 @@ from decimal import Decimal, InvalidOperation
 from accounts.decorators import worker_required, supervisor_required
 from accounts.models import User
 from alerts.models import Alert
-from finance.models import ExpenseTransaction, SalaryPayment
+from finance.models import ExpenseCategory, ExpenseTransaction, SalaryPayment
 from health.models import SicknessReport, TreatmentPlanItem, VaccinationSchedule
 from sales.views import _build_product_stock
 from inventory.models import InventoryTransaction, ReorderRule
@@ -70,7 +71,15 @@ def _batch_cycle_stage(batch):
 
 
 # Create your views here.
+@login_required(login_url="login")
 def dashboard(request):
+    role_code = _role_code(request.user)
+    if role_code != "MANAGER":
+        messages.error(request, "Access denied: Managers only.")
+        from accounts.views import get_post_login_redirect
+
+        return redirect(get_post_login_redirect(request.user))
+
     today = date.today()
     current_time = now()
 
@@ -1011,6 +1020,7 @@ def feedrec(request):
 def investor(request):
     return render(request, 'investor.html')
 
+@login_required(login_url="login")
 def add_batch(request):
     if request.method == "POST":
         form = PoultryBatchForm(request.POST)
@@ -1018,6 +1028,27 @@ def add_batch(request):
             batch = form.save(commit=False)
             batch.created_by = request.user
             batch.save()
+
+            if batch.amount_paid and batch.amount_paid > 0:
+                batch_expense_category, _ = ExpenseCategory.objects.get_or_create(
+                    code="BATCH_PURCHASE",
+                    defaults={"name": "Bird Batch Purchase", "is_active": True},
+                )
+                ExpenseTransaction.objects.create(
+                    expense_date=batch.date_stocked,
+                    category=batch_expense_category,
+                    description=(
+                        f"Bird batch purchase {batch.batch_code} - "
+                        f"{batch.initial_quantity} birds"
+                        + (f" from {batch.supplier_name}" if batch.supplier_name else "")
+                    ),
+                    total_amount=batch.amount_paid,
+                    payment_method=ExpenseTransaction.PAYMENT_CASH,
+                    period_year=batch.date_stocked.year,
+                    period_month=batch.date_stocked.month,
+                    status=ExpenseTransaction.Status.DRAFT,
+                    created_by=request.user,
+                )
 
             messages.success(request, f"Batch {batch.batch_code} created successfully!")
             return redirect("birds")

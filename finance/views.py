@@ -11,14 +11,44 @@ from .models import ExpenseCategory, ExpenseTransaction, SalaryPayment
 User = get_user_model()
 
 
+DEFAULT_EXPENSE_CATEGORIES = [
+    ("VET", "Veterinary & Medication"),
+    ("LABOUR", "Labour & Wages"),
+    ("UTILITIES", "Utilities"),
+    ("TRANSPORT", "Transport & Logistics"),
+    ("MAINTENANCE", "Maintenance & Repairs"),
+    ("EQUIPMENT", "Equipment & Tools"),
+    ("INVENTORY_PURCHASE", "Inventory Purchases"),
+    ("BATCH_PURCHASE", "Bird Batch Purchase"),
+    ("OTHER", "Other"),
+]
+
+MANUAL_EXPENSE_HIDDEN_CATEGORY_CODES = ["INVENTORY_PURCHASE", "BATCH_PURCHASE"]
+
+
+def ensure_default_expense_categories():
+    for code, name in DEFAULT_EXPENSE_CATEGORIES:
+        ExpenseCategory.objects.get_or_create(
+            code=code,
+            defaults={"name": name, "is_active": True},
+        )
+
+    # Feed and bedding now flow through inventory purchases, not direct expense categories.
+    ExpenseCategory.objects.filter(code__in=["FEED", "BEDDING"]).update(is_active=False)
+
+
 def expense_form(request):
-    categories = ExpenseCategory.objects.filter(is_active=True).order_by("name")
+    ensure_default_expense_categories()
+    categories = ExpenseCategory.objects.filter(is_active=True).exclude(
+        code__in=MANUAL_EXPENSE_HIDDEN_CATEGORY_CODES
+    ).order_by("name")
     today = date.today()
 
     if request.method == "POST":
         date_str = request.POST.get("date", "").strip()
         category_id = request.POST.get("category", "").strip()
         description = request.POST.get("description", "").strip()
+        other_category_detail = request.POST.get("other_category_detail", "").strip()
         amount_str = request.POST.get("amount", "0").strip()
         payment_method = request.POST.get("payment_method", ExpenseTransaction.PAYMENT_CASH)
 
@@ -38,12 +68,21 @@ def expense_form(request):
         if not category_id:
             errors.append("Category is required.")
         else:
-            category = ExpenseCategory.objects.filter(pk=category_id, is_active=True).first()
+            category = ExpenseCategory.objects.filter(
+                pk=category_id,
+                is_active=True,
+            ).exclude(code__in=MANUAL_EXPENSE_HIDDEN_CATEGORY_CODES).first()
             if not category:
                 errors.append("Invalid category selected.")
 
         if not description:
             errors.append("Description is required.")
+
+        if category and category.code == "OTHER" and not other_category_detail:
+            errors.append("Please describe the other category.")
+
+        if category and category.code == "OTHER" and other_category_detail:
+            description = f"[Other: {other_category_detail}] {description}" if description else f"Other: {other_category_detail}"
 
         try:
             total_amount = Decimal(amount_str)
@@ -100,6 +139,7 @@ def expense_form(request):
 
 
 def expenses(request):
+    ensure_default_expense_categories()
     qs = (
         ExpenseTransaction.objects
         .select_related("category", "created_by", "approved_by")
@@ -132,7 +172,9 @@ def expenses(request):
         qs = qs.filter(payment_method=f_payment_method)
 
     total_amount = qs.aggregate(total=Sum("total_amount"))["total"] or Decimal("0")
-    categories = ExpenseCategory.objects.filter(is_active=True).order_by("name")
+    categories = ExpenseCategory.objects.filter(is_active=True).exclude(
+        code__in=MANUAL_EXPENSE_HIDDEN_CATEGORY_CODES
+    ).order_by("name")
 
     context = {
         "expenses": qs,

@@ -4,7 +4,12 @@
 <div class="container-fluid">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h2>Expense Records</h2>
-        <span class="fs-5 fw-bold text-danger">Total: {{ total_amount|floatformat:0 }} UGX</span>
+        <div class="d-flex align-items-center gap-2">
+            <a href="{% url 'expense_form' %}" class="btn btn-outline-primary btn-sm">
+                <i class="bi bi-plus-circle me-1"></i>Record Expense
+            </a>
+            <span class="fs-5 fw-bold text-danger">Total: {{ total_amount|floatformat:0 }} UGX</span>
+        </div>
     </div>
 
     <!-- FILTERS -->
@@ -68,8 +73,7 @@
                         <th>Description</th>
                         <th>Amount (UGX)</th>
                         <th>Method</th>
-                        <th>Status</th>
-                        <th>Approved by</th>
+                        <th>Recorded By</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -81,21 +85,16 @@
                         <td>{{ expense.total_amount|floatformat:0 }}</td>
                         <td>{{ expense.payment_method }}</td>
                         <td>
-                            {% if expense.status == "APPROVED" %}
-                                <span class="badge bg-success">Approved</span>
-                            {% elif expense.status == "REJECTED" %}
-                                <span class="badge bg-danger">Rejected</span>
-                            {% elif expense.status == "SUBMITTED" %}
-                                <span class="badge bg-info">Submitted</span>
+                            {% if expense.created_by %}
+                                {{ expense.created_by.username }}
                             {% else %}
-                                <span class="badge bg-secondary">Draft</span>
+                                —
                             {% endif %}
                         </td>
-                        <td>{{ expense.approved_by.get_full_name|default:expense.approved_by.username|default:"—" }}</td>
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="7" class="text-center text-muted">No expense records found.</td>
+                        <td colspan="6" class="text-center text-muted">No expense records found.</td>
                     </tr>
                     {% endfor %}
                 </tbody>

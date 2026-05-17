@@ -256,7 +256,7 @@
         {% endif %}
         <ul class="nav flex-column">
             <li class="nav-item">
-                <a class="nav-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}" href="{% url 'dashboard' %}">
+                <a class="nav-link {% if request.resolver_match.url_name == 'managerdash' %}active{% endif %}" href="{% url 'managerdash' %}">
                     <i class="bi bi-speedometer2"></i><span>Dashboard</span>
                 </a>
             </li>
@@ -302,7 +302,7 @@
                 </a>
             </li>
             <li class="nav-item">
-                <a class="nav-link {% if request.resolver_match.url_name == 'expense_form' %}active{% endif %}" href="{% url 'expense_form' %}">
+                <a class="nav-link {% if request.resolver_match.url_name == 'expense_form' or request.resolver_match.url_name == 'expenses' %}active{% endif %}" href="{% url 'expenses' %}">
                     <i class="bi bi-cash-coin"></i><span>Expenses</span>
                 </a>
             </li>
