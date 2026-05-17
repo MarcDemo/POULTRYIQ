@@ -11,7 +11,29 @@ from .models import ExpenseCategory, ExpenseTransaction, SalaryPayment
 User = get_user_model()
 
 
+DEFAULT_EXPENSE_CATEGORIES = [
+    ("FEED", "Feed & Nutrition"),
+    ("VET", "Veterinary & Medication"),
+    ("LABOUR", "Labour & Wages"),
+    ("UTILITIES", "Utilities"),
+    ("TRANSPORT", "Transport & Logistics"),
+    ("MAINTENANCE", "Maintenance & Repairs"),
+    ("BEDDING", "Bedding & Litter"),
+    ("EQUIPMENT", "Equipment & Tools"),
+    ("OTHER", "Other"),
+]
+
+
+def ensure_default_expense_categories():
+    for code, name in DEFAULT_EXPENSE_CATEGORIES:
+        ExpenseCategory.objects.get_or_create(
+            code=code,
+            defaults={"name": name, "is_active": True},
+        )
+
+
 def expense_form(request):
+    ensure_default_expense_categories()
     categories = ExpenseCategory.objects.filter(is_active=True).order_by("name")
     today = date.today()
 
@@ -19,6 +41,7 @@ def expense_form(request):
         date_str = request.POST.get("date", "").strip()
         category_id = request.POST.get("category", "").strip()
         description = request.POST.get("description", "").strip()
+        other_category_detail = request.POST.get("other_category_detail", "").strip()
         amount_str = request.POST.get("amount", "0").strip()
         payment_method = request.POST.get("payment_method", ExpenseTransaction.PAYMENT_CASH)
 
@@ -44,6 +67,12 @@ def expense_form(request):
 
         if not description:
             errors.append("Description is required.")
+
+        if category and category.code == "OTHER" and not other_category_detail:
+            errors.append("Please describe the other category.")
+
+        if category and category.code == "OTHER" and other_category_detail:
+            description = f"[Other: {other_category_detail}] {description}" if description else f"Other: {other_category_detail}"
 
         try:
             total_amount = Decimal(amount_str)
@@ -100,6 +129,7 @@ def expense_form(request):
 
 
 def expenses(request):
+    ensure_default_expense_categories()
     qs = (
         ExpenseTransaction.objects
         .select_related("category", "created_by", "approved_by")
