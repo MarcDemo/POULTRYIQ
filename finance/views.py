@@ -12,16 +12,18 @@ User = get_user_model()
 
 
 DEFAULT_EXPENSE_CATEGORIES = [
-    ("FEED", "Feed & Nutrition"),
     ("VET", "Veterinary & Medication"),
     ("LABOUR", "Labour & Wages"),
     ("UTILITIES", "Utilities"),
     ("TRANSPORT", "Transport & Logistics"),
     ("MAINTENANCE", "Maintenance & Repairs"),
-    ("BEDDING", "Bedding & Litter"),
     ("EQUIPMENT", "Equipment & Tools"),
+    ("INVENTORY_PURCHASE", "Inventory Purchases"),
+    ("BATCH_PURCHASE", "Bird Batch Purchase"),
     ("OTHER", "Other"),
 ]
+
+MANUAL_EXPENSE_HIDDEN_CATEGORY_CODES = ["INVENTORY_PURCHASE", "BATCH_PURCHASE"]
 
 
 def ensure_default_expense_categories():
@@ -31,10 +33,15 @@ def ensure_default_expense_categories():
             defaults={"name": name, "is_active": True},
         )
 
+    # Feed and bedding now flow through inventory purchases, not direct expense categories.
+    ExpenseCategory.objects.filter(code__in=["FEED", "BEDDING"]).update(is_active=False)
+
 
 def expense_form(request):
     ensure_default_expense_categories()
-    categories = ExpenseCategory.objects.filter(is_active=True).order_by("name")
+    categories = ExpenseCategory.objects.filter(is_active=True).exclude(
+        code__in=MANUAL_EXPENSE_HIDDEN_CATEGORY_CODES
+    ).order_by("name")
     today = date.today()
 
     if request.method == "POST":
@@ -61,7 +68,10 @@ def expense_form(request):
         if not category_id:
             errors.append("Category is required.")
         else:
-            category = ExpenseCategory.objects.filter(pk=category_id, is_active=True).first()
+            category = ExpenseCategory.objects.filter(
+                pk=category_id,
+                is_active=True,
+            ).exclude(code__in=MANUAL_EXPENSE_HIDDEN_CATEGORY_CODES).first()
             if not category:
                 errors.append("Invalid category selected.")
 
@@ -162,7 +172,9 @@ def expenses(request):
         qs = qs.filter(payment_method=f_payment_method)
 
     total_amount = qs.aggregate(total=Sum("total_amount"))["total"] or Decimal("0")
-    categories = ExpenseCategory.objects.filter(is_active=True).order_by("name")
+    categories = ExpenseCategory.objects.filter(is_active=True).exclude(
+        code__in=MANUAL_EXPENSE_HIDDEN_CATEGORY_CODES
+    ).order_by("name")
 
     context = {
         "expenses": qs,

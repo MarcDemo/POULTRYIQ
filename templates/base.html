@@ -256,7 +256,7 @@
         {% endif %}
         <ul class="nav flex-column">
             <li class="nav-item">
-                <a class="nav-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}" href="{% url 'dashboard' %}">
+                <a class="nav-link {% if request.resolver_match.url_name == 'managerdash' %}active{% endif %}" href="{% url 'managerdash' %}">
                     <i class="bi bi-speedometer2"></i><span>Dashboard</span>
                 </a>
             </li>

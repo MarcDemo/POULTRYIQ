@@ -76,6 +76,13 @@ class InventoryTransaction(models.Model):
         validators=[MinValueValidator(Decimal("0.000"))]
     )
 
+    supplier_name = models.CharField(max_length=150, blank=True)
+    unit_price = models.DecimalField(
+        max_digits=14, decimal_places=2, null=True, blank=True,
+        validators=[MinValueValidator(Decimal("0.00"))]
+    )
+    expiry_date = models.DateField(null=True, blank=True)
+
     # Link stock-out to a batch (optional; replace with your actual model path)
     batch = models.ForeignKey(
         "poultry.PoultryBatch", on_delete=models.PROTECT, null=True, blank=True,
