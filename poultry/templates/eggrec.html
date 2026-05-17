@@ -2,140 +2,126 @@
 {% load static %}
 
 {% block content %}
-
 <div class="container-fluid">
 
-<h3 class="mb-4">Egg Collection (Approved Records)</h3>
+    <div class="page-header-row mb-4">
+        <h2><i class="bi bi-basket me-2"></i>Egg Collection Records</h2>
+    </div>
 
-<!-- FILTERS -->
-<div class="card mb-4">
-<div class="card-body">
+    <!-- FILTERS -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <form method="GET" data-auto-filter="true" class="row g-2 align-items-end">
 
-<form class="row g-3">
+                <div class="col-md-2">
+                    <label class="form-label fw-semibold small">Date</label>
+                    <input type="date" name="date" value="{{ f_date }}" class="form-control">
+                </div>
 
-<div class="col-md-3">
-<label>Date</label>
-<input type="date" class="form-control" name="date">
-</div>
+                <div class="col-md-3">
+                    <label class="form-label fw-semibold small">House</label>
+                    <select name="house" class="form-select">
+                        <option value="">All Houses</option>
+                        {% for h in houses %}
+                            <option value="{{ h.pk }}" {% if f_house == h.pk|stringformat:"s" %}selected{% endif %}>
+                                {{ h.house_code }}{% if h.name %} – {{ h.name }}{% endif %}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
 
-<div class="col-md-3">
-<label>House</label>
-<select class="form-control" name="house">
-<option value="">All Houses</option>
-<option>House A</option>
-<option>House B</option>
-</select>
-</div>
+                <div class="col-md-3">
+                    <label class="form-label fw-semibold small">Breed</label>
+                    <select name="breed" class="form-select">
+                        <option value="">All Breeds</option>
+                        {% for b in breeds %}
+                            <option value="{{ b }}" {% if f_breed == b %}selected{% endif %}>{{ b }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
 
-<div class="col-md-3">
-<label>Hour</label>
-<select class="form-control" name="hour">
-<option value="">All</option>
-<option>Morning</option>
-<option>Midday</option>
-<option>Evening</option>
-</select>
-</div>
+                <div class="col-md-2">
+                    <label class="form-label fw-semibold small">Status</label>
+                    <select name="status" class="form-select">
+                        <option value="">All Statuses</option>
+                        {% for val, label in approval_statuses %}
+                            <option value="{{ val }}" {% if f_status == val %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
 
-<div class="col-md-3 d-flex align-items-end">
-<button class="btn btn-primary w-100">Filter</button>
-</div>
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-outline-secondary w-100">
+                        <i class="bi bi-funnel me-1"></i>Filter
+                    </button>
+                </div>
 
-</form>
+            </form>
+        </div>
+    </div>
 
-</div>
-</div>
-
-<!-- TABLE -->
-<div class="card">
-<div class="card-body">
-
-<table class="table table-bordered table-hover">
-
-<thead class="table-light">
-<tr>
-<th>Date</th>
-<th>House</th>
-<th>Collection Time</th>
-<th>Eggs Collected</th>
-<th>Approved By</th>
-<th>Action</th>
-</tr>
-</thead>
-
-<tbody>
-
-
-<tr>
-<td>27th march 2026</td>
-<td>House A</td>
-<td>11:30am</td>
-<td>200  </td>
-<td>Mark</td>
-
-<td>
-<button 
-class="btn btn-sm btn-warning edit-btn"
-data-id="{{ record.id }}"
-data-eggs="{{ record.eggs }}"
-data-bs-toggle="modal"
-data-bs-target="#editModal">
-Edit
-</button>
-</td>
-
-</tr>
-
-
-</tbody>
-
-</table>
-
-</div>
-</div>
-
-</div>
-
-
-<!-- EDIT MODAL -->
-
-<div class="modal fade" id="editModal">
-<div class="modal-dialog">
-<div class="modal-content">
-
-<div class="modal-header">
-<h5 class="modal-title">Edit Egg Record</h5>
-</div>
-
-<div class="modal-body">
-
-<form method="POST">
-{% csrf_token %}
-
-<input type="hidden" name="record_id" id="record_id">
-
-<div class="mb-3">
-<label>Egg Count</label>
-<input type="number" class="form-control" name="eggs" id="edit_eggs">
-</div>
-
-<div class="mb-3">
-<label>Reason for Edit</label>
-<textarea class="form-control" name="reason" required></textarea>
-</div>
-
-<button class="btn btn-danger w-100">
-Save Changes
-</button>
-
-</form>
+    <!-- TABLE -->
+    <div class="card">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Date</th>
+                            <th>House</th>
+                            <th>Breed</th>
+                            <th>Eggs Collected</th>
+                            <th>Broken / Rejected</th>
+                            <th>Net Good Eggs</th>
+                            <th>Collected By</th>
+                            <th>Status</th>
+                            <th>Approved By</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for r in records %}
+                        <tr>
+                            <td>{{ r.collection_date|date:"d M Y" }}</td>
+                            <td>
+                                <span class="badge bg-info text-dark">
+                                    {{ r.batch.house.house_code }}
+                                </span>
+                            </td>
+                            <td>{{ r.batch.breed|default:"—" }}</td>
+                            <td><strong>{{ r.eggs_collected }}</strong></td>
+                            <td>
+                                {% if r.eggs_rejected %}
+                                    <span class="text-danger">{{ r.eggs_rejected }}</span>
+                                {% else %}
+                                    <span class="text-muted">0</span>
+                                {% endif %}
+                            </td>
+                            <td>{% if r.eggs_rejected %}{{ r.eggs_collected|add:r.eggs_rejected|floatformat:0 }}{% else %}{{ r.eggs_collected }}{% endif %}</td>
+                            <td>{% if r.collected_by %}{{ r.collected_by.get_full_name|default:r.collected_by.username }}{% else %}—{% endif %}</td>
+                            <td>
+                                {% if r.status == "APPROVED" %}
+                                    <span class="badge bg-success">Approved</span>
+                                {% elif r.status == "REJECTED" %}
+                                    <span class="badge bg-danger">Rejected</span>
+                                {% else %}
+                                    <span class="badge bg-warning text-dark">Pending</span>
+                                {% endif %}
+                            </td>
+                            <td>{% if r.reviewed_by %}{{ r.reviewed_by.get_full_name|default:r.reviewed_by.username }}{% else %}—{% endif %}</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="9" class="text-center text-muted py-5">
+                                <i class="bi bi-basket fs-3 d-block mb-2"></i>
+                                No egg collection records found.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
 
 </div>
-
-</div>
-</div>
-</div>
-
-<script src="{% static 'js/eggrec.js' %}"></script>
-
 {% endblock %}

@@ -50,7 +50,7 @@
 <input type="hidden" name="form_action" value="create_schedule">
 
 <div class="mb-3">
-    <label for="scheduled_date" class="form-label"><i class="bi bi-calendar me-1"></i>Date</label>
+    <label for="scheduled_date" class="form-label"><i class="bi bi-calendar me-1"></i>Schedule vaccination Date</label>
     <input type="date" id="scheduled_date" name="scheduled_date" class="form-control" required>
     <input type="time" id="scheduled_time" name="scheduled_time" class="form-control mt-2" placeholder="Optional time">
 </div>
@@ -69,37 +69,37 @@
 
 <div class="mb-3">
     <label for="vaccine_name" class="form-label"><i class="bi bi-capsule me-1"></i>Vaccine Name</label>
-    <input type="text" id="vaccine_name" name="vaccine_name" class="form-control" required>
+    <input type="text" id="vaccine_name" name="vaccine_name" placeholder="input the name of the vaccine" class="form-control" required>
 </div>
 
 <div class="mb-3">
     <label for="brand" class="form-label"><i class="bi bi-box-seam me-1"></i>Brand</label>
-    <input type="text" id="brand" name="brand" class="form-control">
+    <input type="text" id="brand" name="brand" placeholder="Vaccination brand name" class="form-control">
 </div>
 
 <div class="mb-3">
     <label for="dosage" class="form-label"><i class="bi bi-eyedropper me-1"></i>Dosage</label>
-    <input type="text" id="dosage" name="dosage" class="form-control">
+    <input type="text" id="dosage" name="dosage" placeholder="Dosage amount eg 2mls, 2 drops etc" class="form-control">
 </div>
 
 <div class="mb-3">
     <label for="administration_mode" class="form-label"><i class="bi bi-hand-index me-1"></i>Administration Mode</label>
-    <input type="text" id="administration_mode" name="administration_mode" class="form-control">
+    <input type="text" id="administration_mode" name="administration_mode" placeholder="Administration mode eg:put in water, eyedrop etc" class="form-control">
 </div>
 
 <div class="mb-3">
     <label for="frequency_days" class="form-label"><i class="bi bi-repeat me-1"></i>Frequency (days, optional)</label>
-    <input type="number" id="frequency_days" name="frequency_days" class="form-control" min="1">
+    <input type="number" id="frequency_days" name="frequency_days" placeholder="number of times the vaccine has to be administered" class="form-control" min="1">
 </div>
 
 <div class="mb-3">
     <label for="vet_name" class="form-label"><i class="bi bi-person-badge me-1"></i>Vet</label>
-    <input type="text" id="vet_name" name="vet_name" class="form-control">
+    <input type="text" id="vet_name" name="vet_name" placeholder="Vet name" class="form-control">
 </div>
 
 <div class="mb-3">
     <label for="brand_expiry_date" class="form-label"><i class="bi bi-calendar-x me-1"></i>Brand Expiry Date</label>
-    <input type="date" id="brand_expiry_date" name="brand_expiry_date" class="form-control">
+    <input type="date" id="brand_expiry_date"  name="brand_expiry_date" placeholder="Vaccine expiry date" class="form-control">
 </div>
 
 <div class="d-grid">
@@ -113,6 +113,52 @@
 
 <!-- TABLE -->
 <div class="col-lg-8">
+
+<!-- Filter bar -->
+<div class="card mb-3">
+<div class="card-body py-2">
+<form method="GET" data-auto-filter="true" class="row g-2 align-items-end">
+    <div class="col-md-3">
+        <label class="form-label fw-semibold small mb-1">Vaccine Name</label>
+        <input type="text" name="vaccine" value="{{ f_vaccine }}" class="form-control form-control-sm" placeholder="Search vaccine...">
+    </div>
+    <div class="col-md-2">
+        <label class="form-label fw-semibold small mb-1">House</label>
+        <select name="house" class="form-select form-select-sm">
+            <option value="">All Houses</option>
+            {% for h in houses %}
+                <option value="{{ h.pk }}" {% if f_house == h.pk|stringformat:"s" %}selected{% endif %}>
+                    {{ h.house_code }}
+                </option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="col-md-2">
+        <label class="form-label fw-semibold small mb-1">Status</label>
+        <select name="vac_status" class="form-select form-select-sm">
+            <option value="">All Statuses</option>
+            {% for val, label in vac_status_choices %}
+                <option value="{{ val }}" {% if f_vac_status == val %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="col-md-2">
+        <label class="form-label fw-semibold small mb-1">From Date</label>
+        <input type="date" name="date_from" value="{{ f_date_from }}" class="form-control form-control-sm">
+    </div>
+    <div class="col-md-2">
+        <label class="form-label fw-semibold small mb-1">To Date</label>
+        <input type="date" name="date_to" value="{{ f_date_to }}" class="form-control form-control-sm">
+    </div>
+    <div class="col-md-1">
+        <button type="submit" class="btn btn-outline-secondary btn-sm w-100 mt-3">
+            <i class="bi bi-funnel"></i> Filter
+        </button>
+    </div>
+</form>
+</div>
+</div>
+
 <div class="card">
 <div class="card-header">
     <i class="bi bi-table me-2"></i>Vaccination Records

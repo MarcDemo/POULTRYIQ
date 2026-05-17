@@ -388,6 +388,17 @@ def sales(request):
 
 
 @login_required(login_url="login")
+def orderview(request):
+    pending_orders = _pending_orders_queryset()
+    _attach_order_item_displays(pending_orders)
+    context = {
+        "pending_orders": pending_orders,
+        **_pending_orders_metrics(pending_orders),
+    }
+    return render(request, "orderview.html", context)
+
+
+@login_required(login_url="login")
 def orders(request):
     if request.method == "POST":
         action = request.POST.get("action", "").strip().lower()

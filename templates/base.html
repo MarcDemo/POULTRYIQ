@@ -154,7 +154,7 @@
             </li>
             <li class="nav-item">
                 <a class="nav-link {% if request.resolver_match.url_name == 'sickbay' %}active{% endif %}" href="{% url 'sickbay' %}">
-                    <i class="bi bi-heart-pulse"></i><span>Sick / Obulwadde</span>
+                    <i class="bi bi-heart-pulse"></i><span>Sick bay / Ewali Endwadde</span>
                 </a>
 
             </li>
@@ -358,30 +358,7 @@
 {% else %}
     </div>
 </div>
-{% if request.user.is_authenticated and request.user.is_worker %}
-<nav class="mobile-bottom-nav" id="mobileBottomNav">
-    <a href="{% url 'workersdash' %}" class="mobile-nav-item {% if request.resolver_match.url_name == 'workersdash' %}active{% endif %}">
-        <i class="bi bi-speedometer2"></i>
-        <span>Awaka</span>
-    </a>
-    <a href="{% url 'record_egg' %}" class="mobile-nav-item {% if request.resolver_match.url_name == 'record_egg' %}active{% endif %}">
-        <i class="bi bi-basket"></i>
-        <span>Amagi</span>
-    </a>
-    <a href="{% url 'record_feed' %}" class="mobile-nav-item {% if request.resolver_match.url_name == 'record_feed' %}active{% endif %}">
-        <i class="bi bi-bag-fill"></i>
-        <span>Emmere</span>
-    </a>
-    <a href="{% url 'record_cleaning' %}" class="mobile-nav-item {% if request.resolver_match.url_name == 'record_cleaning' %}active{% endif %}">
-        <i class="bi bi-broom"></i>
-        <span>Yonja</span>
-    </a>
-    <a href="{% url 'mortality' %}" class="mobile-nav-item {% if request.resolver_match.url_name == 'mortality' %}active{% endif %}">
-        <i class="bi bi-exclamation-triangle"></i>
-        <span>Efudde</span>
-    </a>
-</nav>
-{% endif %}
+
 {% endif %}
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
@@ -394,6 +371,23 @@
 {% if request.user.is_authenticated and request.user.is_supervisor %}
 <script src="{% static 'sales/js/sales.js' %}"></script>
 {% endif %}
+<script>
+(function () {
+    function initAutoFilter(form) {
+        var timer;
+        form.querySelectorAll('select, input[type="date"]').forEach(function (el) {
+            el.addEventListener('change', function () { form.submit(); });
+        });
+        form.querySelectorAll('input[type="text"], input[type="search"]').forEach(function (el) {
+            el.addEventListener('input', function () {
+                clearTimeout(timer);
+                timer = setTimeout(function () { form.submit(); }, 400);
+            });
+        });
+    }
+    document.querySelectorAll('form[data-auto-filter="true"]').forEach(initAutoFilter);
+})();
+</script>
 {% block extra_js %}{% endblock %}
 </body>
 </html>

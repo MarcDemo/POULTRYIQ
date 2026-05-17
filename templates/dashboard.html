@@ -4,117 +4,438 @@
 <div class="container-fluid">
 
     <div class="page-header-row mb-4">
-        <h2>
-            <i class="bi bi-speedometer2 me-2"></i>Dashboard Overview
-        </h2>
-        <small class="text-muted">Last updated: Today</small>
+        <div>
+            <h2 class="mb-1">
+                <i class="bi bi-speedometer2 me-2"></i>Manager Dashboard
+            </h2>
+            <small class="text-muted">{{ today|date:"l, F j, Y" }}</small>
+        </div>
+        <a href="{% url 'orderview' %}" class="btn btn-primary">
+            <i class="bi bi-box-seam me-2"></i>View Available Orders
+        </a>
     </div>
 
-    <!-- Summary Cards -->
-    <div class="row g-4">
+   
 
-        <div class="col-md-3">
-            <div class="card dashboard-card">
+    {% if pending_approvals > 0 %}
+    <div class="alert alert-warning border-0 rounded-3 d-flex align-items-center gap-3 mb-4">
+        <i class="bi bi-clipboard-check fs-3"></i>
+        <div>
+            <div class="fw-bold">{{ pending_approvals }} worker submission{{ pending_approvals|pluralize }} awaiting review</div>
+            <small class="text-muted">Includes egg, feed, cleaning, and mortality records from supervisors' workflow.</small>
+        </div>
+       
+    </div>
+    {% endif %}
+
+  
+
+    <div class="row g-4 mb-4">
+
+        <div class="col-sm-6 col-xl-3">
+            <div class="card dashboard-card h-100">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-start">
                         <div>
                             <h6>Total Birds</h6>
-                            <h3>5,200</h3>
+                            <h3>{{ total_birds|default:"0" }}</h3>
                         </div>
-                        <div class="text-primary" style="font-size: 28px;">
-                            <i class="bi bi-egg"></i>
+                        <div class="text-primary fs-3">
+                            <i class="bi bi-feather"></i>
                         </div>
                     </div>
-                    <small class="text-muted">+2.5% from last week</small>
+                    <small class="text-muted">Live birds in active batches</small>
+                    <div class="mt-3">
+                        <a href="{% url 'birds' %}" class="btn btn-sm btn-light">
+                            <i class="bi bi-eye me-1"></i>Open Birds
+                        </a>
+                    </div>
                 </div>
             </div>
         </div>
 
-        <div class="col-md-3">
-            <div class="card dashboard-card">
+        <div class="col-sm-6 col-xl-3">
+            <div class="card dashboard-card h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <h6>Active Batches</h6>
+                            <h3>{{ active_batches_count|default:"0" }}</h3>
+                        </div>
+                        <div class="text-info fs-3">
+                            <i class="bi bi-collection"></i>
+                        </div>
+                    </div>
+                    <small class="text-muted">Current production groups</small>
+                    <div class="mt-3">
+                        <a href="{% url 'birds' %}" class="btn btn-sm btn-light">
+                            <i class="bi bi-collection me-1"></i>Open Batches
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-sm-6 col-xl-3">
+            <div class="card dashboard-card h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <h6>Active Houses</h6>
+                            <h3>{{ active_houses_count|default:"0" }}</h3>
+                        </div>
+                        <div class="text-success fs-3">
+                            <i class="bi bi-house-door"></i>
+                        </div>
+                    </div>
+                    <small class="text-muted">Operational poultry houses</small>
+                    <div class="mt-3">
+                        <a href="{% url 'birds' %}" class="btn btn-sm btn-light">
+                            <i class="bi bi-house-door me-1"></i>Open Houses
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-sm-6 col-xl-3">
+            <div class="card dashboard-card h-100">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-start">
                         <div>
                             <h6>Eggs Today</h6>
-                            <h3>1,750</h3>
+                            <h3>{{ eggs_today|default:"0" }}</h3>
                         </div>
-                        <div class="text-success" style="font-size: 28px;">
+                        <div class="text-warning fs-3">
                             <i class="bi bi-basket"></i>
                         </div>
                     </div>
-                    <small class="text-muted">+5.2% from yesterday</small>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-md-3">
-            <div class="card dashboard-card">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-start">
-                        <div>
-                            <h6>Feed in Stock</h6>
-                            <h3>3,200 kg</h3>
-                        </div>
-                        <div class="text-info" style="font-size: 28px;">
-                            <i class="bi bi-bag-fill"></i>
-                        </div>
+                    <small class="text-muted">Approved collections today</small>
+                    <div class="mt-3">
+                        <a href="{% url 'eggrec' %}" class="btn btn-sm btn-light">
+                            <i class="bi bi-basket me-1"></i>Open Eggs
+                        </a>
                     </div>
-                    <small class="text-muted">-12% from last month</small>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-md-3">
-            <div class="card dashboard-card">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-start">
-                        <div>
-                            <h6>Mortality (Today)</h6>
-                            <h3>12</h3>
-                        </div>
-                        <div class="text-danger" style="font-size: 28px;">
-                            <i class="bi bi-exclamation-triangle"></i>
-                        </div>
-                    </div>
-                    <small class="text-muted">2.3 per 1000</small>
                 </div>
             </div>
         </div>
 
     </div>
 
-    <!-- Charts -->
-    <div class="row mt-5 g-4">
+    <div class="row g-4 mb-4">
 
-        <div class="col-md-6">
-            <div class="card">
-                <div class="card-header">
-                    <i class="bi bi-graph-up me-2"></i>Egg Production (Last 7 Days)
-                </div>
+        <div class="col-sm-6 col-xl-3">
+            <div class="card dashboard-card h-100">
                 <div class="card-body">
-                    <canvas id="eggChart"></canvas>
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <h6>Egg Stock</h6>
+                            <h3>{{ eggs_in_stock_display|default:"0 trays" }}</h3>
+                        </div>
+                        <div class="text-success fs-3">
+                            <i class="bi bi-egg"></i>
+                        </div>
+                    </div>
+                    <small class="text-muted">Available for sale</small>
+                    <div class="mt-3">
+                        <a href="{% url 'eggrec' %}" class="btn btn-sm btn-light">
+                            <i class="bi bi-egg me-1"></i>Open Stock
+                        </a>
+                    </div>
                 </div>
             </div>
         </div>
 
-        <div class="col-md-6">
-            <div class="card">
-                <div class="card-header">
-                    <i class="bi bi-speedometer me-2"></i>Average Egg Weight (Last 7 Weighs)
-                </div>
+        <div class="col-sm-6 col-xl-3">
+            <div class="card dashboard-card h-100">
                 <div class="card-body">
-                    <canvas id="weightChart"></canvas>
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <h6>Feed Used Today</h6>
+                            <h3>{{ feed_used_today|floatformat:0 }} kg</h3>
+                        </div>
+                        <div class="text-info fs-3">
+                            <i class="bi bi-bag-check"></i>
+                        </div>
+                    </div>
+                    <small class="text-muted">Approved feed records</small>
+                    <div class="mt-3">
+                        <a href="{% url 'feedrec' %}" class="btn btn-sm btn-light">
+                            <i class="bi bi-bag-check me-1"></i>Open Feed
+                        </a>
+                    </div>
                 </div>
             </div>
         </div>
 
-        <div class="col-md-6">
-            <div class="card">
-                <div class="card-header">
-                    <i class="bi bi-bag-fill me-2"></i>Feed Consumption
-                </div>
+        <div class="col-sm-6 col-xl-3">
+            <div class="card dashboard-card h-100">
                 <div class="card-body">
-                    <canvas id="feedChart"></canvas>
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <h6>Feed Stock</h6>
+                            <h3>{{ feed_stock|floatformat:0 }} kg</h3>
+                        </div>
+                        <div class="text-primary fs-3">
+                            <i class="bi bi-box-seam"></i>
+                        </div>
+                    </div>
+                    <small class="text-muted">Inventory feed balance</small>
+                    <div class="mt-3">
+                        <a href="{% url 'inventory_management' %}" class="btn btn-sm btn-light">
+                            <i class="bi bi-box-seam me-1"></i>Open Inventory
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-sm-6 col-xl-3">
+            <div class="card dashboard-card h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <h6>Low Stock Items</h6>
+                            <h3>{{ low_stock_items|default:"0" }}</h3>
+                        </div>
+                        <div class="text-danger fs-3">
+                            <i class="bi bi-exclamation-circle"></i>
+                        </div>
+                    </div>
+                    <small class="text-muted">Items with reorder rules</small>
+                    <div class="mt-3">
+                        <a href="{% url 'inventory_management' %}" class="btn btn-sm btn-light">
+                            <i class="bi bi-exclamation-circle me-1"></i>Open Items
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <div class="row g-4 mb-4">
+
+        <div class="col-sm-6 col-xl-3">
+            <div class="card dashboard-card h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <h6>Deaths Today</h6>
+                            <h3>{{ deaths_today|default:"0" }}</h3>
+                        </div>
+                        <div class="text-danger fs-3">
+                            <i class="bi bi-heartbreak"></i>
+                        </div>
+                    </div>
+                    <small class="text-muted">Approved mortality records</small>
+                    <div class="mt-3">
+                        <a href="{% url 'view_sickness' %}" class="btn btn-sm btn-light">
+                            <i class="bi bi-heartbreak me-1"></i>Open Health
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-sm-6 col-xl-3">
+            <div class="card dashboard-card h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <h6>Sickbay Cases</h6>
+                            <h3>{{ sickbay_cases|default:"0" }}</h3>
+                        </div>
+                        <div class="text-danger fs-3">
+                            <i class="bi bi-heart-pulse"></i>
+                        </div>
+                    </div>
+                    <small class="text-muted">Current isolation cases</small>
+                    <div class="mt-3">
+                        <a href="{% url 'sickbay' %}" class="btn btn-sm btn-light">
+                            <i class="bi bi-heart-pulse me-1"></i>Open Sickbay
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-sm-6 col-xl-3">
+            <div class="card dashboard-card h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <h6>Pending Doses</h6>
+                            <h3>{{ pending_treatment_doses|default:"0" }}</h3>
+                        </div>
+                        <div class="text-info fs-3">
+                            <i class="bi bi-capsule-pill"></i>
+                        </div>
+                    </div>
+                    <small class="text-muted">Treatment items not yet given</small>
+                    <div class="mt-3">
+                        <a href="{% url 'treatment' %}" class="btn btn-sm btn-light">
+                            <i class="bi bi-capsule-pill me-1"></i>Open Treatments
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-sm-6 col-xl-3">
+            <div class="card dashboard-card h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <h6>Pending Vaccinations</h6>
+                            <h3>{{ pending_vaccinations|default:"0" }}</h3>
+                        </div>
+                        <div class="text-success fs-3">
+                            <i class="bi bi-shield-plus"></i>
+                        </div>
+                    </div>
+                    <small class="text-muted">Scheduled vaccinations</small>
+                    <div class="mt-3">
+                        <a href="{% url 'vaccine_report' %}" class="btn btn-sm btn-light">
+                            <i class="bi bi-shield-plus me-1"></i>Open Vaccines
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <div class="row g-4">
+
+        <div class="col-sm-6 col-xl-3">
+            <div class="card dashboard-card h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <h6>Cleaned Today</h6>
+                            <h3>{{ houses_cleaned_today|default:"0" }}</h3>
+                        </div>
+                        <div class="text-success fs-3">
+                            <i class="bi bi-broom"></i>
+                        </div>
+                    </div>
+                    <small class="text-muted">Approved cleaning records</small>
+                    <div class="mt-3">
+                        <a href="{% url 'record_cleaning' %}" class="btn btn-sm btn-light">
+                            <i class="bi bi-broom me-1"></i>Open Cleaning
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-sm-6 col-xl-3">
+            <div class="card dashboard-card h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <h6>Pending Approvals</h6>
+                            <h3>{{ pending_approvals|default:"0" }}</h3>
+                        </div>
+                        <div class="text-warning fs-3">
+                            <i class="bi bi-clipboard-check"></i>
+                        </div>
+                    </div>
+                    <small class="text-muted">Worker submissions to review</small>
+                    <div class="mt-3">
+                        <a href="{% url 'supapproval' %}" class="btn btn-sm btn-light">
+                            <i class="bi bi-clipboard-check me-1"></i>Open Approvals
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-sm-6 col-xl-3">
+            <div class="card dashboard-card h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <h6>Pending Orders</h6>
+                            <h3>{{ pending_orders|default:"0" }}</h3>
+                        </div>
+                        <div class="text-primary fs-3">
+                            <i class="bi bi-truck"></i>
+                        </div>
+                    </div>
+                    <small class="text-muted">Orders awaiting delivery</small>
+                    <div class="mt-3">
+                        <a href="{% url 'orderview' %}" class="btn btn-sm btn-light">
+                            <i class="bi bi-eye me-1"></i>Open Orders
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-sm-6 col-xl-3">
+            <div class="card dashboard-card h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <h6>Customer Balance</h6>
+                            <h3>{{ outstanding_balance|floatformat:0 }} UGX</h3>
+                        </div>
+                        <div class="text-danger fs-3">
+                            <i class="bi bi-wallet2"></i>
+                        </div>
+                    </div>
+                    <small class="text-muted">Outstanding receivables</small>
+                    <div class="mt-3">
+                        <a href="{% url 'orderview' %}" class="btn btn-sm btn-light">
+                            <i class="bi bi-wallet2 me-1"></i>Open Balances
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-sm-6 col-xl-3">
+            <div class="card dashboard-card h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <h6>Expenses Today</h6>
+                            <h3>{{ today_expenses|floatformat:0 }} UGX</h3>
+                        </div>
+                        <div class="text-danger fs-3">
+                            <i class="bi bi-cash-coin"></i>
+                        </div>
+                    </div>
+                    <small class="text-muted">Recorded farm spending</small>
+                    <div class="mt-3">
+                        <a href="{% url 'expenses' %}" class="btn btn-sm btn-light">
+                            <i class="bi bi-cash-coin me-1"></i>Open Expenses
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-sm-6 col-xl-3">
+            <div class="card dashboard-card h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <h6>Pending Salaries</h6>
+                            <h3>{{ pending_salaries|default:"0" }}</h3>
+                        </div>
+                        <div class="text-info fs-3">
+                            <i class="bi bi-people"></i>
+                        </div>
+                    </div>
+                    <small class="text-muted">Salary payments awaiting completion</small>
+                    <div class="mt-3">
+                        <a href="{% url 'salaries' %}" class="btn btn-sm btn-light">
+                            <i class="bi bi-people me-1"></i>Open Salaries
+                        </a>
+                    </div>
                 </div>
             </div>
         </div>
