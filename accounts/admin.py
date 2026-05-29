@@ -2,7 +2,7 @@ from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 
 from .forms import PoultryUserChangeForm, PoultryUserCreationForm
-from .models import Role, User
+from .models import InvestorCapitalTransaction, Role, User
 
 
 @admin.register(Role)
@@ -59,3 +59,11 @@ class UserAdmin(BaseUserAdmin):
     def assigned_houses(self, obj):
         houses = obj.houses.order_by("house_code").values_list("house_code", flat=True)
         return ", ".join(houses) or "-"
+
+
+@admin.register(InvestorCapitalTransaction)
+class InvestorCapitalTransactionAdmin(admin.ModelAdmin):
+    list_display = ("transaction_date", "transaction_type", "amount", "recorded_by", "created_at")
+    list_filter = ("transaction_type", "transaction_date")
+    search_fields = ("notes", "recorded_by__username", "recorded_by__first_name", "recorded_by__last_name")
+    ordering = ("-transaction_date", "-created_at")

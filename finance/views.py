@@ -7,6 +7,7 @@ from django.db.models import Sum
 from django.shortcuts import redirect, render
 
 from .models import ExpenseCategory, ExpenseTransaction, SalaryPayment
+from poultryiq.pagination import paginate
 
 User = get_user_model()
 
@@ -175,9 +176,12 @@ def expenses(request):
     categories = ExpenseCategory.objects.filter(is_active=True).exclude(
         code__in=MANUAL_EXPENSE_HIDDEN_CATEGORY_CODES
     ).order_by("name")
+    page_obj, querystring = paginate(request, qs, per_page=20)
 
     context = {
-        "expenses": qs,
+        "expenses": page_obj,
+        "page_obj": page_obj,
+        "querystring": querystring,
         "total_amount": total_amount,
         "categories": categories,
         "payment_method_choices": ExpenseTransaction.PAYMENT_METHOD_CHOICES,
@@ -241,8 +245,12 @@ def salaries(request):
         for error in errors:
             messages.error(request, error)
 
+    page_obj, querystring = paginate(request, salary_records, per_page=20)
+
     context = {
         "employees": employees,
-        "salary_records": salary_records,
+        "salary_records": page_obj,
+        "page_obj": page_obj,
+        "querystring": querystring,
     }
     return render(request, "salaries.html", context)

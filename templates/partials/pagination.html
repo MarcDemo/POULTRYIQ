@@ -1,0 +1,33 @@
+{% if page_obj and page_obj.paginator.num_pages > 1 %}
+{% firstof page_param "page" as active_page_param %}
+<nav class="table-pagination" aria-label="Table pagination">
+    <div class="text-muted small">
+        Showing {{ page_obj.start_index }}-{{ page_obj.end_index }} of {{ page_obj.paginator.count }}
+    </div>
+    <ul class="pagination pagination-sm mb-0">
+        <li class="page-item {% if not page_obj.has_previous %}disabled{% endif %}">
+            <a class="page-link" href="?{% if querystring %}{{ querystring }}&{% endif %}{{ active_page_param }}=1">First</a>
+        </li>
+        <li class="page-item {% if not page_obj.has_previous %}disabled{% endif %}">
+            {% if page_obj.has_previous %}
+            <a class="page-link" href="?{% if querystring %}{{ querystring }}&{% endif %}{{ active_page_param }}={{ page_obj.previous_page_number }}">Prev</a>
+            {% else %}
+            <span class="page-link">Prev</span>
+            {% endif %}
+        </li>
+        <li class="page-item active">
+            <span class="page-link">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>
+        </li>
+        <li class="page-item {% if not page_obj.has_next %}disabled{% endif %}">
+            {% if page_obj.has_next %}
+            <a class="page-link" href="?{% if querystring %}{{ querystring }}&{% endif %}{{ active_page_param }}={{ page_obj.next_page_number }}">Next</a>
+            {% else %}
+            <span class="page-link">Next</span>
+            {% endif %}
+        </li>
+        <li class="page-item {% if not page_obj.has_next %}disabled{% endif %}">
+            <a class="page-link" href="?{% if querystring %}{{ querystring }}&{% endif %}{{ active_page_param }}={{ page_obj.paginator.num_pages }}">Last</a>
+        </li>
+    </ul>
+</nav>
+{% endif %}

@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="container-fluid">
+    <div class="page-header-row mb-4">
+        <div>
+            <h2 class="mb-1"><i class="bi bi-bag-plus me-2"></i>Feed Mixtures</h2>
+            <small class="text-muted">Record what was mixed today and which houses received it.</small>
+        </div>
+        <a href="{% url 'feedrec' %}" class="btn btn-light">
+            <i class="bi bi-list-check me-1"></i>Feed Management
+        </a>
+    </div>
+
+    <div class="row g-4">
+        <div class="">
+            <div class="card">
+                <div class="card-header">
+                    <i class="bi bi-beaker me-2"></i>New Mixture
+                </div>
+                <div class="card-body">
+                    <form method="POST">
+                        {% csrf_token %}
+
+                        <div class="row g-3">
+                            <div class="col-md-5">
+                                <label class="form-label">Mixture Name</label>
+                                <input type="text" name="name" class="form-control" placeholder="e.g. Morning Layer Boost" required>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Date</label>
+                                <input type="date" name="mix_date" class="form-control" value="{{ today|date:'Y-m-d' }}" required>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Final Weighed Kg</label>
+                                <input type="number" name="total_weight_kg" class="form-control" placeholder="kg after mixing" min="0" step="0.01" inputmode="decimal" required>
+                            </div>
+                        </div>
+
+                        <h6 class="mt-4 mb-2">Ingredients Mixed</h6>
+                        {% for row in "12345" %}
+                        <div class="row g-2 mb-2">
+                            <div class="col-md-8">
+                                <select name="ingredient_item" class="form-select">
+                                    <option value="">-- Select feed stock item --</option>
+                                    {% for item in feed_items %}
+                                    <option value="{{ item.pk }}">{{ item.name }} ({{ item.available_kg|floatformat:2 }} {{ item.unit }} available)</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <input type="number" name="ingredient_quantity" class="form-control" placeholder="kg" min="0" step="0.01" inputmode="decimal">
+                            </div>
+                        </div>
+                        {% endfor %}
+
+                        <h6 class="mt-4 mb-2">House Distribution</h6>
+                        {% for row in "12345678" %}
+                        <div class="row g-2 mb-2">
+                            <div class="col-md-8">
+                                <select name="allocation_house" class="form-select">
+                                    <option value="">-- Select house --</option>
+                                    {% for house in houses %}
+                                    <option value="{{ house.pk }}">{{ house.house_code }}{% if house.name %} - {{ house.name }}{% endif %}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <input type="number" name="allocation_quantity" class="form-control" placeholder="kg assigned" min="0" step="0.01" inputmode="decimal">
+                            </div>
+                        </div>
+                        {% endfor %}
+
+                        <div class="mt-3">
+                            <label class="form-label">Notes</label>
+                            <textarea name="notes" class="form-control" rows="3" placeholder="Optional"></textarea>
+                        </div>
+
+                        <div class="d-grid mt-4">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-check-circle me-1"></i>Save Mixture
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+{% endblock %}

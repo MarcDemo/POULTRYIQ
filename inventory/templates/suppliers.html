@@ -37,6 +37,14 @@
 </div>
 
 <div class="mb-3">
+    <label for="tin_number" class="form-label">
+        <i class="bi bi-receipt me-1"></i>TIN Number
+    </label>
+    <input class="form-control" id="tin_number" name="tin_number" placeholder="Tax identification number" data-tin-lookup-url="{% url 'tin_lookup' %}" inputmode="numeric" autocomplete="off" pattern="\d{10}">
+    <div class="form-text" id="tin_lookup_status"></div>
+</div>
+
+<div class="mb-3">
     <label for="location" class="form-label">
         <i class="bi bi-geo-alt me-1"></i>Location
     </label>
@@ -74,6 +82,7 @@
 <thead>
 <tr>
 <th>Name</th>
+<th>TIN</th>
 <th>Phone</th>
 <th>Location</th>
 <th>Product</th>
@@ -86,6 +95,7 @@
 {% for supplier in suppliers %}
 <tr>
 <td>{{ supplier.name }}</td>
+<td>{{ supplier.tin_number|default:"-" }}</td>
 <td>{{ supplier.phone|default:"-" }}</td>
 <td>{{ supplier.location|default:"-" }}</td>
 <td>{{ supplier.product|default:"-" }}</td>
@@ -93,7 +103,7 @@
 </tr>
 {% empty %}
 <tr>
-<td colspan="5" class="text-center text-muted py-3">No suppliers recorded yet.</td>
+<td colspan="6" class="text-center text-muted py-3">No suppliers recorded yet.</td>
 </tr>
 {% endfor %}
 
@@ -104,9 +114,83 @@
 </div>
 </div>
 </div>
+{% include "partials/pagination.html" %}
 
 </div>
 
 </div>
 
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+    const tinInput = document.getElementById('tin_number');
+    const nameInput = document.getElementById('name');
+    const statusEl = document.getElementById('tin_lookup_status');
+    if (!tinInput || !nameInput || !statusEl) return;
+
+    let timer;
+    let controller;
+
+    function setStatus(message, state) {
+        statusEl.textContent = message || '';
+        statusEl.classList.remove('text-success', 'text-danger', 'text-muted');
+        if (state === 'success') statusEl.classList.add('text-success');
+        else if (state === 'danger') statusEl.classList.add('text-danger');
+        else statusEl.classList.add('text-muted');
+    }
+
+    function lookupTin() {
+        const tin = tinInput.value.replace(/\s+/g, '');
+        tinInput.setCustomValidity('');
+
+        if (!tin) {
+            setStatus('', 'muted');
+            return;
+        }
+
+        if (!/^\d{10}$/.test(tin)) {
+            tinInput.setCustomValidity('Invalid TIN number.');
+            setStatus('Invalid TIN number. A Uganda TIN should be 10 digits.', 'danger');
+            return;
+        }
+
+        if (controller) controller.abort();
+        controller = new AbortController();
+        setStatus('Checking TIN...', 'muted');
+
+        fetch(`${tinInput.dataset.tinLookupUrl}?tin=${encodeURIComponent(tin)}`, {
+            headers: { 'Accept': 'application/json' },
+            signal: controller.signal
+        })
+            .then((response) => response.json().then((data) => ({ response, data })))
+            .then(({ response, data }) => {
+                if (data.valid === true && data.supplier_name) {
+                    nameInput.value = data.supplier_name;
+                    tinInput.setCustomValidity('');
+                    setStatus('TIN verified. Supplier name filled in.', 'success');
+                    return;
+                }
+                if (data.valid === false) {
+                    tinInput.setCustomValidity('Invalid TIN number.');
+                    setStatus(data.message || 'Invalid TIN number.', 'danger');
+                    return;
+                }
+                setStatus(data.message || (response.ok ? 'Could not verify this TIN.' : 'TIN lookup service is unavailable.'), 'muted');
+            })
+            .catch((error) => {
+                if (error.name !== 'AbortError') {
+                    setStatus('TIN lookup service is unavailable.', 'muted');
+                }
+            });
+    }
+
+    tinInput.addEventListener('input', function () {
+        clearTimeout(timer);
+        timer = setTimeout(lookupTin, 450);
+    });
+    tinInput.addEventListener('blur', lookupTin);
+})();
+</script>
 {% endblock %}

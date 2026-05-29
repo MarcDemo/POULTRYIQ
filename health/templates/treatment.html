@@ -3,10 +3,10 @@
 
 {% block extra_css %}
 <style>
-/* Allow horizontal scrolling when content is wider than viewport */
-.container-fluid, .main-content { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-.table-responsive { overflow-x: auto; }
-/* Ensure tables can shrink on small screens but allow horizontal scroll when needed */
+/* Keep pages responsive while table areas handle their own scrolling. */
+.container-fluid, .main-content { max-width: 100%; overflow-x: hidden; }
+.table-responsive { overflow: auto; max-width: 100%; max-height: clamp(320px, 64vh, 720px); -webkit-overflow-scrolling: touch; }
+/* Ensure wide treatment tables scroll inside their table area when needed. */
 .table-responsive table { min-width: 760px; }
 /* Improve button spacing */
 .card-header .badge { margin-left: 8px; }

@@ -19,6 +19,7 @@ from poultry.models import (
     FeedRecord,
     CleaningRecord,
 )
+from poultryiq.pagination import paginate
 from decimal import Decimal, InvalidOperation
 from .models import SickbayCleaningRecord, SicknessReport, TreatmentPlanItem
 
@@ -536,10 +537,13 @@ def vaccination(request):
         schedules = schedules.filter(scheduled_for__date__gte=f_date_from)
     if f_date_to:
         schedules = schedules.filter(scheduled_for__date__lte=f_date_to)
+    page_obj, querystring = paginate(request, schedules, per_page=20)
 
     return render(request, 'vaccination.html', {
         "houses": houses,
-        "schedules": schedules,
+        "schedules": page_obj,
+        "page_obj": page_obj,
+        "querystring": querystring,
         "base_template": "supbase.html" if role_code == "SUPERVISOR" else "base.html",
         "f_house": f_house,
         "f_vac_status": f_vac_status,
@@ -575,9 +579,12 @@ def vaccine_report(request):
         schedules = schedules.filter(scheduled_for__date__gte=f_date_from)
     if f_date_to:
         schedules = schedules.filter(scheduled_for__date__lte=f_date_to)
+    page_obj, querystring = paginate(request, schedules, per_page=20)
 
     return render(request, 'vaccine_report.html', {
-        "schedules": schedules,
+        "schedules": page_obj,
+        "page_obj": page_obj,
+        "querystring": querystring,
         "houses": houses,
         "vac_status_choices": VaccinationSchedule.Status.choices,
         "f_house": f_house,
@@ -826,13 +833,16 @@ def view_sickness_reports(request):
     common_disease = common_disease_entry["disease"] if common_disease_entry else "N/A"
 
     house_choices = _scoped_health_houses(request.user)
+    page_obj, querystring = paginate(request, reports, per_page=20)
 
     return render(
         request,
         "view_sickness.html",
         {
             "base_template": "supbase.html" if role_code == "SUPERVISOR" else "base.html",
-            "reports": reports,
+            "reports": page_obj,
+            "page_obj": page_obj,
+            "querystring": querystring,
             "house_choices": house_choices,
             "total_cases": total_cases,
             "total_affected": total_affected,
@@ -872,9 +882,11 @@ def sick_record_egg(request):
         collection_date_raw = request.POST.get("collection_date", "").strip()
         total_eggs_raw = request.POST.get("total_eggs", "").strip()
         broken_eggs_raw = request.POST.get("broken_eggs", "0").strip()
+        egg_weight_values = request.POST.getlist("egg_weights")
         notes = request.POST.get("notes", "").strip()
 
         errors = []
+        average_egg_weight_g = None
         selected_batch = batches.filter(pk=batch_id).first() if batch_id else None
         selected_report = assigned_sick_reports.filter(pk=sickness_report_id).first() if sickness_report_id else None
         if selected_report and selected_report.batch:
@@ -919,6 +931,35 @@ def sick_record_egg(request):
         if not selected_batch and not selected_report:
             errors.append("Please select a valid batch or sickbay case from your assignment.")
 
+        weights = []
+        for raw_weight in egg_weight_values:
+            raw_weight = raw_weight.strip()
+            if not raw_weight:
+                continue
+            try:
+                weight = Decimal(raw_weight)
+            except InvalidOperation:
+                errors.append("Please enter valid egg weights.")
+                weights = []
+                break
+            if weight <= 0:
+                errors.append("Egg weights must be greater than zero.")
+                weights = []
+                break
+            weights.append(weight)
+
+        if eggs_collected is not None and eggs_collected > 0:
+            if eggs_collected < 50:
+                if len(weights) != eggs_collected:
+                    errors.append(
+                        f"Because fewer than 50 eggs were collected, enter the weight for all {eggs_collected} eggs."
+                    )
+            elif len(weights) < 20 or len(weights) > 30:
+                errors.append("Enter 20 to 30 random egg weights for collections of 50 eggs or more.")
+
+            if weights and not errors:
+                average_egg_weight_g = (sum(weights) / Decimal(len(weights))).quantize(Decimal("0.01"))
+
         if errors:
             for error in errors:
                 messages.error(request, error)
@@ -928,6 +969,7 @@ def sick_record_egg(request):
                 collection_date=collection_date,
                 eggs_collected=eggs_collected,
                 eggs_rejected=eggs_rejected,
+                average_egg_weight_g=average_egg_weight_g,
                 notes=notes,
                 collected_by=request.user,
                 sickness_report=selected_report,
@@ -939,7 +981,7 @@ def sick_record_egg(request):
     recent_egg_records = egg_collection.objects.filter(
         collected_by=request.user,
         collection_date=date.today(),
-    ).filter(Q(batch__in=batches) | Q(sickness_report__in=assigned_sick_reports)).select_related("batch__house")[:10]
+    ).filter(Q(batch__in=batches) | Q(sickness_report__in=assigned_sick_reports)).select_related("batch__house", "sickness_report")[:10]
 
     return render(request, "record_egg_sickbay.html", {"batches": batches, "today": date.today(), "recent_egg_records": recent_egg_records, "sick_reports": assigned_sick_reports})
 
