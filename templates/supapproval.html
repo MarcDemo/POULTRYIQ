@@ -71,6 +71,7 @@
                         <th>Date</th>
                         <th>Eggs</th>
                         <th>Broken</th>
+                        <th>Avg Weight</th>
                         <th>Notes</th>
                         <th class="text-center">Actions</th>
                     </tr>
@@ -96,6 +97,13 @@
                         <td>{{ rec.collection_date }}</td>
                         <td><span class="badge bg-success fs-6">{{ rec.eggs_collected }}</span></td>
                         <td>{% if rec.eggs_rejected > 0 %}<span class="badge bg-secondary">{{ rec.eggs_rejected }}</span>{% else %}-{% endif %}</td>
+                        <td>
+                            {% if rec.average_egg_weight_g %}
+                                {{ rec.average_egg_weight_g|floatformat:1 }} g
+                            {% else %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
                         <td><small class="text-muted">{{ rec.notes|default:"-"|truncatechars:40 }}</small></td>
                         <td>
                             <div class="d-flex gap-2 justify-content-center">
@@ -111,7 +119,7 @@
                         </td>
                     </tr>
                     {% empty %}
-                    <tr><td colspan="7" class="text-center text-muted py-5">
+                    <tr><td colspan="8" class="text-center text-muted py-5">
                         <i class="bi bi-check-circle-fill text-success fs-3 d-block mb-2"></i>
                         No pending egg submissions — all caught up!
                     </td></tr>
@@ -130,7 +138,7 @@
                         <th>Worker</th>
                         <th>House / Batch</th>
                         <th>Date</th>
-                        <th>Feed Type</th>
+                        <th>Mixture</th>
                         <th>Qty (kg)</th>
                         <th>Time Given</th>
                         <th>Notes</th>
@@ -156,7 +164,7 @@
                             <small class="text-muted">{{ rec.batch.batch_code }}</small>
                         </td>
                         <td>{{ rec.record_date }}</td>
-                        <td><span class="badge bg-warning text-dark">{{ rec.get_feed_type_display }}</span></td>
+                        <td><span class="badge bg-warning text-dark">{{ rec.feed_mixture.name|default:rec.get_feed_type_display }}</span></td>
                         <td><strong>{{ rec.quantity_kg }}</strong></td>
                         <td>{{ rec.time_given|default:"-" }}</td>
                         <td><small class="text-muted">{{ rec.notes|default:"-"|truncatechars:30 }}</small></td>
@@ -303,6 +311,7 @@
 
     </div>
 </div>
+{% include "partials/pagination.html" %}
 
 <!-- Approve / Reject Modal -->
 <div class="modal fade" id="approveModal" tabindex="-1">

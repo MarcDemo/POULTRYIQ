@@ -182,6 +182,7 @@
                                 <th>Worker</th>
                                 <th>Date</th>
                                 <th>Eggs</th>
+                                <th>Avg Weight</th>
                                 <th>Status</th>
                             </tr>
                         </thead>
@@ -191,10 +192,17 @@
                                 <td>{{ rec.collected_by.get_full_name|default:rec.collected_by.username }}</td>
                                 <td>{{ rec.collection_date }}</td>
                                 <td>{{ rec.eggs_collected }}</td>
+                                <td>
+                                    {% if rec.average_egg_weight_g %}
+                                        {{ rec.average_egg_weight_g|floatformat:1 }} g
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
                                 <td><span class="badge bg-warning text-dark"><i class="bi bi-hourglass-split me-1"></i>Pending</span></td>
                             </tr>
                             {% empty %}
-                            <tr><td colspan="4" class="text-center text-muted py-3"><i class="bi bi-check-circle text-success me-2"></i>No pending egg submissions</td></tr>
+                            <tr><td colspan="5" class="text-center text-muted py-3"><i class="bi bi-check-circle text-success me-2"></i>No pending egg submissions</td></tr>
                             {% endfor %}
                         </tbody>
                     </table>
@@ -347,6 +355,12 @@
                     <i class="bi bi-bag-fill fs-4"></i>
                     <span class="fw-semibold">Feed Records</span>
                     {% if pending_feed > 0 %}<span class="badge bg-warning text-dark">{{ pending_feed }} pending</span>{% endif %}
+                </a>
+            </div>
+            <div class="col-6 col-md-3">
+                <a href="{% url 'feed_mixtures' %}" class="btn btn-outline-primary w-100 py-3 d-flex flex-column align-items-center gap-1">
+                    <i class="bi bi-bag-plus fs-4"></i>
+                    <span class="fw-semibold">Mix Feed</span>
                 </a>
             </div>
             <div class="col-6 col-md-3">

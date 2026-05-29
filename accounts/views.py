@@ -3,10 +3,17 @@ from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.core.exceptions import ValidationError
+from django.db.models import DecimalField, Sum, Value
+from django.db.models.functions import Coalesce
+from datetime import date
+from decimal import Decimal, InvalidOperation
 
+from finance.models import ExpenseTransaction
+from inventory.models import InventoryTransaction
 from poultry.models import PoultryHouse
+from sales.models import CustomerPayment, ReceivableLedger, SaleInvoice
 
-from .models import Role, User, validate_house_assignment
+from .models import InvestorCapitalTransaction, Role, User, validate_house_assignment
 
 # Create your views here.
 
@@ -232,25 +239,162 @@ def end_of_day(request):
 
 @login_required(login_url='login')
 def valuation(request):
-    # Sample data for demonstration
-    invested = 1000000
-    withdrawn = 200000
-    profit = 500000
-    assets = 1500000
-    liabilities = 300000
+    if request.method == "POST":
+        transaction_type = request.POST.get("transaction_type", "").strip()
+        transaction_date_raw = request.POST.get("transaction_date", "").strip()
+        amount_raw = request.POST.get("amount", "").strip()
+        notes = request.POST.get("notes", "").strip()
+
+        errors = []
+        transaction_date = None
+        amount = None
+
+        valid_types = dict(InvestorCapitalTransaction.TransactionType.choices)
+        if transaction_type not in valid_types:
+            errors.append("Please select a valid capital transaction type.")
+
+        if not transaction_date_raw:
+            errors.append("Transaction date is required.")
+        else:
+            try:
+                transaction_date = date.fromisoformat(transaction_date_raw)
+            except ValueError:
+                errors.append("Please enter a valid transaction date.")
+
+        try:
+            amount = Decimal(amount_raw)
+            if amount <= 0:
+                errors.append("Amount must be greater than zero.")
+        except (InvalidOperation, ValueError):
+            errors.append("Please enter a valid amount.")
+
+        if not errors and transaction_date and amount:
+            InvestorCapitalTransaction.objects.create(
+                transaction_type=transaction_type,
+                transaction_date=transaction_date,
+                amount=amount,
+                notes=notes,
+                recorded_by=request.user,
+            )
+            messages.success(request, "Investor capital record saved.")
+            return redirect("valuation")
+
+        for error in errors:
+            messages.error(request, error)
+
+    def decimal_total(queryset, field_name):
+        return queryset.aggregate(
+            total=Coalesce(
+                Sum(field_name),
+                Value(0),
+                output_field=DecimalField(max_digits=14, decimal_places=2),
+            )
+        )["total"]
+
+    capital_records = InvestorCapitalTransaction.objects.select_related("recorded_by")
+    startup_capital = decimal_total(
+        capital_records.filter(transaction_type=InvestorCapitalTransaction.TransactionType.STARTUP),
+        "amount",
+    )
+    additional_capital = decimal_total(
+        capital_records.filter(transaction_type=InvestorCapitalTransaction.TransactionType.ADDITION),
+        "amount",
+    )
+    withdrawn = decimal_total(
+        capital_records.filter(transaction_type=InvestorCapitalTransaction.TransactionType.WITHDRAWAL),
+        "amount",
+    )
+    invested = startup_capital + additional_capital
+    net_owner_capital = invested - withdrawn
+
+    sales = decimal_total(
+        SaleInvoice.objects.exclude(status=SaleInvoice.Status.CANCELLED),
+        "total_amount",
+    )
+    cash_received = decimal_total(CustomerPayment.objects.all(), "amount")
+    expenses = decimal_total(
+        ExpenseTransaction.objects.exclude(status=ExpenseTransaction.Status.REJECTED),
+        "total_amount",
+    )
+    profit = sales - expenses
+    outstanding_receivables = decimal_total(ReceivableLedger.objects.all(), "balance")
+
+    inventory_rows = {}
+    for tx in InventoryTransaction.objects.select_related("item").order_by("item_id", "tx_date", "tx_id"):
+        row = inventory_rows.setdefault(
+            tx.item_id,
+            {"quantity": Decimal("0.000"), "unit_price": Decimal("0.00")},
+        )
+        if tx.tx_type == InventoryTransaction.TxType.IN_:
+            row["quantity"] += tx.quantity
+            if tx.unit_price is not None:
+                row["unit_price"] = tx.unit_price
+        elif tx.tx_type == InventoryTransaction.TxType.OUT:
+            row["quantity"] -= tx.quantity
+        else:
+            row["quantity"] += tx.quantity
+    inventory_value = sum(
+        max(row["quantity"], Decimal("0.000")) * row["unit_price"]
+        for row in inventory_rows.values()
+    )
+
+    cash_position = net_owner_capital + cash_received - expenses
+    assets = cash_position + outstanding_receivables + inventory_value
+    liabilities = Decimal("0.00")
     business_value = assets - liabilities
-    share = profit
-    roi = (profit / invested * 100) if invested != 0 else 0
+    owner_equity = business_value
+    owner_gain = owner_equity - net_owner_capital
+    roi = (owner_gain / invested * 100) if invested > 0 else Decimal("0")
+
+    capital_mix = [
+        {"label": "Startup Capital", "value": float(startup_capital)},
+        {"label": "Additional Capital", "value": float(additional_capital)},
+        {"label": "Withdrawals", "value": float(withdrawn)},
+    ]
+
+    asset_mix = [
+        {"label": "Cash Position", "value": float(cash_position)},
+        {"label": "Receivables", "value": float(outstanding_receivables)},
+        {"label": "Inventory Estimate", "value": float(inventory_value)},
+    ]
+
+    valuation_notes = []
+    if invested <= 0:
+        valuation_notes.append("Add startup capital first so ROI and owner equity can be measured properly.")
+    if cash_position < 0:
+        valuation_notes.append("Cash position is negative. The farm may need cash collection, cost control, or additional capital.")
+    if outstanding_receivables > cash_received and cash_received > 0:
+        valuation_notes.append("Receivables are higher than collected cash. Follow up customer balances before adding more capital.")
+    if profit < 0:
+        valuation_notes.append("The farm is carrying a loss. Review expenses and selling prices before expansion.")
+    if not valuation_notes:
+        valuation_notes.append("Valuation is stable based on the current records. Keep capital additions separated from operating revenue.")
 
     context = {
+        "today": date.today(),
+        "startup_capital": startup_capital,
+        "additional_capital": additional_capital,
         'invested': invested,
         'withdrawn': withdrawn,
+        "net_owner_capital": net_owner_capital,
+        "cash_received": cash_received,
+        "sales": sales,
+        "expenses": expenses,
         'profit': profit,
         'assets': assets,
         'liabilities': liabilities,
         'business_value': business_value,
-        'share': share,
+        "owner_equity": owner_equity,
+        "owner_gain": owner_gain,
         'roi': roi,
+        "cash_position": cash_position,
+        "outstanding_receivables": outstanding_receivables,
+        "inventory_value": inventory_value,
+        "capital_records": capital_records[:12],
+        "capital_mix": capital_mix,
+        "asset_mix": asset_mix,
+        "valuation_notes": valuation_notes,
+        "capital_transaction_types": InvestorCapitalTransaction.TransactionType.choices,
     }
     return render(request, 'valuation.html', context)
 

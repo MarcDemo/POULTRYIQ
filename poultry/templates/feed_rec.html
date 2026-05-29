@@ -5,116 +5,118 @@
 <div class="container-fluid">
 
     <div class="page-header-row mb-4">
-        <h2><i class="bi bi-bag-fill me-2"></i>Feed Records</h2>
+        <h2><i class="bi bi-bag-fill me-2"></i>Feed Management</h2>
+        {% if request.user.is_supervisor %}
+        <a href="{% url 'feed_mixtures' %}" class="btn btn-primary">
+            <i class="bi bi-bag-plus me-1"></i>Record Feed Mixture
+        </a>
+        {% endif %}
     </div>
 
-    <!-- FILTERS -->
-    <div class="card mb-4">
+    <div class="card">
+        <div class="card-header">
+            <i class="bi bi-beaker me-2"></i>Recent Mixtures
+        </div>
         <div class="card-body">
-            <form method="GET" data-auto-filter="true" class="row g-2 align-items-end">
+            {% if recent_mixtures %}
+            <div class="row g-3">
+                {% for mixture in recent_mixtures %}
+                <div class="col-lg-6">
+                    <div class="border rounded-3 p-3 h-100 bg-light">
+                        <div class="d-flex justify-content-between gap-2 mb-2">
+                            <div>
+                                <div class="fw-bold">{{ mixture.name }}</div>
+                                <small class="text-muted">
+                                    Mixed by {{ mixture.mixed_by.get_full_name|default:mixture.mixed_by.username }} on {{ mixture.mix_date }}
+                                </small>
+                            </div>
+                            <span class="badge bg-warning text-dark align-self-start">
+                                {{ mixture.total_weight_kg|floatformat:1 }} kg weighed
+                            </span>
+                        </div>
 
-                <div class="col-md-2">
-                    <label class="form-label fw-semibold small">Date</label>
-                    <input type="date" name="date" value="{{ f_date }}" class="form-control">
+                        <div class="mb-2">
+                            <small class="fw-semibold text-muted d-block">Ingredients Used</small>
+                            {% for item in mixture.ingredients.all %}
+                            <span class="badge bg-white text-dark border mb-1">
+                                {{ item.ingredient_name|default:item.get_feed_type_display }}: {{ item.quantity_kg|floatformat:1 }} kg
+                            </span>
+                            {% empty %}
+                            <span class="text-muted small">No ingredients recorded.</span>
+                            {% endfor %}
+                        </div>
+
+                        <div>
+                            <small class="fw-semibold text-muted d-block">Distributed To</small>
+                            {% for allocation in mixture.allocations.all %}
+                            <span class="badge bg-info text-dark mb-1">
+                                {{ allocation.house.house_code }}{% if allocation.house.name %} - {{ allocation.house.name }}{% endif %}: {{ allocation.quantity_kg|floatformat:1 }} kg
+                            </span>
+                            {% empty %}
+                            <span class="text-muted small">No house distribution recorded.</span>
+                            {% endfor %}
+                        </div>
+
+                        {% if mixture.notes %}
+                        <div class="small text-muted mt-2">{{ mixture.notes }}</div>
+                        {% endif %}
+                    </div>
                 </div>
-
-                <div class="col-md-3">
-                    <label class="form-label fw-semibold small">House</label>
-                    <select name="house" class="form-select">
-                        <option value="">All Houses</option>
-                        {% for h in houses %}
-                            <option value="{{ h.pk }}" {% if f_house == h.pk|stringformat:"s" %}selected{% endif %}>
-                                {{ h.house_code }}{% if h.name %} – {{ h.name }}{% endif %}
-                            </option>
-                        {% endfor %}
-                    </select>
-                </div>
-
-                <div class="col-md-2">
-                    <label class="form-label fw-semibold small">Feed Type</label>
-                    <select name="feed_type" class="form-select">
-                        <option value="">All Types</option>
-                        {% for val, label in feed_types %}
-                            <option value="{{ val }}" {% if f_feed_type == val %}selected{% endif %}>{{ label }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-
-                <div class="col-md-2">
-                    <label class="form-label fw-semibold small">Status</label>
-                    <select name="status" class="form-select">
-                        <option value="">All Statuses</option>
-                        {% for val, label in approval_statuses %}
-                            <option value="{{ val }}" {% if f_status == val %}selected{% endif %}>{{ label }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-
-                <div class="col-md-3">
-                    <button type="submit" class="btn btn-outline-secondary w-100">
-                        <i class="bi bi-funnel me-1"></i>Filter
-                    </button>
-                </div>
-
-            </form>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="text-center text-muted py-5">
+                <i class="bi bi-bag fs-3 d-block mb-2"></i>
+                No recent feed mixtures found.
+            </div>
+            {% endif %}
         </div>
     </div>
+    {% include "partials/pagination.html" with page_obj=mixtures_page_obj querystring=mixtures_querystring page_param="mixtures_page" only %}
 
-    <!-- TABLE -->
-    <div class="card">
-        <div class="card-body">
+    {% if show_feed_records %}
+    <div class="card mt-4">
+        <div class="card-header">
+            <i class="bi bi-list-check me-2"></i>Feed Records
+        </div>
+        <div class="card-body p-0">
             <div class="table-responsive">
-                <table class="table table-hover align-middle">
-                    <thead class="table-light">
+                <table class="table table-hover align-middle mb-0">
+                    <thead>
                         <tr>
                             <th>Date</th>
                             <th>House</th>
-                            <th>Breed</th>
-                            <th>Feed Type</th>
-                            <th>Amount (kg)</th>
-                            <th>Time Given</th>
+                            <th>Batch</th>
+                            <th>Mixture / Feed</th>
+                            <th>Qty (kg)</th>
                             <th>Recorded By</th>
                             <th>Status</th>
-                            <th>Approved By</th>
+                            <th>Notes</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {% for r in records %}
+                        {% for rec in feed_records %}
                         <tr>
-                            <td>{{ r.record_date|date:"d M Y" }}</td>
+                            <td>{{ rec.record_date }}</td>
+                            <td>{{ rec.batch.house.name|default:rec.batch.house.house_code }}</td>
+                            <td>{{ rec.batch.batch_code }}</td>
+                            <td>{{ rec.feed_mixture.name|default:rec.get_feed_type_display }}</td>
+                            <td>{{ rec.quantity_kg|floatformat:2 }}</td>
+                            <td>{{ rec.recorded_by.get_full_name|default:rec.recorded_by.username }}</td>
                             <td>
-                                <span class="badge bg-info text-dark">
-                                    {{ r.batch.house.house_code }}
-                                </span>
-                            </td>
-                            <td>{{ r.batch.breed|default:"—" }}</td>
-                            <td>{{ r.get_feed_type_display }}</td>
-                            <td><strong>{{ r.quantity_kg }} kg</strong></td>
-                            <td>
-                                {% if r.time_given %}
-                                    {{ r.time_given|time:"H:i" }}
-                                {% else %}
-                                    <span class="text-muted">—</span>
-                                {% endif %}
-                            </td>
-                            <td>{% if r.recorded_by %}{{ r.recorded_by.get_full_name|default:r.recorded_by.username }}{% else %}—{% endif %}</td>
-                            <td>
-                                {% if r.status == "APPROVED" %}
+                                {% if rec.status == 'APPROVED' %}
                                     <span class="badge bg-success">Approved</span>
-                                {% elif r.status == "REJECTED" %}
+                                {% elif rec.status == 'REJECTED' %}
                                     <span class="badge bg-danger">Rejected</span>
                                 {% else %}
                                     <span class="badge bg-warning text-dark">Pending</span>
                                 {% endif %}
                             </td>
-                            <td>{% if r.reviewed_by %}{{ r.reviewed_by.get_full_name|default:r.reviewed_by.username }}{% else %}—{% endif %}</td>
+                            <td class="text-muted small">{{ rec.notes|default:"-" }}</td>
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="9" class="text-center text-muted py-5">
-                                <i class="bi bi-bag fs-3 d-block mb-2"></i>
-                                No feed records found.
-                            </td>
+                            <td colspan="8" class="text-center text-muted py-4">No feed records found.</td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -122,6 +124,8 @@
             </div>
         </div>
     </div>
+    {% include "partials/pagination.html" with page_obj=feed_records_page_obj querystring=feed_records_querystring page_param="feed_page" only %}
+    {% endif %}
 
 </div>
 {% endblock %}

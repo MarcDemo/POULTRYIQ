@@ -1,6 +1,9 @@
 from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.core.exceptions import ValidationError
+from django.conf import settings
+from django.core.validators import MinValueValidator
+from decimal import Decimal
 
 
 HOUSE_REQUIRED_ROLE_CODES = {"WORKER", "SUPERVISOR"}
@@ -106,3 +109,40 @@ class User(AbstractUser):
 
         if self.pk and self.requires_house_assignment:
             validate_house_assignment(self.role, self.houses.all())
+
+
+class InvestorCapitalTransaction(models.Model):
+    class TransactionType(models.TextChoices):
+        STARTUP = "STARTUP", "Startup Capital"
+        ADDITION = "ADDITION", "Additional Capital"
+        WITHDRAWAL = "WITHDRAWAL", "Owner Withdrawal"
+
+    transaction_id = models.BigAutoField(primary_key=True)
+    transaction_type = models.CharField(
+        max_length=12,
+        choices=TransactionType.choices,
+        default=TransactionType.ADDITION,
+        db_index=True,
+    )
+    transaction_date = models.DateField(db_index=True)
+    amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal("0.00"))],
+    )
+    notes = models.CharField(max_length=255, blank=True)
+    recorded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="investor_capital_transactions",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-transaction_date", "-created_at"]
+        indexes = [
+            models.Index(fields=["transaction_type", "transaction_date"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.get_transaction_type_display()} - {self.amount}"
