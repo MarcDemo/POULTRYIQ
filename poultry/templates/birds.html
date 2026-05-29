@@ -4,7 +4,8 @@
 <style>
     .table-responsive {
         max-width: 100%;
-        overflow-x: auto;
+        overflow: auto;
+        max-height: clamp(320px, 64vh, 720px);
         -webkit-overflow-scrolling: touch;
     }
 
@@ -304,6 +305,7 @@
             </div>
         </div>
     </div>
+    {% include "partials/pagination.html" %}
 
 </div>
 

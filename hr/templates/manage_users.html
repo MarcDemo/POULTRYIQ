@@ -2,180 +2,57 @@
 {% load static %}
 
 {% block content %}
-
 <div class="container-fluid">
-
-<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
-    <h3>
-        <i class="bi bi-people-fill me-2"></i>User Management
-    </h3>
-
-    <div class="btn-group" role="group">
-        <a href="{% url 'add_user' %}" class="btn btn-primary">
-            <i class="bi bi-person-plus me-2"></i>Add User
-        </a>
-        <a href="{% url 'salaries' %}" class="btn btn-info">
-            <i class="bi bi-cash-coin me-2"></i>Salaries
-        </a>
+    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+        <h3><i class="bi bi-people-fill me-2"></i>User Management</h3>
+        <div class="btn-group" role="group">
+            <a href="{% url 'add_user' %}" class="btn btn-primary">
+                <i class="bi bi-person-plus me-2"></i>Add User
+            </a>
+            <a href="{% url 'salaries' %}" class="btn btn-info">
+                <i class="bi bi-cash-coin me-2"></i>Salaries
+            </a>
+        </div>
     </div>
+
+    <div class="card">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Full Name</th>
+                            <th>Enrollment Date</th>
+                            <th>Enrollment #</th>
+                            <th>Role</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for user in users %}
+                        <tr>
+                            <td><strong>{{ user.get_full_name|default:user.username }}</strong></td>
+                            <td>{{ user.date_joined|date:"d M Y" }}</td>
+                            <td><code>{{ user.pk }}</code></td>
+                            <td><span class="badge bg-info">{{ user.role.name|default:"No role" }}</span></td>
+                            <td>
+                                {% if user.is_active %}
+                                <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Active</span>
+                                {% else %}
+                                <span class="badge bg-secondary">Inactive</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="5" class="text-center text-muted py-3">No users found.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% include "partials/pagination.html" %}
 </div>
-
-<!-- USERS TABLE -->
-<div class="card">
-<div class="card-body">
-
-<div class="table-responsive">
-<table class="table table-hover">
-
-<thead>
-<tr>
-<th>Full Name</th>
-<th>Enrollment Date</th>
-<th>Enrollment #</th>
-<th>Salary</th>
-<th>Role</th>
-<th>Status</th>
-<th>Actions</th>
-</tr>
-</thead>
-
-<tbody>
-
-<tr>
-<td>
-    <strong>Shanitah Isa</strong>
-</td>
-<td>25 May 2025</td>
-<td><code>EN001</code></td>
-<td>1,000,000 UGX</td>
-
-<td>
-    <span class="badge bg-info">Worker</span>
-</td>
-
-<td>
-    <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Active</span>
-</td>
-<td>
-    <button class="btn btn-sm btn-outline-warning" title="Edit">
-        <i class="bi bi-pencil"></i>
-    </button>
-    <button class="btn btn-sm btn-outline-danger" title="Delete">
-        <i class="bi bi-trash"></i>
-    </button>
-</td>
-</tr>
-
-</td>
-
-<td>
-
-<button class="btn btn-sm btn-warning edit-btn">
-Edit
-</button>
-
-<a href="" class="btn btn-sm btn-secondary">
-Remove user
-</a>
-
-</td>
-
-</tr>
-
-
-</tbody>
-
-</table>
-
-</div>
-</div>
-
-</div>
-
-<!-- ADD USER MODAL -->
-
-<div class="modal fade" id="addUserModal">
-<div class="modal-dialog">
-<div class="modal-content">
-
-
-
-<div class="modal-body">
-
-<form method="POST" action="#">
-{% csrf_token %}
-
-<div class="mb-3">
-<label>Username</label>
-<input type="text" class="form-control" name="username" required>
-</div>
-
-<div class="mb-3">
-<label>Password</label>
-<input type="password" class="form-control" name="password" required>
-</div>
-
-<div class="mb-3">
-<label>Role</label>
-<select class="form-control" name="role">
-<option value="manager">Manager</option>
-<option value="supervisor">Supervisor</option>
-<option value="worker">Worker</option>
-</select>
-</div>
-
-<button class="btn btn-success w-100">Create User</button>
-
-</form>
-
-</div>
-
-</div>
-</div>
-</div>
-
-
-<!-- EDIT USER MODAL -->
-
-<div class="modal fade" id="editUserModal">
-<div class="modal-dialog">
-<div class="modal-content">
-
-<div class="modal-header">
-<h5>Edit User</h5>
-</div>
-
-<div class="modal-body">
-
-<form method="POST" action="#">
-{% csrf_token %}
-
-<input type="hidden" name="user_id" id="edit_user_id">
-
-<div class="mb-3">
-<label>Username</label>
-<input type="text" class="form-control" name="username" id="edit_username">
-</div>
-
-<div class="mb-3">
-<label>Role</label>
-<select class="form-control" name="role" id="edit_role">
-<option value="manager">Manager</option>
-<option value="supervisor">Supervisor</option>
-<option value="worker">Worker</option>
-</select>
-</div>
-
-<button class="btn btn-primary w-100">Save Changes</button>
-
-</form>
-
-</div>
-
-</div>
-</div>
-</div>
-
-<script src="{% static 'js/manage_users.js' %}"></script>
-
 {% endblock %}

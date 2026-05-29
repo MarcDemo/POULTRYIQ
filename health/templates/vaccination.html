@@ -3,7 +3,9 @@
 <style>
 /* Keep wide vaccination records scrollable inside the records card. */
 .vaccination-records-scroll {
-    overflow-x: auto;
+    overflow: auto;
+    max-width: 100%;
+    max-height: clamp(320px, 64vh, 720px);
     -webkit-overflow-scrolling: touch;
 }
 .vaccination-table {
@@ -230,6 +232,7 @@
 </div>
 </div>
 </div>
+{% include "partials/pagination.html" %}
 
 </div>
 

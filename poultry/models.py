@@ -240,6 +240,13 @@ class egg_collection(models.Model):
 
     eggs_collected = models.PositiveIntegerField(validators=[MinValueValidator(0)])
     eggs_rejected = models.PositiveIntegerField(default=0, validators=[MinValueValidator(0)])
+    average_egg_weight_g = models.DecimalField(
+        max_digits=6,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal("0.00"))],
+        null=True,
+        blank=True,
+    )
 
     notes = models.TextField(blank=True)
 
@@ -283,6 +290,13 @@ class FeedRecord(models.Model):
 
     feed_id = models.BigAutoField(primary_key=True)
     batch = models.ForeignKey(PoultryBatch, on_delete=models.PROTECT, related_name="feed_records")
+    feed_mixture = models.ForeignKey(
+        "poultry.FeedMixture",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="feed_records",
+    )
     sickness_report = models.ForeignKey(
         'health.SicknessReport', on_delete=models.PROTECT, null=True, blank=True, related_name='sickbay_feed_records'
     )
@@ -325,6 +339,88 @@ class FeedRecord(models.Model):
 
     def __str__(self) -> str:
         return f"{self.batch.batch_code} feed {self.record_date}: {self.quantity_kg}kg"
+
+
+class FeedMixture(models.Model):
+    mixture_id = models.BigAutoField(primary_key=True)
+    name = models.CharField(max_length=120)
+    mix_date = models.DateField(db_index=True)
+    total_weight_kg = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal("0.00"))],
+        null=True,
+        blank=True,
+    )
+    notes = models.TextField(blank=True)
+    mixed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="feed_mixtures_created",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-mix_date", "-created_at"]
+        indexes = [
+            models.Index(fields=["mix_date"]),
+            models.Index(fields=["mixed_by", "mix_date"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.name} ({self.mix_date})"
+
+    @property
+    def total_ingredient_kg(self):
+        return self.ingredients.aggregate(total=models.Sum("quantity_kg"))["total"] or Decimal("0.00")
+
+    @property
+    def total_allocated_kg(self):
+        return self.allocations.aggregate(total=models.Sum("quantity_kg"))["total"] or Decimal("0.00")
+
+
+class FeedMixtureIngredient(models.Model):
+    ingredient_id = models.BigAutoField(primary_key=True)
+    mixture = models.ForeignKey(FeedMixture, on_delete=models.CASCADE, related_name="ingredients")
+    item = models.ForeignKey(
+        "inventory.Item",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="feed_mixture_ingredients",
+    )
+    feed_type = models.CharField(max_length=20, choices=FeedRecord.FeedType.choices, default=FeedRecord.FeedType.OTHER)
+    ingredient_name = models.CharField(max_length=120, blank=True)
+    quantity_kg = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal("0.00"))],
+    )
+
+    class Meta:
+        ordering = ["ingredient_id"]
+
+    def __str__(self) -> str:
+        label = self.ingredient_name or self.get_feed_type_display()
+        return f"{label}: {self.quantity_kg}kg"
+
+
+class FeedMixtureAllocation(models.Model):
+    allocation_id = models.BigAutoField(primary_key=True)
+    mixture = models.ForeignKey(FeedMixture, on_delete=models.CASCADE, related_name="allocations")
+    house = models.ForeignKey(PoultryHouse, on_delete=models.PROTECT, related_name="feed_mixture_allocations")
+    quantity_kg = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal("0.00"))],
+    )
+
+    class Meta:
+        ordering = ["house__house_code", "allocation_id"]
+        unique_together = ("mixture", "house")
+
+    def __str__(self) -> str:
+        return f"{self.mixture.name} -> {self.house.house_code}: {self.quantity_kg}kg"
 
 
 class CleaningRecord(models.Model):

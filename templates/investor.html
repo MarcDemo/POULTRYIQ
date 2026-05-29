@@ -1,144 +1,423 @@
 {% extends 'base.html' %}
 {% load static %}
 
+{% block title %}Investor Panel - PoultryIQ{% endblock %}
+
 {% block content %}
+<style>
+    .investor-panel {
+        color: #1d2b38;
+    }
 
-<div class="container-fluid">
+    .investor-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 16px;
+        flex-wrap: wrap;
+        margin-bottom: 18px;
+    }
 
-<h3 class="mb-4">Investor Dashboard</h3>
+    .investor-title {
+        font-size: 26px;
+        font-weight: 800;
+        margin-bottom: 4px;
+        color: #17324d;
+    }
 
-<!-- FILTER PANEL -->
-<div class="card mb-4">
-<div class="card-body">
+    .investor-subtitle {
+        color: #687685;
+        margin: 0;
+    }
 
-<form id="filterForm" class="row g-3">
+    .investor-card {
+        border: 1px solid #e1e8ee;
+        border-radius: 8px;
+        background: #fff;
+        box-shadow: 0 4px 14px rgba(20, 39, 56, 0.06);
+    }
 
-<div class="col-md-3">
-<label>Start Date</label>
-<input type="date" class="form-control" id="start_date">
+    .investor-filter {
+        padding: 16px;
+        margin-bottom: 18px;
+    }
+
+    .investor-metrics {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 14px;
+        margin-bottom: 18px;
+    }
+
+    .investor-metric {
+        padding: 16px;
+    }
+
+    .investor-metric span {
+        display: block;
+        color: #687685;
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.4px;
+        text-transform: uppercase;
+        margin-bottom: 8px;
+    }
+
+    .investor-metric strong {
+        display: block;
+        color: #17324d;
+        font-size: 22px;
+        line-height: 1.2;
+        overflow-wrap: anywhere;
+    }
+
+    .investor-metric small {
+        display: block;
+        color: #687685;
+        margin-top: 6px;
+    }
+
+    .investor-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 2fr) minmax(320px, 1fr);
+        gap: 16px;
+        margin-bottom: 18px;
+    }
+
+    .investor-section-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 14px 16px;
+        border-bottom: 1px solid #e8eef2;
+    }
+
+    .investor-section-header h5 {
+        margin: 0;
+        font-weight: 800;
+        color: #17324d;
+        font-size: 16px;
+    }
+
+    .investor-body {
+        padding: 16px;
+    }
+
+    .investor-chart-wrap {
+        height: 360px;
+        position: relative;
+    }
+
+    .advisor-list {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .advisor-item {
+        border-left: 4px solid #3b82f6;
+        border-radius: 8px;
+        padding: 12px;
+        background: #f8fbfd;
+    }
+
+    .advisor-item.danger { border-color: #dc3545; }
+    .advisor-item.warning { border-color: #f0ad4e; }
+    .advisor-item.success { border-color: #198754; }
+
+    .advisor-item strong {
+        display: block;
+        margin-bottom: 4px;
+        color: #17324d;
+    }
+
+    .report-text {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+    }
+
+    .report-fact {
+        border: 1px solid #e8eef2;
+        border-radius: 8px;
+        padding: 12px;
+        background: #fbfcfd;
+    }
+
+    .report-fact span {
+        color: #687685;
+        font-size: 12px;
+        text-transform: uppercase;
+        font-weight: 700;
+    }
+
+    .report-fact strong {
+        display: block;
+        color: #17324d;
+        font-size: 18px;
+        margin-top: 4px;
+    }
+
+    @media (max-width: 1100px) {
+        .investor-metrics {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .investor-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    @media (max-width: 576px) {
+        .investor-metrics,
+        .report-text {
+            grid-template-columns: 1fr;
+        }
+
+        .investor-chart-wrap {
+            height: 300px;
+        }
+    }
+</style>
+
+<div class="investor-panel">
+    <div class="investor-header">
+        <div>
+            <h1 class="investor-title">Investor Decision Panel</h1>
+            <p class="investor-subtitle">Financial, production, cash, and health reports from {{ start_date }} to {{ end_date }}.</p>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+            <a href="{% url 'valuation' %}" class="btn btn-outline-primary">
+                <i class="bi bi-calculator me-1"></i>Valuation
+            </a>
+            <button type="button" class="btn btn-outline-secondary" onclick="window.print()">
+                <i class="bi bi-printer me-1"></i>Print Report
+            </button>
+        </div>
+    </div>
+
+    <form class="investor-card investor-filter" method="get" action="{% url 'investor' %}" id="investorReportForm">
+        <div class="row g-3 align-items-end">
+            <div class="col-md-2">
+                <label class="form-label">Start Date</label>
+                <input type="date" class="form-control" name="start_date" id="start_date" value="{{ start_date|date:'Y-m-d' }}">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">End Date</label>
+                <input type="date" class="form-control" name="end_date" id="end_date" value="{{ end_date|date:'Y-m-d' }}">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Report Type</label>
+                <select class="form-select" name="report_type" id="report_type">
+                    <option value="profit" {% if selected_report_type == "profit" %}selected{% endif %}>Profit & Loss</option>
+                    <option value="sales" {% if selected_report_type == "sales" %}selected{% endif %}>Sales</option>
+                    <option value="expenses" {% if selected_report_type == "expenses" %}selected{% endif %}>Expenses</option>
+                    <option value="eggs" {% if selected_report_type == "eggs" %}selected{% endif %}>Egg Production</option>
+                    <option value="health" {% if selected_report_type == "health" %}selected{% endif %}>Health & Feed</option>
+                    <option value="cash" {% if selected_report_type == "cash" %}selected{% endif %}>Cash Collection</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Group By</label>
+                <select class="form-select" name="group_by" id="group_by">
+                    <option value="day" {% if selected_group_by == "day" %}selected{% endif %}>Daily</option>
+                    <option value="week" {% if selected_group_by == "week" %}selected{% endif %}>Weekly</option>
+                    <option value="month" {% if selected_group_by == "month" %}selected{% endif %}>Monthly</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Chart Type</label>
+                <select class="form-select" name="chart_type" id="chart_type">
+                    <option value="line" {% if selected_chart_type == "line" %}selected{% endif %}>Line</option>
+                    <option value="bar" {% if selected_chart_type == "bar" %}selected{% endif %}>Bar</option>
+                    <option value="pie" {% if selected_chart_type == "pie" %}selected{% endif %}>Pie</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-primary w-100" id="generateReportButton">
+                    <i class="bi bi-funnel me-1"></i>Generate
+                </button>
+            </div>
+        </div>
+    </form>
+
+    <div class="investor-metrics">
+        <div class="investor-card investor-metric">
+            <span>Total Revenue</span>
+            <strong>UGX {{ metrics.total_revenue|floatformat:0 }}</strong>
+            <small>Cash received: UGX {{ metrics.cash_received|floatformat:0 }}</small>
+        </div>
+        <div class="investor-card investor-metric">
+            <span>Total Expenses</span>
+            <strong>UGX {{ metrics.total_expenses|floatformat:0 }}</strong>
+            <small>Outstanding: UGX {{ metrics.outstanding_balance|floatformat:0 }}</small>
+        </div>
+        <div class="investor-card investor-metric">
+            <span>Profit</span>
+            <strong>UGX {{ metrics.profit|floatformat:0 }}</strong>
+            <small>Margin: {{ metrics.profit_margin|floatformat:1 }}%</small>
+        </div>
+        <div class="investor-card investor-metric">
+            <span>Production</span>
+            <strong>{{ metrics.total_eggs|floatformat:0 }} eggs</strong>
+            <small>{{ metrics.current_birds }} live birds, {{ metrics.active_batches }} active batches</small>
+        </div>
+    </div>
+
+    <div class="investor-grid">
+        <div class="investor-card">
+            <div class="investor-section-header">
+                <h5 id="chartTitle">Report Visualization</h5>
+                <span class="badge text-bg-light" id="chartUnit">UGX</span>
+            </div>
+            <div class="investor-body">
+                <div class="investor-chart-wrap">
+                    <canvas id="reportChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div class="investor-card">
+            <div class="investor-section-header">
+                <h5><i class="bi bi-stars me-1"></i>AI Advisor</h5>
+                <span class="badge text-bg-primary">Rule-based</span>
+            </div>
+            <div class="investor-body">
+                <div class="advisor-list">
+                    {% for insight in insights %}
+                    <div class="advisor-item {{ insight.level }}">
+                        <strong>{{ insight.title }}</strong>
+                        <span>{{ insight.text }}</span>
+                    </div>
+                    {% empty %}
+                    <div class="advisor-item">
+                        <strong>No alerts</strong>
+                        <span>The selected period has no major advisory flags.</span>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="investor-grid">
+        <div class="investor-card">
+            <div class="investor-section-header">
+                <h5>Text Report</h5>
+            </div>
+            <div class="investor-body">
+                <div class="report-text">
+                    <div class="report-fact">
+                        <span>Collection Rate</span>
+                        <strong>{{ metrics.collection_rate|floatformat:1 }}%</strong>
+                    </div>
+                    <div class="report-fact">
+                        <span>Mortality Rate</span>
+                        <strong>{{ metrics.mortality_rate|floatformat:2 }}%</strong>
+                    </div>
+                    <div class="report-fact">
+                        <span>Feed Used</span>
+                        <strong>{{ metrics.feed_used_kg|floatformat:1 }} kg</strong>
+                    </div>
+                    <div class="report-fact">
+                        <span>Feed Per Egg</span>
+                        <strong>{{ metrics.feed_per_egg|floatformat:3 }} kg</strong>
+                    </div>
+                    <div class="report-fact">
+                        <span>Rejected Eggs</span>
+                        <strong>{{ metrics.rejected_eggs|floatformat:0 }}</strong>
+                    </div>
+                    <div class="report-fact">
+                        <span>Deaths</span>
+                        <strong>{{ metrics.total_deaths|floatformat:0 }}</strong>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="investor-card">
+            <div class="investor-section-header">
+                <h5>Breakdown</h5>
+            </div>
+            <div class="investor-body">
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>Category</th>
+                                <th class="text-end">Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody id="breakdownTable">
+                            <tr><td colspan="2" class="text-muted">Choose a report to view breakdowns.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="investor-card">
+        <div class="investor-section-header">
+            <h5>Detailed Data</h5>
+            <span class="text-muted small">Dates and times included where records provide them</span>
+        </div>
+        <div class="investor-body">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Time</th>
+                            <th>Type</th>
+                            <th>Details</th>
+                            <th class="text-end">Value</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for invoice in recent_invoices %}
+                        <tr>
+                            <td>{{ invoice.invoice_date }}</td>
+                            <td>{{ invoice.created_at|time:"H:i" }}</td>
+                            <td><span class="badge text-bg-success">Sale</span></td>
+                            <td>{{ invoice.invoice_no }} - {{ invoice.customer.name }}</td>
+                            <td class="text-end">UGX {{ invoice.total_amount|floatformat:0 }}</td>
+                        </tr>
+                        {% endfor %}
+                        {% for expense in recent_expenses %}
+                        <tr>
+                            <td>{{ expense.expense_date }}</td>
+                            <td>{{ expense.created_at|time:"H:i" }}</td>
+                            <td><span class="badge text-bg-danger">Expense</span></td>
+                            <td>{{ expense.category.name }} - {{ expense.description }}</td>
+                            <td class="text-end">UGX {{ expense.total_amount|floatformat:0 }}</td>
+                        </tr>
+                        {% endfor %}
+                        {% for egg in recent_eggs %}
+                        <tr>
+                            <td>{{ egg.collection_date }}</td>
+                            <td>{{ egg.collected_at|time:"H:i" }}</td>
+                            <td><span class="badge text-bg-warning">Eggs</span></td>
+                            <td>{{ egg.batch.batch_code }} / {{ egg.batch.house.house_code }}</td>
+                            <td class="text-end">{{ egg.eggs_collected }} eggs</td>
+                        </tr>
+                        {% empty %}
+                        {% if not recent_invoices and not recent_expenses %}
+                        <tr>
+                            <td colspan="5" class="text-center text-muted py-4">No detailed records found for the selected period.</td>
+                        </tr>
+                        {% endif %}
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
 </div>
 
-<div class="col-md-3">
-<label>End Date</label>
-<input type="date" class="form-control" id="end_date">
-</div>
-
-<div class="col-md-3">
-<label>Report Type</label>
-<select class="form-control" id="report_type">
-<option value="profit">Profit & Loss</option>
-<option value="eggs">Egg Production</option>
-<option value="sales">Sales</option>
-<option value="expenses">Expenses</option>
-</select>
-</div>
-
-<div class="col-md-3">
-<label>Group By</label>
-<select class="form-control" id="group_by">
-<option value="day">Daily</option>
-<option value="week">Weekly</option>
-<option value="month">Monthly</option>
-</select>
-</div>
-
-<div class="col-md-3">
-<label>Chart Type</label>
-<select class="form-control" id="chart_type">
-<option value="line">Line</option>
-<option value="bar">Bar</option>
-<option value="pie">Pie</option>
-</select>
-</div>
-
-<div class="col-md-3 d-flex align-items-end">
-<button type="button" class="btn btn-primary w-100" onclick="loadReport()">
-Generate Report
-</button>
-</div>
-
-</form>
-
-</div>
-</div>
-
-<!-- SUMMARY CARDS -->
-
-<div class="row g-4 mb-4">
-
-<div class="col-12 col-md-4">
-<div class="card text-center">
-<div class="card-body">
-<h6>Total Revenue For 2026</h6>
-<h3 id="total_revenue">0</h3>
-</div>
-</div>
-</div>
-
-<div class="col-12 col-md-4">
-<div class="card text-center">
-<div class="card-body">
-<h6>Total Expenses For 2026</h6>
-<h3 id="total_expenses">0</h3>
-</div>
-</div>
-</div>
-
-<div class="col-12 col-md-4">
-<div class="card text-center">
-<div class="card-body">
-<h6>Profit So far </h6>
-<h3 id="profit">0</h3>
-</div>
-</div>
-</div>
-
-</div>
-
-<!-- CHART -->
-
-<div class="card mb-4">
-<div class="card-header">
-Report Visualization
-</div>
-
-<div class="card-body">
-<canvas id="reportChart"></canvas>
-</div>
-</div>
-
-<!-- TABLE -->
-
-<div class="card">
-<div class="card-header">
-Detailed Data
-</div>
-
-<div class="card-body">
-
-<div class="table-responsive">
-<table class="table table-bordered">
-
-<thead>
-<tr>
-<th>Date</th>
-<th>Value</th>
-</tr>
-</thead>
-
-<tbody id="reportTable">
-<tr><td colspan="2">No data loaded</td></tr>
-</tbody>
-
-</table>
-</div>
-
-</div>
-</div>
-
-</div>
+{{ chart_data|json_script:"investor-chart-data" }}
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="{% static 'js/investor.js' %}"></script>
-
 {% endblock %}

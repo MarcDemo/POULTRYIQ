@@ -8,6 +8,7 @@ from django.core.validators import MinValueValidator
 
 class Supplier(models.Model):
     name = models.CharField(max_length=150, unique=True)
+    tin_number = models.CharField(max_length=50, blank=True)
     phone = models.CharField(max_length=30, blank=True)
     location = models.CharField(max_length=150, blank=True)
     product = models.CharField(max_length=150, blank=True)

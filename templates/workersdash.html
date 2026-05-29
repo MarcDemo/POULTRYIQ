@@ -201,6 +201,7 @@
                             <th>House</th>
                             <th>Collected</th>
                             <th>Rejected</th>
+                            <th>Avg Weight</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -216,10 +217,17 @@
                                     <span class="text-muted">—</span>
                                 {% endif %}
                             </td>
+                            <td>
+                                {% if rec.average_egg_weight_g %}
+                                    {{ rec.average_egg_weight_g|floatformat:1 }} g
+                                {% else %}
+                                    <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="4" class="text-center text-muted py-3">oops!!! looks like you havent collected any eggs today!</td>
+                            <td colspan="5" class="text-center text-muted py-3">oops!!! looks like you havent collected any eggs today!</td>
                         </tr>
                         {% endfor %}
                     </tbody>
