@@ -286,7 +286,7 @@ class LoginRedirectTests(TestCase):
             },
         )
 
-        self.assertRedirects(response, reverse("dashboard"))
+        self.assertRedirects(response, reverse("managerdash"))
 
     def test_investor_login_redirects_to_investor_dashboard(self):
         User.objects.create_user(
@@ -368,14 +368,14 @@ class NavSidebarVisibilityTests(TestCase):
     # --------------------------------------------------------------- manager
     def test_manager_sees_manager_sidebar_on_dashboard(self):
         self.client.force_login(self.manager)
-        response = self.client.get(reverse("dashboard"))
+        response = self.client.get(reverse("managerdash"))
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'id="managerSidebar"')
 
     def test_manager_does_not_see_other_sidebars(self):
         self.client.force_login(self.manager)
-        response = self.client.get(reverse("dashboard"))
+        response = self.client.get(reverse("managerdash"))
 
         self.assertNotContains(response, 'id="workerSidebar"')
         self.assertNotContains(response, 'id="supervisorSidebar"')

@@ -1,70 +1,367 @@
 {% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Owner Valuation - PoultryIQ{% endblock %}
+
 {% block content %}
+<style>
+    .valuation-page {
+        color: #1d2b38;
+    }
 
-<div class="container-fluid">
+    .valuation-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 16px;
+        flex-wrap: wrap;
+        margin-bottom: 18px;
+    }
 
-<h3 class="mb-4">Financial Overview</h3>
+    .valuation-title {
+        color: #17324d;
+        font-size: 26px;
+        font-weight: 800;
+        margin: 0 0 4px;
+    }
 
-<div class="row g-4">
+    .valuation-subtitle {
+        color: #687685;
+        margin: 0;
+    }
 
-<div class="col-12 col-md-4">
-<div class="card text-center p-3">
-<h6>Total Invested</h6>
-<h3>{{ invested }}</h3>
-</div>
+    .valuation-card {
+        background: #fff;
+        border: 1px solid #e1e8ee;
+        border-radius: 8px;
+        box-shadow: 0 4px 14px rgba(20, 39, 56, 0.06);
+    }
+
+    .valuation-metrics {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 14px;
+        margin-bottom: 18px;
+    }
+
+    .valuation-metric {
+        padding: 16px;
+    }
+
+    .valuation-metric span {
+        display: block;
+        color: #687685;
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.4px;
+        text-transform: uppercase;
+        margin-bottom: 8px;
+    }
+
+    .valuation-metric strong {
+        display: block;
+        color: #17324d;
+        font-size: 22px;
+        line-height: 1.2;
+        overflow-wrap: anywhere;
+    }
+
+    .valuation-metric small {
+        display: block;
+        color: #687685;
+        margin-top: 6px;
+    }
+
+    .valuation-grid {
+        display: grid;
+        grid-template-columns: minmax(320px, 0.85fr) minmax(0, 1.15fr);
+        gap: 16px;
+        margin-bottom: 18px;
+    }
+
+    .valuation-section-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 14px 16px;
+        border-bottom: 1px solid #e8eef2;
+    }
+
+    .valuation-section-header h5 {
+        margin: 0;
+        color: #17324d;
+        font-size: 16px;
+        font-weight: 800;
+    }
+
+    .valuation-body {
+        padding: 16px;
+    }
+
+    .valuation-chart {
+        height: 280px;
+        position: relative;
+    }
+
+    .valuation-note {
+        border-left: 4px solid #2563eb;
+        border-radius: 8px;
+        background: #f8fbfd;
+        padding: 12px;
+        margin-bottom: 10px;
+    }
+
+    @media (max-width: 1100px) {
+        .valuation-metrics {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .valuation-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    @media (max-width: 576px) {
+        .valuation-metrics {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+
+<div class="valuation-page">
+    <div class="valuation-header">
+        <div>
+            <h1 class="valuation-title">Owner Valuation</h1>
+            <p class="valuation-subtitle">Sole investor view: capital in, farm value, profit, and owner equity.</p>
+        </div>
+        <a href="{% url 'investor' %}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-1"></i>Investor Panel
+        </a>
+    </div>
+
+    <div class="valuation-metrics">
+        <div class="valuation-card valuation-metric">
+            <span>Startup Capital</span>
+            <strong>UGX {{ startup_capital|floatformat:0 }}</strong>
+            <small>Initial owner funding</small>
+        </div>
+        <div class="valuation-card valuation-metric">
+            <span>Total Capital Added</span>
+            <strong>UGX {{ invested|floatformat:0 }}</strong>
+            <small>Startup plus additions</small>
+        </div>
+        <div class="valuation-card valuation-metric">
+            <span>Business Value</span>
+            <strong>UGX {{ business_value|floatformat:0 }}</strong>
+            <small>Assets minus liabilities</small>
+        </div>
+        <div class="valuation-card valuation-metric">
+            <span>Owner ROI</span>
+            <strong>{{ roi|floatformat:2 }}%</strong>
+            <small>Gain over capital added</small>
+        </div>
+    </div>
+
+    <div class="valuation-grid">
+        <div class="valuation-card">
+            <div class="valuation-section-header">
+                <h5>Add Owner Capital</h5>
+                <span class="badge text-bg-primary">Sole investor</span>
+            </div>
+            <div class="valuation-body">
+                <form method="post" class="row g-3">
+                    {% csrf_token %}
+                    <div class="col-12">
+                        <label class="form-label">Type</label>
+                        <select class="form-select" name="transaction_type" required>
+                            {% for value, label in capital_transaction_types %}
+                            <option value="{{ value }}">{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">Date</label>
+                        <input type="date" class="form-control" name="transaction_date" value="{{ today|date:'Y-m-d' }}" required>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">Amount (UGX)</label>
+                        <input type="number" class="form-control" name="amount" min="1" step="0.01" placeholder="5000000" required>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">Notes</label>
+                        <input type="text" class="form-control" name="notes" placeholder="e.g. Startup deposit, new expansion capital">
+                    </div>
+                    <div class="col-12">
+                        <button type="submit" class="btn btn-primary w-100">
+                            <i class="bi bi-plus-circle me-1"></i>Save Capital Record
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="valuation-card">
+            <div class="valuation-section-header">
+                <h5>Valuation Summary</h5>
+                <span class="text-muted small">No shares used</span>
+            </div>
+            <div class="valuation-body">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <div class="valuation-card valuation-metric">
+                            <span>Net Owner Capital</span>
+                            <strong>UGX {{ net_owner_capital|floatformat:0 }}</strong>
+                            <small>Capital added minus withdrawals</small>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="valuation-card valuation-metric">
+                            <span>Owner Equity</span>
+                            <strong>UGX {{ owner_equity|floatformat:0 }}</strong>
+                            <small>The sole investor owns 100%</small>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="valuation-card valuation-metric">
+                            <span>Profit</span>
+                            <strong>UGX {{ profit|floatformat:0 }}</strong>
+                            <small>Sales minus expenses</small>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="valuation-card valuation-metric">
+                            <span>Owner Gain</span>
+                            <strong>UGX {{ owner_gain|floatformat:0 }}</strong>
+                            <small>Equity minus net capital</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="valuation-grid">
+        <div class="valuation-card">
+            <div class="valuation-section-header">
+                <h5>Advisor Notes</h5>
+            </div>
+            <div class="valuation-body">
+                {% for note in valuation_notes %}
+                <div class="valuation-note">{{ note }}</div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="valuation-card">
+            <div class="valuation-section-header">
+                <h5>Assets and Capital</h5>
+            </div>
+            <div class="valuation-body">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <div class="valuation-chart">
+                            <canvas id="capitalChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="valuation-chart">
+                            <canvas id="assetChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="valuation-card">
+        <div class="valuation-section-header">
+            <h5>Capital History</h5>
+            <span class="text-muted small">Startup and additional owner funding</span>
+        </div>
+        <div class="valuation-body">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Type</th>
+                            <th>Notes</th>
+                            <th>Recorded By</th>
+                            <th class="text-end">Amount</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for record in capital_records %}
+                        <tr>
+                            <td>{{ record.transaction_date }}</td>
+                            <td>{{ record.get_transaction_type_display }}</td>
+                            <td>{{ record.notes|default:"-" }}</td>
+                            <td>{{ record.recorded_by.display_name }}</td>
+                            <td class="text-end">UGX {{ record.amount|floatformat:0 }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="5" class="text-center text-muted py-4">No capital has been recorded yet.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
 </div>
 
-<div class="col-12 col-md-4">
-<div class="card text-center p-3">
-<h6>Withdrawn</h6>
-<h3>{{ withdrawn }}</h3>
-</div>
-</div>
+{{ capital_mix|json_script:"capital-mix-data" }}
+{{ asset_mix|json_script:"asset-mix-data" }}
 
-<div class="col-12 col-md-4">
-<div class="card text-center p-3">
-<h6>Profit</h6>
-<h3>{{ profit }}</h3>
-</div>
-</div>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+(function () {
+    if (typeof Chart === "undefined") return;
 
-<div class="col-12 col-md-4">
-<div class="card text-center p-3">
-<h6>Assets</h6>
-<h3>{{ assets }}</h3>
-</div>
-</div>
+    const palette = ["#2563eb", "#16a34a", "#f59e0b", "#dc2626"];
+    const options = {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            tooltip: {
+                callbacks: {
+                    label: function (context) {
+                        const value = Number(context.raw || 0).toLocaleString(undefined, { maximumFractionDigits: 0 });
+                        return context.label + ": UGX " + value;
+                    },
+                },
+            },
+        },
+    };
 
-<div class="col-12 col-md-4">
-<div class="card text-center p-3">
-<h6>Liabilities</h6>
-<h3>{{ liabilities }}</h3>
-</div>
-</div>
+    function readData(id) {
+        const node = document.getElementById(id);
+        return node ? JSON.parse(node.textContent) : [];
+    }
 
-<div class="col-12 col-md-4">
-<div class="card text-center p-3 bg-dark text-white">
-<h6>Business Value</h6>
-<h3>{{ business_value }}</h3>
-</div>
-</div>
+    function drawPie(canvasId, dataId) {
+        const canvas = document.getElementById(canvasId);
+        const data = readData(dataId).filter(function (item) { return Number(item.value || 0) > 0; });
+        if (!canvas || !data.length) return;
+        new Chart(canvas, {
+            type: "pie",
+            data: {
+                labels: data.map(function (item) { return item.label; }),
+                datasets: [{
+                    data: data.map(function (item) { return item.value; }),
+                    backgroundColor: palette,
+                    borderColor: "#ffffff",
+                    borderWidth: 2,
+                }],
+            },
+            options: options,
+        });
+    }
 
-<div class="col-12 col-md-6">
-<div class="card text-center p-3 bg-success text-white">
-<h6>Your Share</h6>
-<h2>{{ share }}</h2>
-</div>
-</div>
-
-<div class="col-12 col-md-6">
-<div class="card text-center p-3 bg-primary text-white">
-<h6>ROI (%)</h6>
-<h2>{{ roi|floatformat:2 }}%</h2>
-</div>
-</div>
-
-</div>
-
-</div>
-
+    drawPie("capitalChart", "capital-mix-data");
+    drawPie("assetChart", "asset-mix-data");
+})();
+</script>
 {% endblock %}

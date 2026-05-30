@@ -1,26 +1,32 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
+from django.contrib.auth.decorators import login_required
+from django.db import transaction
 from django.db.models import Count, DecimalField, Max, Q, Sum, Value
 from django.db.models.functions import Coalesce
 from django.utils.timezone import now
-from datetime import date
+from datetime import date, timedelta
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 
 from accounts.decorators import worker_required, supervisor_required
 from accounts.models import User
 from alerts.models import Alert
-from finance.models import ExpenseTransaction, SalaryPayment
+from finance.models import ExpenseCategory, ExpenseTransaction, SalaryPayment
 from health.models import SicknessReport, TreatmentPlanItem, VaccinationSchedule
 from sales.views import _build_product_stock
-from inventory.models import InventoryTransaction, ReorderRule
-from sales.models import ReceivableLedger, SaleInvoice, SaleItem
+from inventory.models import InventoryTransaction, Item, ReorderRule, Store
+from sales.models import CustomerPayment, ReceivableLedger, SaleInvoice, SaleItem
+from poultryiq.pagination import paginate
 from .models import (
     PoultryBatch,
     DailyProduction,
     PoultryHouse,
     egg_collection,
     FeedRecord,
+    FeedMixture,
+    FeedMixtureAllocation,
+    FeedMixtureIngredient,
     CleaningRecord,
     CleaningPhoto,
     MortalityRecord,
@@ -70,7 +76,15 @@ def _batch_cycle_stage(batch):
 
 
 # Create your views here.
+@login_required(login_url="login")
 def dashboard(request):
+    role_code = _role_code(request.user)
+    if role_code != "MANAGER":
+        messages.error(request, "Access denied: Managers only.")
+        from accounts.views import get_post_login_redirect
+
+        return redirect(get_post_login_redirect(request.user))
+
     today = date.today()
     current_time = now()
 
@@ -348,8 +362,12 @@ def birds(request):
             "assigned_supervisors": assigned_supervisors,
         })
 
+    page_obj, querystring = paginate(request, batch_data, per_page=12)
+
     context = {
-        "batch_data": batch_data,
+        "batch_data": page_obj,
+        "page_obj": page_obj,
+        "querystring": querystring,
         "houses": PoultryHouse.objects.filter(is_active=True),
         "breeds": PoultryBatch.objects.exclude(breed="").values_list("breed", flat=True).distinct().order_by("breed"),
         "selected_status": status,
@@ -377,14 +395,36 @@ def _scope_to_supervisor_houses(queryset, user, house_lookup):
     return queryset
 
 
+def _mixtures_for_worker_batches(batches):
+    return (
+        FeedMixture.objects.filter(
+            mix_date=date.today(),
+            allocations__house__in=batches.values("house"),
+        )
+        .select_related("mixed_by")
+        .prefetch_related("allocations__house", "ingredients")
+        .distinct()
+        .order_by("-created_at")
+    )
+
+
+def _stock_for_item(item):
+    transactions = InventoryTransaction.objects.filter(item=item)
+    stock_in = transactions.filter(tx_type=InventoryTransaction.TxType.IN_).aggregate(total=Sum("quantity"))["total"] or Decimal("0.000")
+    stock_out = transactions.filter(tx_type=InventoryTransaction.TxType.OUT).aggregate(total=Sum("quantity"))["total"] or Decimal("0.000")
+    adjustments = transactions.filter(tx_type=InventoryTransaction.TxType.ADJUST).aggregate(total=Sum("quantity"))["total"] or Decimal("0.000")
+    return stock_in - stock_out + adjustments
+
+
 @worker_required
 def record_feed(request):
     batches = _get_worker_active_batches(request.user)
+    available_mixtures = _mixtures_for_worker_batches(batches)
 
     if request.method == "POST":
         batch_id = request.POST.get("batch", "").strip()
         record_date_raw = request.POST.get("record_date", "").strip()
-        feed_type = request.POST.get("feed_type", FeedRecord.FeedType.OTHER).strip()
+        feed_mixture_id = request.POST.get("feed_mixture", "").strip()
         quantity_raw = request.POST.get("quantity", "").strip()
         time_given_raw = request.POST.get("time_given", "").strip()
         notes = request.POST.get("notes", "").strip()
@@ -392,9 +432,19 @@ def record_feed(request):
 
         errors = []
         selected_batch = batches.filter(pk=batch_id).first() if batch_id else None
+        selected_mixture = None
 
         if not selected_batch:
             errors.append("Please select a valid batch from your assigned houses.")
+        elif feed_mixture_id:
+            selected_mixture = available_mixtures.filter(
+                pk=feed_mixture_id,
+                allocations__house=selected_batch.house,
+            ).first()
+            if not selected_mixture:
+                errors.append("Please select a mixture assigned to this house.")
+        else:
+            errors.append("Please select a supervisor feed mixture.")
 
         try:
             record_date = date.fromisoformat(record_date_raw)
@@ -414,8 +464,19 @@ def record_feed(request):
             quantity_kg = None
             errors.append("Please provide a valid quantity.")
 
-        if feed_type not in dict(FeedRecord.FeedType.choices):
-            errors.append("Please select a valid feed type.")
+        if selected_mixture and selected_batch and quantity_kg is not None:
+            allocation = selected_mixture.allocations.filter(house=selected_batch.house).first()
+            allocated_kg = allocation.quantity_kg if allocation else Decimal("0.00")
+            already_recorded_kg = FeedRecord.objects.filter(
+                feed_mixture=selected_mixture,
+                batch__house=selected_batch.house,
+                record_date=record_date or date.today(),
+            ).exclude(status=ApprovalStatus.REJECTED).aggregate(total=Sum("quantity_kg"))["total"] or Decimal("0.00")
+            if already_recorded_kg + quantity_kg > allocated_kg:
+                remaining_kg = max(allocated_kg - already_recorded_kg, Decimal("0.00"))
+                errors.append(
+                    f"This house has {remaining_kg} kg remaining from {selected_mixture.name}."
+                )
 
         parsed_time = None
         if time_given_raw:
@@ -430,8 +491,9 @@ def record_feed(request):
         else:
             FeedRecord.objects.create(
                 batch=selected_batch,
+                feed_mixture=selected_mixture,
                 record_date=record_date,
-                feed_type=feed_type,
+                feed_type=FeedRecord.FeedType.OTHER,
                 quantity_kg=quantity_kg,
                 time_given=parsed_time,
                 notes=notes,
@@ -444,7 +506,7 @@ def record_feed(request):
         recorded_by=request.user,
         batch__in=batches,
         record_date=date.today(),
-    ).select_related("batch__house")[:10]
+    ).select_related("batch__house", "feed_mixture")[:10]
 
     return render(
         request,
@@ -453,7 +515,7 @@ def record_feed(request):
             "batches": batches,
             "today": date.today(),
             "recent_feed_records": recent_feed_records,
-            "feed_types": FeedRecord.FeedType.choices,
+            "feed_mixtures": available_mixtures,
         },
     )
 
@@ -466,10 +528,12 @@ def record_egg(request):
         collection_date_raw = request.POST.get("collection_date", "").strip()
         total_eggs_raw = request.POST.get("total_eggs", "").strip()
         broken_eggs_raw = request.POST.get("broken_eggs", "0").strip()
+        egg_weight_values = request.POST.getlist("egg_weights")
         notes = request.POST.get("notes", "").strip()
 
         errors = []
         selected_batch = batches.filter(pk=batch_id).first() if batch_id else None
+        average_egg_weight_g = None
 
         if not selected_batch:
             errors.append("Please select a valid batch from your assigned houses.")
@@ -507,6 +571,35 @@ def record_egg(request):
         ):
             errors.append("Broken eggs cannot be more than total eggs.")
 
+        weights = []
+        for raw_weight in egg_weight_values:
+            raw_weight = raw_weight.strip()
+            if not raw_weight:
+                continue
+            try:
+                weight = Decimal(raw_weight)
+            except InvalidOperation:
+                errors.append("Please enter valid egg weights.")
+                weights = []
+                break
+            if weight <= 0:
+                errors.append("Egg weights must be greater than zero.")
+                weights = []
+                break
+            weights.append(weight)
+
+        if eggs_collected is not None and eggs_collected > 0:
+            if eggs_collected < 50:
+                if len(weights) != eggs_collected:
+                    errors.append(
+                        f"Because fewer than 50 eggs were collected, enter the weight for all {eggs_collected} eggs."
+                    )
+            elif len(weights) < 20 or len(weights) > 30:
+                errors.append("Enter 20 to 30 random egg weights for collections of 50 eggs or more.")
+
+            if weights and not errors:
+                average_egg_weight_g = (sum(weights) / Decimal(len(weights))).quantize(Decimal("0.01"))
+
         if errors:
             for error in errors:
                 messages.error(request, error)
@@ -516,6 +609,7 @@ def record_egg(request):
                 collection_date=collection_date,
                 eggs_collected=eggs_collected,
                 eggs_rejected=eggs_rejected,
+                average_egg_weight_g=average_egg_weight_g,
                 notes=notes,
                 collected_by=request.user,
             )
@@ -537,6 +631,175 @@ def record_egg(request):
             "recent_egg_records": recent_egg_records,
         },
     )
+
+
+@supervisor_required
+def feed_mixtures(request):
+    houses = PoultryHouse.objects.filter(is_active=True).order_by("house_code")
+    store, _ = Store.objects.get_or_create(
+        name="Main Store",
+        defaults={"location_note": "Primary farm store", "is_active": True},
+    )
+    feed_items = list(
+        Item.objects.filter(is_active=True, category__code__iexact="FEED")
+        .select_related("category")
+        .order_by("name")
+    )
+    feed_item_stock = {item.pk: _stock_for_item(item) for item in feed_items}
+    for item in feed_items:
+        item.available_kg = feed_item_stock.get(item.pk, Decimal("0.000"))
+
+    if request.method == "POST":
+        name = request.POST.get("name", "").strip()
+        mix_date_raw = request.POST.get("mix_date", "").strip()
+        total_weight_raw = request.POST.get("total_weight_kg", "").strip()
+        notes = request.POST.get("notes", "").strip()
+        ingredient_items = request.POST.getlist("ingredient_item")
+        ingredient_quantities = request.POST.getlist("ingredient_quantity")
+        allocation_houses = request.POST.getlist("allocation_house")
+        allocation_quantities = request.POST.getlist("allocation_quantity")
+
+        errors = []
+        ingredients = []
+        allocations = []
+        ingredient_totals_by_item = {}
+        total_weight_kg = None
+
+        if not name:
+            errors.append("Please name this mixture.")
+
+        try:
+            mix_date = date.fromisoformat(mix_date_raw)
+        except ValueError:
+            mix_date = None
+            errors.append("Please provide a valid mixture date.")
+
+        if mix_date and mix_date != date.today():
+            errors.append("Feed mixtures can only be recorded for today.")
+
+        try:
+            total_weight_kg = Decimal(total_weight_raw)
+            if total_weight_kg <= 0:
+                errors.append("Total weighed kg must be greater than zero.")
+        except (InvalidOperation, ValueError):
+            errors.append("Please enter the total weighed kg after mixing.")
+
+        for item_id, quantity_raw in zip(ingredient_items, ingredient_quantities):
+            quantity_raw = quantity_raw.strip()
+            if not item_id and not quantity_raw:
+                continue
+            item = Item.objects.filter(pk=item_id, is_active=True, category__code__iexact="FEED").first()
+            if not item:
+                errors.append("Please select a valid feed stock item.")
+                continue
+            try:
+                quantity_kg = Decimal(quantity_raw)
+                if quantity_kg <= 0:
+                    errors.append("Ingredient kg must be greater than zero.")
+                    continue
+            except (InvalidOperation, ValueError):
+                errors.append("Please enter valid ingredient kg values.")
+                continue
+            available_kg = feed_item_stock.get(item.pk, Decimal("0.000"))
+            if quantity_kg > available_kg:
+                errors.append(f"Only {available_kg} kg of {item.name} is available in stock.")
+            ingredient_totals_by_item[item.pk] = ingredient_totals_by_item.get(item.pk, Decimal("0.00")) + quantity_kg
+            ingredients.append({
+                "item": item,
+                "feed_type": FeedRecord.FeedType.OTHER,
+                "ingredient_name": item.name,
+                "quantity_kg": quantity_kg,
+            })
+
+        for house_id, quantity_raw in zip(allocation_houses, allocation_quantities):
+            quantity_raw = quantity_raw.strip()
+            if not house_id or not quantity_raw:
+                continue
+            house = houses.filter(pk=house_id).first()
+            if not house:
+                errors.append("Please select valid houses for distribution.")
+                continue
+            try:
+                quantity_kg = Decimal(quantity_raw)
+                if quantity_kg <= 0:
+                    errors.append("House allocation kg must be greater than zero.")
+                    continue
+            except (InvalidOperation, ValueError):
+                errors.append("Please enter valid house allocation kg values.")
+                continue
+            allocations.append({"house": house, "quantity_kg": quantity_kg})
+
+        allocation_house_ids = [item["house"].pk for item in allocations]
+        if len(allocation_house_ids) != len(set(allocation_house_ids)):
+            errors.append("Each house should appear only once in the distribution list.")
+
+        if not ingredients:
+            errors.append("Add at least one feed ingredient.")
+        if not allocations:
+            errors.append("Assign the mixture to at least one house.")
+        for item in feed_items:
+            requested_kg = ingredient_totals_by_item.get(item.pk, Decimal("0.00"))
+            available_kg = feed_item_stock.get(item.pk, Decimal("0.000"))
+            if requested_kg > available_kg:
+                errors.append(f"Total {item.name} used is {requested_kg} kg, but only {available_kg} kg is available.")
+
+        total_ingredients = sum((item["quantity_kg"] for item in ingredients), Decimal("0.00"))
+        total_allocations = sum((item["quantity_kg"] for item in allocations), Decimal("0.00"))
+        if total_allocations > total_ingredients:
+            errors.append("Total kg assigned to houses cannot be more than the kg mixed.")
+        if total_weight_kg is not None and total_weight_kg > total_ingredients:
+            errors.append("Total weighed kg cannot be more than the kg of ingredients mixed.")
+        if total_weight_kg is not None and total_allocations > total_weight_kg:
+            errors.append("Total kg assigned to houses cannot be more than the final weighed mixture.")
+
+        if errors:
+            for error in errors:
+                messages.error(request, error)
+        else:
+            with transaction.atomic():
+                mixture = FeedMixture.objects.create(
+                    name=name,
+                    mix_date=mix_date,
+                    total_weight_kg=total_weight_kg,
+                    notes=notes,
+                    mixed_by=request.user,
+                )
+                FeedMixtureIngredient.objects.bulk_create([
+                    FeedMixtureIngredient(mixture=mixture, **item) for item in ingredients
+                ])
+                FeedMixtureAllocation.objects.bulk_create([
+                    FeedMixtureAllocation(mixture=mixture, **item) for item in allocations
+                ])
+                InventoryTransaction.objects.bulk_create([
+                    InventoryTransaction(
+                        tx_date=mix_date,
+                        tx_type=InventoryTransaction.TxType.OUT,
+                        store=store,
+                        item=item["item"],
+                        quantity=item["quantity_kg"],
+                        reference=f"MIX-{mixture.mixture_id}",
+                        notes=f"Used in feed mixture {mixture.name}",
+                        created_by=request.user,
+                    )
+                    for item in ingredients
+                ])
+            messages.success(request, f"Feed mixture {mixture.name} recorded and assigned.")
+            return redirect("feed_mixtures")
+
+    recent_mixtures = (
+        FeedMixture.objects.select_related("mixed_by")
+        .prefetch_related("ingredients", "allocations__house")
+        .order_by("-mix_date", "-created_at")[:20]
+    )
+
+    return render(request, "feed_mixtures.html", {
+        "today": date.today(),
+        "houses": houses,
+        "feed_items": feed_items,
+        "feed_item_stock": feed_item_stock,
+        "recent_mixtures": recent_mixtures,
+    })
+
 
 @worker_required
 def record_cleaning(request):
@@ -890,7 +1153,7 @@ def supapproval(request):
         ),
         request.user,
         "batch__house",
-    ).select_related("batch__house", "recorded_by", "sickness_report").order_by("-created_at")
+    ).select_related("batch__house", "recorded_by", "sickness_report", "feed_mixture").order_by("-created_at")
 
     pending_cleaning = _scope_to_supervisor_houses(
         CleaningRecord.objects.filter(
@@ -908,6 +1171,26 @@ def supapproval(request):
         "batch__house",
     ).select_related("batch__house", "reported_by", "cause").order_by("-reported_at")
 
+    pending_eggs_count = pending_eggs.count()
+    pending_feed_count = pending_feed.count()
+    pending_cleaning_count = pending_cleaning.count()
+    pending_mortality_count = pending_mortality.count()
+
+    page_obj = None
+    querystring = ""
+    if tab == "eggs":
+        page_obj, querystring = paginate(request, pending_eggs, per_page=20)
+        pending_eggs = page_obj
+    elif tab == "feed":
+        page_obj, querystring = paginate(request, pending_feed, per_page=20)
+        pending_feed = page_obj
+    elif tab == "cleaning":
+        page_obj, querystring = paginate(request, pending_cleaning, per_page=20)
+        pending_cleaning = page_obj
+    elif tab == "mortality":
+        page_obj, querystring = paginate(request, pending_mortality, per_page=20)
+        pending_mortality = page_obj
+
     context = {
         "tab": tab,
         "assigned_houses": assigned_houses,
@@ -916,10 +1199,12 @@ def supapproval(request):
         "pending_feed": pending_feed,
         "pending_cleaning": pending_cleaning,
         "pending_mortality": pending_mortality,
-        "pending_eggs_count": pending_eggs.count(),
-        "pending_feed_count": pending_feed.count(),
-        "pending_cleaning_count": pending_cleaning.count(),
-        "pending_mortality_count": pending_mortality.count(),
+        "page_obj": page_obj,
+        "querystring": querystring,
+        "pending_eggs_count": pending_eggs_count,
+        "pending_feed_count": pending_feed_count,
+        "pending_cleaning_count": pending_cleaning_count,
+        "pending_mortality_count": pending_mortality_count,
     }
     return render(request, 'supapproval.html', context)
 
@@ -951,6 +1236,7 @@ def eggrec(request):
         records = records.filter(batch__breed__icontains=f_breed)
 
     records = records.order_by("-collection_date", "-collection_id")
+    page_obj, querystring = paginate(request, records, per_page=20)
     houses = PoultryHouse.objects.filter(is_active=True).order_by("house_code")
     breeds = (
         PoultryBatch.objects.exclude(breed="")
@@ -960,7 +1246,9 @@ def eggrec(request):
     )
 
     return render(request, 'eggrec.html', {
-        "records": records,
+        "records": page_obj,
+        "page_obj": page_obj,
+        "querystring": querystring,
         "houses": houses,
         "breeds": breeds,
         "f_date": f_date,
@@ -970,47 +1258,331 @@ def eggrec(request):
         "approval_statuses": ApprovalStatus.choices,
     })
 
+@login_required(login_url="login")
 def feedrec(request):
-    records = FeedRecord.objects.select_related(
-        "batch__house", "recorded_by", "reviewed_by"
-    ).filter(sickness_report__isnull=True)
+    role_code = _role_code(request.user)
+    show_feed_records = role_code in {"MANAGER", "OWNER"}
 
-    # filters
-    f_date = request.GET.get("date", "").strip()
-    f_house = request.GET.get("house", "").strip()
-    f_feed_type = request.GET.get("feed_type", "").strip()
-    f_status = request.GET.get("status", "").strip()
+    recent_mixtures = (
+        FeedMixture.objects.select_related("mixed_by")
+        .prefetch_related("ingredients", "allocations__house")
+        .order_by("-mix_date", "-created_at")
+    )
+    mixtures_page_obj, mixtures_querystring = paginate(
+        request,
+        recent_mixtures,
+        per_page=8,
+        page_param="mixtures_page",
+    )
 
-    if f_date:
-        try:
-            records = records.filter(record_date=date.fromisoformat(f_date))
-        except ValueError:
-            pass
-    if f_house:
-        records = records.filter(batch__house__pk=f_house)
-    if f_feed_type:
-        records = records.filter(feed_type=f_feed_type)
-    if f_status:
-        records = records.filter(status=f_status)
-
-    records = records.order_by("-record_date", "-feed_id")
-    houses = PoultryHouse.objects.filter(is_active=True).order_by("house_code")
+    feed_records_page_obj = None
+    feed_records_querystring = ""
+    if show_feed_records:
+        feed_records = (
+            FeedRecord.objects.select_related(
+                "batch",
+                "batch__house",
+                "feed_mixture",
+                "recorded_by",
+                "sickness_report",
+            )
+            .order_by("-record_date", "-created_at", "-feed_id")
+        )
+        feed_records_page_obj, feed_records_querystring = paginate(
+            request,
+            feed_records,
+            per_page=15,
+            page_param="feed_page",
+        )
 
     return render(request, 'feed_rec.html', {
-        "records": records,
-        "houses": houses,
-        "feed_types": FeedRecord.FeedType.choices,
-        "f_date": f_date,
-        "f_house": f_house,
-        "f_feed_type": f_feed_type,
-        "f_status": f_status,
-        "approval_statuses": ApprovalStatus.choices,
+        "recent_mixtures": mixtures_page_obj,
+        "mixtures_page_obj": mixtures_page_obj,
+        "mixtures_querystring": mixtures_querystring,
+        "feed_records": feed_records_page_obj,
+        "feed_records_page_obj": feed_records_page_obj,
+        "feed_records_querystring": feed_records_querystring,
+        "show_feed_records": show_feed_records,
     })
 
 
+@login_required(login_url="login")
 def investor(request):
-    return render(request, 'investor.html')
+    today = date.today()
 
+    def parse_date_param(name, fallback):
+        raw_value = request.GET.get(name, "").strip()
+        if not raw_value:
+            return fallback
+        try:
+            return date.fromisoformat(raw_value)
+        except ValueError:
+            return fallback
+
+    start_date = parse_date_param("start_date", date(today.year, 1, 1))
+    end_date = parse_date_param("end_date", today)
+    if start_date > end_date:
+        start_date, end_date = end_date, start_date
+
+    selected_report_type = request.GET.get("report_type", "profit")
+    selected_group_by = request.GET.get("group_by", "month")
+    selected_chart_type = request.GET.get("chart_type", "line")
+
+    def decimal_total(queryset, field_name):
+        return queryset.aggregate(
+            total=Coalesce(
+                Sum(field_name),
+                Value(0),
+                output_field=DecimalField(max_digits=14, decimal_places=2),
+            )
+        )["total"]
+
+    def number(value):
+        return float(value or 0)
+
+    def grouped_series(queryset, date_field, value_field, group_by, start, end):
+        grouped = {}
+        current = start
+        while current <= end:
+            if group_by == "week":
+                key_date = current - timedelta(days=current.weekday())
+                label = f"Week of {key_date.strftime('%d %b %Y')}"
+            elif group_by == "month":
+                label = current.strftime("%b %Y")
+            else:
+                label = current.strftime("%d %b %Y")
+            grouped.setdefault(label, Decimal("0"))
+            current += timedelta(days=1)
+
+        for row in queryset.values(date_field).annotate(total=Sum(value_field)).order_by(date_field):
+            row_date = row[date_field]
+            if not row_date:
+                continue
+            if group_by == "week":
+                key_date = row_date - timedelta(days=row_date.weekday())
+                label = f"Week of {key_date.strftime('%d %b %Y')}"
+            elif group_by == "month":
+                label = row_date.strftime("%b %Y")
+            else:
+                label = row_date.strftime("%d %b %Y")
+            grouped[label] = grouped.get(label, Decimal("0")) + (row["total"] or Decimal("0"))
+
+        return {
+            "labels": list(grouped.keys()),
+            "values": [number(value) for value in grouped.values()],
+        }
+
+    sales_qs = SaleInvoice.objects.exclude(
+        status=SaleInvoice.Status.CANCELLED
+    ).filter(invoice_date__range=(start_date, end_date))
+    payments_qs = CustomerPayment.objects.filter(payment_date__range=(start_date, end_date))
+    expenses_qs = ExpenseTransaction.objects.exclude(
+        status=ExpenseTransaction.Status.REJECTED
+    ).filter(expense_date__range=(start_date, end_date))
+    eggs_qs = egg_collection.objects.filter(
+        collection_date__range=(start_date, end_date),
+        status=ApprovalStatus.APPROVED,
+    )
+    mortality_qs = MortalityRecord.objects.filter(
+        record_date__range=(start_date, end_date),
+        status=ApprovalStatus.APPROVED,
+    )
+    feed_qs = FeedRecord.objects.filter(
+        record_date__range=(start_date, end_date),
+        status=ApprovalStatus.APPROVED,
+    )
+
+    total_revenue = decimal_total(sales_qs, "total_amount")
+    total_cash_received = decimal_total(payments_qs, "amount")
+    total_expenses = decimal_total(expenses_qs, "total_amount")
+    total_profit = total_revenue - total_expenses
+    total_eggs = eggs_qs.aggregate(total=Sum("eggs_collected"))["total"] or 0
+    total_rejected_eggs = eggs_qs.aggregate(total=Sum("eggs_rejected"))["total"] or 0
+    total_deaths = mortality_qs.aggregate(total=Sum("number_dead"))["total"] or 0
+    total_feed_kg = feed_qs.aggregate(total=Sum("quantity_kg"))["total"] or Decimal("0")
+    outstanding_balance = ReceivableLedger.objects.aggregate(
+        total=Coalesce(
+            Sum("balance"),
+            Value(0),
+            output_field=DecimalField(max_digits=14, decimal_places=2),
+        )
+    )["total"]
+
+    active_batches = PoultryBatch.objects.filter(status=PoultryBatch.Status.ACTIVE).select_related("house")
+    current_birds = 0
+    for batch in active_batches:
+        approved_deaths = batch.mortality_records.filter(
+            status=ApprovalStatus.APPROVED
+        ).aggregate(total=Sum("number_dead"))["total"] or 0
+        birds_sold = SaleItem.objects.filter(batch=batch).filter(
+            Q(product_name__icontains="bird") | Q(product_name__icontains="off layer")
+        ).aggregate(total=Sum("quantity"))["total"] or 0
+        current_birds += max(batch.initial_quantity - approved_deaths - int(birds_sold), 0)
+
+    expense_ratio = (total_expenses / total_revenue * 100) if total_revenue else Decimal("0")
+    profit_margin = (total_profit / total_revenue * 100) if total_revenue else Decimal("0")
+    collection_rate = (total_cash_received / total_revenue * 100) if total_revenue else Decimal("0")
+    egg_yield = (Decimal(total_eggs) / Decimal(current_birds)) if current_birds else Decimal("0")
+    feed_per_egg = (total_feed_kg / Decimal(total_eggs)) if total_eggs else Decimal("0")
+    mortality_rate = (Decimal(total_deaths) / Decimal(current_birds + total_deaths) * 100) if (current_birds + total_deaths) else Decimal("0")
+
+    expense_breakdown = [
+        {"label": row["category__name"] or "Uncategorised", "value": number(row["total"])}
+        for row in expenses_qs.values("category__name").annotate(total=Sum("total_amount")).order_by("-total")[:8]
+    ]
+    sales_breakdown = [
+        {"label": row["product_name"] or "Sales", "value": number(row["total"])}
+        for row in SaleItem.objects.filter(
+            invoice__in=sales_qs
+        ).values("product_name").annotate(total=Sum("line_total")).order_by("-total")[:8]
+    ]
+    payment_breakdown = [
+        {"label": row["method"] or "Unknown", "value": number(row["total"])}
+        for row in payments_qs.values("method").annotate(total=Sum("amount")).order_by("-total")
+    ]
+
+    chart_data = {
+        "profit": {
+            "title": "Profit and loss",
+            "unit": "UGX",
+            "series": [
+                {"label": "Revenue", **grouped_series(sales_qs, "invoice_date", "total_amount", selected_group_by, start_date, end_date)},
+                {"label": "Expenses", **grouped_series(expenses_qs, "expense_date", "total_amount", selected_group_by, start_date, end_date)},
+            ],
+        },
+        "sales": {
+            "title": "Sales revenue",
+            "unit": "UGX",
+            "series": [
+                {"label": "Sales", **grouped_series(sales_qs, "invoice_date", "total_amount", selected_group_by, start_date, end_date)},
+                {"label": "Cash received", **grouped_series(payments_qs, "payment_date", "amount", selected_group_by, start_date, end_date)},
+            ],
+            "pie": sales_breakdown,
+        },
+        "expenses": {
+            "title": "Expense movement",
+            "unit": "UGX",
+            "series": [
+                {"label": "Expenses", **grouped_series(expenses_qs, "expense_date", "total_amount", selected_group_by, start_date, end_date)},
+            ],
+            "pie": expense_breakdown,
+        },
+        "eggs": {
+            "title": "Egg production",
+            "unit": "eggs",
+            "series": [
+                {"label": "Collected eggs", **grouped_series(eggs_qs, "collection_date", "eggs_collected", selected_group_by, start_date, end_date)},
+                {"label": "Rejected eggs", **grouped_series(eggs_qs, "collection_date", "eggs_rejected", selected_group_by, start_date, end_date)},
+            ],
+        },
+        "health": {
+            "title": "Mortality and feed",
+            "unit": "count / kg",
+            "series": [
+                {"label": "Deaths", **grouped_series(mortality_qs, "record_date", "number_dead", selected_group_by, start_date, end_date)},
+                {"label": "Feed used kg", **grouped_series(feed_qs, "record_date", "quantity_kg", selected_group_by, start_date, end_date)},
+            ],
+        },
+        "cash": {
+            "title": "Payment methods",
+            "unit": "UGX",
+            "series": [
+                {"label": "Cash received", **grouped_series(payments_qs, "payment_date", "amount", selected_group_by, start_date, end_date)},
+            ],
+            "pie": payment_breakdown,
+        },
+    }
+
+    insights = []
+    if total_profit < 0:
+        insights.append({
+            "level": "danger",
+            "title": "Loss risk",
+            "text": "Expenses are higher than revenue in this period. Review feed, labour, veterinary costs, and selling prices before adding more birds.",
+        })
+    elif profit_margin < 15 and total_revenue > 0:
+        insights.append({
+            "level": "warning",
+            "title": "Thin margin",
+            "text": "Profit margin is below 15%. Consider checking tray prices, discounting, wastage, and high-cost expense categories.",
+        })
+    else:
+        insights.append({
+            "level": "success",
+            "title": "Margin is healthy",
+            "text": "The farm is currently profitable for the selected period. Keep watching cash collection and production consistency.",
+        })
+
+    if outstanding_balance > total_revenue * Decimal("0.25") and total_revenue > 0:
+        insights.append({
+            "level": "warning",
+            "title": "Receivables need attention",
+            "text": "Outstanding customer balances are high compared with sales. Tighten credit terms or prioritize collections.",
+        })
+    if expense_ratio > 70:
+        insights.append({
+            "level": "warning",
+            "title": "High cost base",
+            "text": "Expenses are consuming more than 70% of revenue. Inspect the largest expense categories before new investment.",
+        })
+    if mortality_rate > 3:
+        insights.append({
+            "level": "danger",
+            "title": "Mortality above target",
+            "text": "Mortality is above 3% for the selected period. Check disease reports, house conditions, feed quality, and vaccination follow-up.",
+        })
+    if current_birds and egg_yield < Decimal("0.55"):
+        insights.append({
+            "level": "warning",
+            "title": "Egg yield is low",
+            "text": "Eggs per live bird are below a strong laying target. Review bird age, feed ration, light, disease pressure, and rejected eggs.",
+        })
+    if feed_per_egg > Decimal("0.18"):
+        insights.append({
+            "level": "warning",
+            "title": "Feed efficiency watch",
+            "text": "Feed used per egg looks high. Compare feed allocation with actual egg output and investigate wastage.",
+        })
+
+    recent_invoices = sales_qs.select_related("customer", "created_by").order_by("-created_at")[:5]
+    recent_expenses = expenses_qs.select_related("category", "created_by").order_by("-expense_date", "-created_at")[:5]
+    recent_eggs = eggs_qs.select_related("batch__house", "collected_by").order_by("-collection_date", "-collected_at")[:5]
+
+    context = {
+        "start_date": start_date,
+        "end_date": end_date,
+        "selected_report_type": selected_report_type,
+        "selected_group_by": selected_group_by,
+        "selected_chart_type": selected_chart_type,
+        "metrics": {
+            "total_revenue": total_revenue,
+            "cash_received": total_cash_received,
+            "total_expenses": total_expenses,
+            "profit": total_profit,
+            "profit_margin": profit_margin,
+            "collection_rate": collection_rate,
+            "outstanding_balance": outstanding_balance,
+            "total_eggs": total_eggs,
+            "rejected_eggs": total_rejected_eggs,
+            "total_deaths": total_deaths,
+            "mortality_rate": mortality_rate,
+            "feed_used_kg": total_feed_kg,
+            "feed_per_egg": feed_per_egg,
+            "current_birds": current_birds,
+            "active_batches": active_batches.count(),
+            "egg_yield": egg_yield,
+        },
+        "chart_data": chart_data,
+        "expense_breakdown": expense_breakdown,
+        "sales_breakdown": sales_breakdown,
+        "insights": insights[:6],
+        "recent_invoices": recent_invoices,
+        "recent_expenses": recent_expenses,
+        "recent_eggs": recent_eggs,
+    }
+    return render(request, 'investor.html', context)
+
+@login_required(login_url="login")
 def add_batch(request):
     if request.method == "POST":
         form = PoultryBatchForm(request.POST)
@@ -1018,6 +1590,27 @@ def add_batch(request):
             batch = form.save(commit=False)
             batch.created_by = request.user
             batch.save()
+
+            if batch.amount_paid and batch.amount_paid > 0:
+                batch_expense_category, _ = ExpenseCategory.objects.get_or_create(
+                    code="BATCH_PURCHASE",
+                    defaults={"name": "Bird Batch Purchase", "is_active": True},
+                )
+                ExpenseTransaction.objects.create(
+                    expense_date=batch.date_stocked,
+                    category=batch_expense_category,
+                    description=(
+                        f"Bird batch purchase {batch.batch_code} - "
+                        f"{batch.initial_quantity} birds"
+                        + (f" from {batch.supplier_name}" if batch.supplier_name else "")
+                    ),
+                    total_amount=batch.amount_paid,
+                    payment_method=ExpenseTransaction.PAYMENT_CASH,
+                    period_year=batch.date_stocked.year,
+                    period_month=batch.date_stocked.month,
+                    status=ExpenseTransaction.Status.DRAFT,
+                    created_by=request.user,
+                )
 
             messages.success(request, f"Batch {batch.batch_code} created successfully!")
             return redirect("birds")

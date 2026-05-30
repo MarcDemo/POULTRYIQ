@@ -118,7 +118,8 @@ def alert_detail(request, alert_id):
 def send_message(request):
     """Send direct message to worker(s)"""
     # Only supervisors, managers, and owners can send messages
-    if request.user.role.code not in ['SUPERVISOR', 'MANAGER', 'OWNER']:
+    role_code = (request.user.role_code or "").upper()
+    if role_code not in ['SUPERVISOR', 'MANAGER', 'OWNER']:
         messages.error(request, 'You do not have permission to send messages.')
         return redirect('alerts:inbox')
     
@@ -155,7 +156,8 @@ def send_message(request):
 @login_required
 def send_bulk_message(request):
     """Send message to multiple workers (supervisor/manager feature)"""
-    if request.user.role.code not in ['SUPERVISOR', 'MANAGER', 'OWNER']:
+    role_code = (request.user.role_code or "").upper()
+    if role_code not in ['SUPERVISOR', 'MANAGER', 'OWNER']:
         messages.error(request, 'You do not have permission to send messages.')
         return redirect('alerts:inbox')
     

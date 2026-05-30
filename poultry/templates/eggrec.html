@@ -51,9 +51,9 @@
                 </div>
 
                 <div class="col-md-2">
-                    <button type="submit" class="btn btn-outline-secondary w-100">
-                        <i class="bi bi-funnel me-1"></i>Filter
-                    </button>
+                    <a href="{% url 'eggrec' %}" class="btn btn-outline-secondary w-100">
+                        <i class="bi bi-x-circle me-1"></i>Clear Filters
+                    </a>
                 </div>
 
             </form>
@@ -73,6 +73,7 @@
                             <th>Eggs Collected</th>
                             <th>Broken / Rejected</th>
                             <th>Net Good Eggs</th>
+                            <th>Avg Weight</th>
                             <th>Collected By</th>
                             <th>Status</th>
                             <th>Approved By</th>
@@ -97,6 +98,13 @@
                                 {% endif %}
                             </td>
                             <td>{% if r.eggs_rejected %}{{ r.eggs_collected|add:r.eggs_rejected|floatformat:0 }}{% else %}{{ r.eggs_collected }}{% endif %}</td>
+                            <td>
+                                {% if r.average_egg_weight_g %}
+                                    {{ r.average_egg_weight_g|floatformat:1 }} g
+                                {% else %}
+                                    <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
                             <td>{% if r.collected_by %}{{ r.collected_by.get_full_name|default:r.collected_by.username }}{% else %}—{% endif %}</td>
                             <td>
                                 {% if r.status == "APPROVED" %}
@@ -111,7 +119,7 @@
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="9" class="text-center text-muted py-5">
+                            <td colspan="10" class="text-center text-muted py-5">
                                 <i class="bi bi-basket fs-3 d-block mb-2"></i>
                                 No egg collection records found.
                             </td>
@@ -122,6 +130,7 @@
             </div>
         </div>
     </div>
+    {% include "partials/pagination.html" %}
 
 </div>
 {% endblock %}

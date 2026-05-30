@@ -20,7 +20,11 @@ def worker_required(view_func):
             messages.error(request, "Access denied: Workers only.")
             if role_code == "SUPERVISOR":
                 return redirect("supdash")
-            return redirect("dashboard")
+            if role_code in ("OWNER", "INVESTOR"):
+                return redirect("investor")
+            if role_code == "MANAGER":
+                return redirect("managerdash")
+            return redirect("login")
 
         return view_func(request, *args, **kwargs)
 
@@ -43,7 +47,11 @@ def supervisor_required(view_func):
             messages.error(request, "Access denied: Supervisors only.")
             if role_code == "WORKER":
                 return redirect("workersdash")
-            return redirect("dashboard")
+            if role_code in ("OWNER", "INVESTOR"):
+                return redirect("investor")
+            if role_code == "MANAGER":
+                return redirect("managerdash")
+            return redirect("login")
 
         return view_func(request, *args, **kwargs)
 

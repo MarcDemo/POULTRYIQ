@@ -61,6 +61,33 @@
                         </div>
 
                         <div class="mb-3">
+                            <label class="form-label">
+                                <i class="bi bi-speedometer2 me-2"></i>Average egg weight
+                                <span class="luganda">Obuzito bw'egg wakati</span>
+                            </label>
+                            <div class="border rounded-3 p-3 bg-light">
+                                <small class="form-text text-muted d-block mb-2" id="weight_rule_text">
+                                    Enter good eggs first. For 50 or more eggs, weigh 20 to 30 random eggs. Below 50, weigh every egg.
+                                </small>
+                                <div class="row g-2 js-egg-weight-list" id="egg_weight_list">
+                                    <div class="col-12 text-muted small">Enter the good eggs count to show weight fields.</div>
+                                </div>
+                                <div class="d-flex flex-column flex-sm-row gap-2 align-items-sm-center mt-3">
+                                    <button type="button" class="btn btn-outline-primary btn-sm" id="calculate_avg_weight">
+                                        <i class="bi bi-calculator me-1"></i>Get Avg Weight
+                                    </button>
+                                    <div class="input-group input-group-sm">
+                                        <span class="input-group-text">Avg</span>
+                                        <input type="text" id="average_egg_weight" name="average_egg_weight" class="form-control" placeholder="0.0 g" readonly>
+                                    </div>
+                                </div>
+                                <small class="form-text text-muted d-block mt-2" id="average_weight_hint">
+                                    The saved average will be calculated from these weights.
+                                </small>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
                             <label for="notes" class="form-label">
                                 <i class="bi bi-chat-left-text me-2"></i>Note
                                 <span class="luganda">Eky'okwongerako</span>
@@ -97,6 +124,7 @@
                                     <th>House</th>
                                     <th>Collected</th>
                                     <th>Broken</th>
+                                    <th>Avg Weight</th>
                                     <th>Status</th>
                                 </tr>
                             </thead>
@@ -108,6 +136,13 @@
                                     <td>{{ rec.eggs_collected }}</td>
                                     <td>{{ rec.eggs_rejected }}</td>
                                     <td>
+                                        {% if rec.average_egg_weight_g %}
+                                            {{ rec.average_egg_weight_g|floatformat:1 }} g
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
                                         {% if rec.status == 'APPROVED' %}
                                             <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Approved</span>
                                         {% elif rec.status == 'REJECTED' %}
@@ -118,7 +153,7 @@
                                     </td>
                                 </tr>
                                 {% empty %}
-                                <tr><td colspan="5" class="text-center text-muted">No records yet.</td></tr>
+                                <tr><td colspan="6" class="text-center text-muted">No records yet.</td></tr>
                                 {% endfor %}
                             </tbody>
                         </table>
@@ -136,10 +171,118 @@
 <script>
 document.querySelectorAll('.js-confirm-submit').forEach((form) => {
     form.addEventListener('submit', (event) => {
+        if (!calculateAverageWeight(true)) {
+            event.preventDefault();
+            return;
+        }
+
         if (!confirm(form.dataset.confirmMessage || 'Send this record?')) {
             event.preventDefault();
         }
     });
 });
+
+const totalEggsInput = document.getElementById('total_eggs');
+const weightList = document.getElementById('egg_weight_list');
+const weightRuleText = document.getElementById('weight_rule_text');
+const avgWeightButton = document.getElementById('calculate_avg_weight');
+const avgWeightOutput = document.getElementById('average_egg_weight');
+const avgWeightHint = document.getElementById('average_weight_hint');
+
+function setAverageHint(message, state) {
+    avgWeightHint.textContent = message;
+    avgWeightHint.classList.remove('text-muted', 'text-success', 'text-danger');
+    avgWeightHint.classList.add(state);
+}
+
+function currentEggCount() {
+    const count = Number.parseInt(totalEggsInput.value, 10);
+    return Number.isFinite(count) && count >= 0 ? count : null;
+}
+
+function renderWeightInputs() {
+    const eggCount = currentEggCount();
+    weightList.innerHTML = '';
+    avgWeightOutput.value = '';
+
+    if (eggCount === null) {
+        weightRuleText.textContent = 'Enter good eggs first. For 50 or more eggs, weigh 20 to 30 random eggs. Below 50, weigh every egg.';
+        weightList.innerHTML = '<div class="col-12 text-muted small">Enter the good eggs count to show weight fields.</div>';
+        setAverageHint('The saved average will be calculated from these weights.', 'text-muted');
+        return;
+    }
+
+    if (eggCount === 0) {
+        weightRuleText.textContent = 'No egg weights are needed when zero good eggs are recorded.';
+        weightList.innerHTML = '<div class="col-12 text-muted small">No weight fields needed.</div>';
+        setAverageHint('No average weight will be saved for zero eggs.', 'text-muted');
+        return;
+    }
+
+    const inputCount = eggCount < 50 ? eggCount : 30;
+    const rule = eggCount < 50
+        ? `Collected ${eggCount} eggs: enter the weight for every egg.`
+        : 'Collected 50 or more eggs: enter 20 to 30 random egg weights.';
+    weightRuleText.textContent = rule;
+
+    for (let index = 1; index <= inputCount; index += 1) {
+        const col = document.createElement('div');
+        col.className = 'col-6 col-md-3';
+        col.innerHTML = `
+            <input type="number" name="egg_weights" class="form-control form-control-sm egg-weight-input" placeholder="Egg ${index} g" min="0" step="0.1" inputmode="decimal" aria-label="Egg ${index} weight in grams">
+        `;
+        weightList.appendChild(col);
+    }
+
+    setAverageHint(eggCount < 50 ? `Enter all ${eggCount} weights.` : 'Enter at least 20 weights, up to 30.', 'text-muted');
+}
+
+function calculateAverageWeight(showErrors) {
+    const eggCount = currentEggCount();
+    const weights = Array.from(document.querySelectorAll('.egg-weight-input'))
+        .map((input) => Number.parseFloat(input.value))
+        .filter((weight) => Number.isFinite(weight) && weight > 0);
+
+    if (eggCount === null) {
+        avgWeightOutput.value = '';
+        if (showErrors) {
+            setAverageHint('Enter the good eggs count before calculating average weight.', 'text-danger');
+        }
+        return false;
+    }
+
+    if (eggCount === 0) {
+        avgWeightOutput.value = '';
+        setAverageHint('No average weight is needed for zero eggs.', 'text-muted');
+        return true;
+    }
+
+    if (eggCount < 50 && weights.length !== eggCount) {
+        avgWeightOutput.value = '';
+        if (showErrors) {
+            setAverageHint(`Please enter the weight for all ${eggCount} eggs.`, 'text-danger');
+        }
+        return false;
+    }
+
+    if (eggCount >= 50 && (weights.length < 20 || weights.length > 30)) {
+        avgWeightOutput.value = '';
+        if (showErrors) {
+            setAverageHint('Please enter 20 to 30 random egg weights.', 'text-danger');
+        }
+        return false;
+    }
+
+    const average = weights.reduce((sum, weight) => sum + weight, 0) / weights.length;
+    avgWeightOutput.value = `${average.toFixed(1)} g`;
+    setAverageHint(`Calculated from ${weights.length} egg weight${weights.length === 1 ? '' : 's'}.`, 'text-success');
+    return true;
+}
+
+if (totalEggsInput && weightList && avgWeightButton && avgWeightOutput && avgWeightHint) {
+    totalEggsInput.addEventListener('input', renderWeightInputs);
+    avgWeightButton.addEventListener('click', () => calculateAverageWeight(true));
+    renderWeightInputs();
+}
 </script>
 {% endblock %}

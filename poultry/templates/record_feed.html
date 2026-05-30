@@ -29,7 +29,7 @@
                             <select id="batch" name="batch" class="form-select" required>
                                 <option value="">-- Choose house --</option>
                                 {% for batch in batches %}
-                                <option value="{{ batch.pk }}">{{ batch.house.name|default:batch.house.house_code }} - {{ batch.batch_code }}</option>
+                                <option value="{{ batch.pk }}" data-house="{{ batch.house_id }}">{{ batch.house.name|default:batch.house.house_code }} - {{ batch.batch_code }}</option>
                                 {% endfor %}
                             </select>
                         </div>
@@ -43,15 +43,19 @@
                         </div>
 
                         <div class="mb-3">
-                            <label for="feed_type" class="form-label">
-                                <i class="bi bi-bag me-1"></i>Feed type
-                                <span class="luganda">Ekika ky'emmere</span>
+                            <label for="feed_mixture" class="form-label">
+                                <i class="bi bi-bag me-1"></i>Feed mixture
+                                <span class="luganda">Tabula y'emmere</span>
                             </label>
-                            <select id="feed_type" name="feed_type" class="form-select">
-                                {% for code, label in feed_types %}
-                                <option value="{{ code }}">{{ label }}</option>
+                            <select id="feed_mixture" name="feed_mixture" class="form-select" required>
+                                <option value="">-- Choose supervisor mixture --</option>
+                                {% for mixture in feed_mixtures %}
+                                <option value="{{ mixture.pk }}" data-houses="{% for allocation in mixture.allocations.all %}{{ allocation.house_id }} {% endfor %}">
+                                    {{ mixture.name }} - mixed by {{ mixture.mixed_by.get_full_name|default:mixture.mixed_by.username }}
+                                </option>
                                 {% endfor %}
                             </select>
+                            <small class="form-text text-muted">Only mixtures assigned to your houses today are shown.</small>
                         </div>
 
                         <div class="mb-3">
@@ -104,7 +108,7 @@
                                 <tr>
                                     <th>Date</th>
                                     <th>House</th>
-                                    <th>Feed Type</th>
+                                    <th>Mixture</th>
                                     <th>Qty (kg)</th>
                                     <th>Status</th>
                                 </tr>
@@ -114,7 +118,7 @@
                                 <tr>
                                     <td>{{ rec.record_date }}</td>
                                     <td>{{ rec.batch.house.name|default:rec.batch.house.house_code }}</td>
-                                    <td>{{ rec.get_feed_type_display }}</td>
+                                    <td>{{ rec.feed_mixture.name|default:rec.get_feed_type_display }}</td>
                                     <td>{{ rec.quantity_kg }}</td>
                                     <td>
                                         {% if rec.status == 'APPROVED' %}
@@ -150,5 +154,31 @@ document.querySelectorAll('.js-confirm-submit').forEach((form) => {
         }
     });
 });
+
+const batchSelect = document.getElementById('batch');
+const mixtureSelect = document.getElementById('feed_mixture');
+
+function filterMixturesForHouse() {
+    if (!batchSelect || !mixtureSelect) return;
+
+    const selectedHouse = batchSelect.selectedOptions[0]?.dataset.house || '';
+    Array.from(mixtureSelect.options).forEach((option) => {
+        if (!option.value) {
+            option.hidden = false;
+            return;
+        }
+        const houses = option.dataset.houses || '';
+        option.hidden = selectedHouse ? !houses.split(/\s+/).includes(selectedHouse) : false;
+    });
+
+    if (mixtureSelect.selectedOptions[0]?.hidden) {
+        mixtureSelect.value = '';
+    }
+}
+
+if (batchSelect && mixtureSelect) {
+    batchSelect.addEventListener('change', filterMixturesForHouse);
+    filterMixturesForHouse();
+}
 </script>
 {% endblock %}

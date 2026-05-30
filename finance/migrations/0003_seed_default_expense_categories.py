@@ -5,14 +5,14 @@ def seed_default_expense_categories(apps, schema_editor):
     ExpenseCategory = apps.get_model("finance", "ExpenseCategory")
 
     default_categories = [
-        ("FEED", "Feed & Nutrition"),
         ("VET", "Veterinary & Medication"),
         ("LABOUR", "Labour & Wages"),
         ("UTILITIES", "Utilities"),
         ("TRANSPORT", "Transport & Logistics"),
         ("MAINTENANCE", "Maintenance & Repairs"),
-        ("BEDDING", "Bedding & Litter"),
         ("EQUIPMENT", "Equipment & Tools"),
+        ("INVENTORY_PURCHASE", "Inventory Purchases"),
+        ("BATCH_PURCHASE", "Bird Batch Purchase"),
         ("OTHER", "Other"),
     ]
 

@@ -208,6 +208,16 @@
                 </a>
             </li>
             <li class="nav-item">
+                <a class="nav-link {% if request.resolver_match.url_name == 'feed_mixtures' %}active{% endif %}" href="{% url 'feed_mixtures' %}">
+                    <i class="bi bi-bag-plus"></i><span>Feed Mixtures</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link {% if request.resolver_match.url_name == 'feedrec' %}active{% endif %}" href="{% url 'feedrec' %}">
+                    <i class="bi bi-bag-fill"></i><span>Feed Management</span>
+                </a>
+            </li>
+            <li class="nav-item">
                 <a class="nav-link" href="{% url 'view_sickness' %}" {% if request.resolver_match.url_name == 'view_sickness' %}class="active"{% endif %}>
                     <i class="bi bi-clipboard2-pulse"></i> Sickness Records
                 </a>
@@ -256,7 +266,7 @@
         {% endif %}
         <ul class="nav flex-column">
             <li class="nav-item">
-                <a class="nav-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}" href="{% url 'dashboard' %}">
+                <a class="nav-link {% if request.resolver_match.url_name == 'managerdash' %}active{% endif %}" href="{% url 'managerdash' %}">
                     <i class="bi bi-speedometer2"></i><span>Dashboard</span>
                 </a>
             </li>
@@ -297,6 +307,11 @@
                 </a>
             </li>
             <li class="nav-item">
+                <a class="nav-link {% if request.resolver_match.url_name == 'store' %}active{% endif %}" href="{% url 'store' %}">
+                    <i class="bi bi-box-arrow-up"></i><span>Store</span>
+                </a>
+            </li>
+            <li class="nav-item">
                 <a class="nav-link {% if request.resolver_match.url_name == 'reports' %}active{% endif %}" href="{% url 'reports' %}">
                     <i class="bi bi-file-earmark-pdf"></i><span>Reports</span>
                 </a>
@@ -304,6 +319,12 @@
             <li class="nav-item">
                 <a class="nav-link {% if request.resolver_match.url_name == 'expense_form' or request.resolver_match.url_name == 'expenses' %}active{% endif %}" href="{% url 'expenses' %}">
                     <i class="bi bi-cash-coin"></i><span>Expenses</span>
+                </a>
+            </li>
+
+            <li class="nav-item">
+                <a class="nav-link {% if request.resolver_match.url_name == 'salaries' %}active{% endif %}" href="{% url 'salaries' %}">
+                    <i class="bi bi-currency-dollar"></i><span>Salaries</span>
                 </a>
             </li>
             <li class="nav-item">
@@ -361,6 +382,28 @@
 
 {% endif %}
 
+{% if request.user.is_authenticated %}
+<div class="home-return">
+    {% if request.user.is_worker %}
+    <a href="{% url 'workersdash' %}" class="btn btn-light btn-sm shadow-sm">
+        <i class="bi bi-house-door me-1"></i>Back to Home
+    </a>
+    {% elif request.user.is_supervisor %}
+    <a href="{% url 'supdash' %}" class="btn btn-light btn-sm shadow-sm">
+        <i class="bi bi-house-door me-1"></i>Back to Home
+    </a>
+    {% elif request.user.is_investor %}
+    <a href="{% url 'investor' %}" class="btn btn-light btn-sm shadow-sm">
+        <i class="bi bi-house-door me-1"></i>Back to Home
+    </a>
+    {% else %}
+    <a href="{% url 'managerdash' %}" class="btn btn-light btn-sm shadow-sm">
+        <i class="bi bi-house-door me-1"></i>Back to Home
+    </a> 
+    {% endif %}
+</div>
+{% endif %}
+
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 {% if not request.user.is_authenticated or not request.user.is_investor %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -373,6 +416,14 @@
 {% endif %}
 <script>
 (function () {
+    document.querySelectorAll('table').forEach(function (table) {
+        if (table.closest('.table-responsive')) return;
+        var wrapper = document.createElement('div');
+        wrapper.className = 'table-responsive';
+        table.parentNode.insertBefore(wrapper, table);
+        wrapper.appendChild(table);
+    });
+
     function initAutoFilter(form) {
         var timer;
         form.querySelectorAll('select, input[type="date"]').forEach(function (el) {

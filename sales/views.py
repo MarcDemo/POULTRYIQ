@@ -10,6 +10,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 
 from inventory.models import InventoryTransaction
 from poultry.models import ApprovalStatus, egg_collection
+from poultryiq.pagination import paginate
 from .models import Customer, CustomerPayment, ReceivableLedger, SaleInvoice, SaleItem
 
 
@@ -391,8 +392,11 @@ def sales(request):
 def orderview(request):
     pending_orders = _pending_orders_queryset()
     _attach_order_item_displays(pending_orders)
+    page_obj, querystring = paginate(request, pending_orders, per_page=15)
     context = {
-        "pending_orders": pending_orders,
+        "pending_orders": page_obj,
+        "page_obj": page_obj,
+        "querystring": querystring,
         **_pending_orders_metrics(pending_orders),
     }
     return render(request, "orderview.html", context)

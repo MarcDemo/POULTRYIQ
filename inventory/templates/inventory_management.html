@@ -3,6 +3,61 @@
 
 <div class="container-fluid">
 
+<style>
+.stock-progress {
+    min-width: 190px;
+}
+
+.stock-progress .progress {
+    height: 11px;
+    background: #edf2f7;
+}
+
+.available-stock-progress {
+    min-width: 150px;
+}
+
+.available-stock-progress .progress {
+    height: 8px;
+    background: #edf2f7;
+}
+
+.stock-status-meta {
+    align-items: center;
+    display: flex;
+    gap: .5rem;
+    justify-content: space-between;
+}
+
+.stock-badge {
+    border-radius: 999px;
+    display: inline-flex;
+    font-size: .72rem;
+    font-weight: 700;
+    min-width: 78px;
+    justify-content: center;
+    padding: .25rem .55rem;
+}
+
+.stock-progress-enough,
+.stock-badge-enough {
+    background: #198754;
+    color: #fff;
+}
+
+.stock-progress-moderate,
+.stock-badge-moderate {
+    background: #f59e0b;
+    color: #111827;
+}
+
+.stock-progress-low,
+.stock-badge-low {
+    background: #dc3545;
+    color: #fff;
+}
+</style>
+
 <h3 class="mb-4">
     <i class="bi bi-boxes me-2"></i>Inventory Management
 </h3>
@@ -28,17 +83,62 @@
 </div>
 
 <div class="mb-3">
+    <label for="category" class="form-label">
+        <i class="bi bi-tags me-1"></i>Category
+    </label>
+    <select class="form-select" id="category" name="category" required>
+        <option value="">-- Select category --</option>
+        {% for cat in categories %}
+        <option value="{{ cat.pk }}" data-category-code="{{ cat.code }}" {% if request.POST.category == cat.pk|stringformat:"s" %}selected{% endif %}>{{ cat.name }}</option>
+        {% endfor %}
+    </select>
+</div>
+
+<div class="mb-3" id="otherCategoryWrapper" style="display:none;">
+    <label for="other_category_name" class="form-label">
+        <i class="bi bi-pencil-square me-1"></i>Specify Category
+    </label>
+    <input class="form-control" id="other_category_name" name="other_category_name" value="{{ request.POST.other_category_name|default:'' }}" placeholder="Enter category name">
+</div>
+
+<div class="mb-3">
     <label for="quantity" class="form-label">
         <i class="bi bi-collection me-1"></i>Quantity
     </label>
-    <input class="form-control" id="quantity" name="quantity" placeholder="0" type="number" required min="0">
+    <input class="form-control" id="quantity" name="quantity" value="{{ request.POST.quantity|default:'' }}" placeholder="0" type="number" required min="0" step="0.001">
 </div>
 
 <div class="mb-3">
     <label for="unit" class="form-label">
         <i class="bi bi-rulers me-1"></i>Unit
     </label>
-    <input class="form-control" id="unit" name="unit" placeholder="kg, trays, liters, etc">
+    <input class="form-control" id="unit" name="unit" value="{{ request.POST.unit|default:'' }}" placeholder="kg, trays, liters, etc">
+</div>
+
+<div class="mb-3">
+    <label for="supplier_name" class="form-label">
+        <i class="bi bi-truck me-1"></i>Supplier Name
+    </label>
+    <select class="form-select" id="supplier_name" name="supplier_name">
+        <option value="">-- Select supplier --</option>
+        {% for supplier in suppliers %}
+        <option value="{{ supplier.name }}" {% if request.POST.supplier_name == supplier.name %}selected{% endif %}>{{ supplier.name }}</option>
+        {% endfor %}
+    </select>
+</div>
+
+<div class="mb-3">
+    <label for="unit_price" class="form-label">
+        <i class="bi bi-cash-coin me-1"></i>Price (per unit)
+    </label>
+    <input class="form-control" id="unit_price" name="unit_price" value="{{ request.POST.unit_price|default:'' }}" placeholder="0" type="number" required min="0" step="0.01">
+</div>
+
+<div class="mb-3">
+    <label for="expiry_date" class="form-label">
+        <i class="bi bi-calendar-event me-1"></i>Expiry Date
+    </label>
+    <input class="form-control" id="expiry_date" name="expiry_date" value="{{ request.POST.expiry_date|default:'' }}" type="date">
 </div>
 
 <div class="d-grid">
@@ -65,8 +165,12 @@
 <thead>
 <tr>
 <th>Item</th>
-<th>Quantity</th>
+<th>Category</th>
+<th>Available Stock</th>
 <th>Unit</th>
+<th>Supplier</th>
+<th>Price/Unit</th>
+<th>Expiry</th>
 <th>Status</th>
 </tr>
 </thead>
@@ -77,15 +181,43 @@
 <td>
     <i class="bi bi-box-seam me-2"></i>{{ i.item }}
 </td>
-<td><strong>{{ i.quantity }}</strong></td>
-<td>{{ i.unit }}</td>
+<td>{{ i.category }}</td>
 <td>
-{% if i.quantity < 50 %}
-<span class="badge bg-danger">Low</span>
-{% else %}
-<span class="badge bg-success">OK</span>
-{% endif %}
+<div class="available-stock-progress">
+    <div class="d-flex justify-content-between gap-2 small mb-1">
+        <span><strong>{{ i.current_qty|floatformat:3 }}</strong> {{ i.unit }}</span>
+        <span class="fw-semibold">{{ i.percent_left }}%</span>
+    </div>
+    <div class="progress" role="progressbar" aria-label="{{ i.item }} available stock" aria-valuenow="{{ i.percent_left }}" aria-valuemin="0" aria-valuemax="100">
+        <div class="progress-bar {{ i.progress_class }}" style="width: {{ i.percent_left }}%"></div>
+    </div>
+</div>
 </td>
+<td>{{ i.unit }}</td>
+<td>{{ i.supplier_name|default:"-" }}</td>
+<td>
+    {% if i.unit_price or i.unit_price == 0 %}
+        {{ i.unit_price|floatformat:0 }}
+    {% else %}
+        -
+    {% endif %}
+</td>
+<td>{{ i.expiry_date|default:"-" }}</td>
+<td>
+<div class="stock-progress">
+    <div class="stock-status-meta small mb-1">
+        <span class="stock-badge {{ i.badge_class }}">{{ i.status_label }}</span>
+        <span class="fw-semibold">{{ i.percent_left }}% left</span>
+    </div>
+    <div class="progress" role="progressbar" aria-label="{{ i.status_label }} stock status" aria-valuenow="{{ i.percent_left }}" aria-valuemin="0" aria-valuemax="100">
+        <div class="progress-bar {{ i.progress_class }}" style="width: {{ i.percent_left }}%"></div>
+    </div>
+</div>
+</td>
+</tr>
+{% empty %}
+<tr>
+<td colspan="8" class="text-center text-muted py-3">No inventory items recorded yet.</td>
 </tr>
 {% endfor %}
 </tbody>
@@ -95,9 +227,34 @@
 </div>
 </div>
 </div>
+{% include "partials/pagination.html" %}
 
 </div>
 
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const categorySelect = document.getElementById('category');
+    const otherWrapper = document.getElementById('otherCategoryWrapper');
+    const otherInput = document.getElementById('other_category_name');
+
+    function toggleOtherCategoryInput() {
+        const selected = categorySelect.options[categorySelect.selectedIndex];
+        const selectedCode = selected ? (selected.dataset.categoryCode || '') : '';
+        const isOther = selectedCode.toUpperCase() === 'OTHER';
+
+        otherWrapper.style.display = isOther ? '' : 'none';
+        otherInput.required = isOther;
+
+        if (!isOther) {
+            otherInput.value = '';
+        }
+    }
+
+    categorySelect.addEventListener('change', toggleOtherCategoryInput);
+    toggleOtherCategoryInput();
+});
+</script>
 
 {% endblock %}

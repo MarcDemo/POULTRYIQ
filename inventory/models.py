@@ -8,6 +8,7 @@ from django.core.validators import MinValueValidator
 
 class Supplier(models.Model):
     name = models.CharField(max_length=150, unique=True)
+    tin_number = models.CharField(max_length=50, blank=True)
     phone = models.CharField(max_length=30, blank=True)
     location = models.CharField(max_length=150, blank=True)
     product = models.CharField(max_length=150, blank=True)
@@ -75,6 +76,13 @@ class InventoryTransaction(models.Model):
         max_digits=12, decimal_places=3,
         validators=[MinValueValidator(Decimal("0.000"))]
     )
+
+    supplier_name = models.CharField(max_length=150, blank=True)
+    unit_price = models.DecimalField(
+        max_digits=14, decimal_places=2, null=True, blank=True,
+        validators=[MinValueValidator(Decimal("0.00"))]
+    )
+    expiry_date = models.DateField(null=True, blank=True)
 
     # Link stock-out to a batch (optional; replace with your actual model path)
     batch = models.ForeignKey(

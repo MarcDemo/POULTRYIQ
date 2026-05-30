@@ -9,6 +9,10 @@ canvas {
     height: auto;
 }
 
+* {
+    min-width: 0;
+}
+
 .mobile-topbar {
     display: none;
 }
@@ -26,7 +30,7 @@ canvas {
 
 @media (max-width: 991.98px) {
     body {
-        overflow-x: hidden;
+        overflow-x: auto;
     }
 
     body.sidebar-open {
@@ -126,12 +130,14 @@ canvas {
     .main-content {
         margin-left: 0 !important;
         width: 100%;
+        overflow-x: auto;
         padding: calc(var(--mobile-shell-height) + 1rem) 1rem 1.5rem !important;
     }
 
     .container,
     .container-fluid {
         --bs-gutter-x: 1rem;
+        overflow-x: auto;
     }
 
     .page-header-row {
@@ -154,18 +160,18 @@ canvas {
         font-size: 1.5rem;
     }
 
-    .table,
-    table {
-        display: block;
-        width: 100%;
-        overflow-x: auto;
-        white-space: nowrap;
+    .table-responsive {
+        max-width: 100%;
+        overflow: auto;
+        max-height: 62vh;
         -webkit-overflow-scrolling: touch;
     }
 
-    .table-responsive {
-        overflow-x: auto;
-        -webkit-overflow-scrolling: touch;
+    .table,
+    table {
+        width: max-content;
+        min-width: 100%;
+        white-space: nowrap;
     }
 
     .table th,
