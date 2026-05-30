@@ -5,11 +5,56 @@
 
 <style>
 .stock-progress {
-    min-width: 170px;
+    min-width: 190px;
 }
 
 .stock-progress .progress {
-    height: 10px;
+    height: 11px;
+    background: #edf2f7;
+}
+
+.available-stock-progress {
+    min-width: 150px;
+}
+
+.available-stock-progress .progress {
+    height: 8px;
+    background: #edf2f7;
+}
+
+.stock-status-meta {
+    align-items: center;
+    display: flex;
+    gap: .5rem;
+    justify-content: space-between;
+}
+
+.stock-badge {
+    border-radius: 999px;
+    display: inline-flex;
+    font-size: .72rem;
+    font-weight: 700;
+    min-width: 78px;
+    justify-content: center;
+    padding: .25rem .55rem;
+}
+
+.stock-progress-enough,
+.stock-badge-enough {
+    background: #198754;
+    color: #fff;
+}
+
+.stock-progress-moderate,
+.stock-badge-moderate {
+    background: #f59e0b;
+    color: #111827;
+}
+
+.stock-progress-low,
+.stock-badge-low {
+    background: #dc3545;
+    color: #fff;
 }
 </style>
 
@@ -121,7 +166,7 @@
 <tr>
 <th>Item</th>
 <th>Category</th>
-<th>Quantity</th>
+<th>Available Stock</th>
 <th>Unit</th>
 <th>Supplier</th>
 <th>Price/Unit</th>
@@ -137,7 +182,17 @@
     <i class="bi bi-box-seam me-2"></i>{{ i.item }}
 </td>
 <td>{{ i.category }}</td>
-<td><strong>{{ i.current_qty|floatformat:3 }}</strong></td>
+<td>
+<div class="available-stock-progress">
+    <div class="d-flex justify-content-between gap-2 small mb-1">
+        <span><strong>{{ i.current_qty|floatformat:3 }}</strong> {{ i.unit }}</span>
+        <span class="fw-semibold">{{ i.percent_left }}%</span>
+    </div>
+    <div class="progress" role="progressbar" aria-label="{{ i.item }} available stock" aria-valuenow="{{ i.percent_left }}" aria-valuemin="0" aria-valuemax="100">
+        <div class="progress-bar {{ i.progress_class }}" style="width: {{ i.percent_left }}%"></div>
+    </div>
+</div>
+</td>
 <td>{{ i.unit }}</td>
 <td>{{ i.supplier_name|default:"-" }}</td>
 <td>
@@ -150,12 +205,19 @@
 <td>{{ i.expiry_date|default:"-" }}</td>
 <td>
 <div class="stock-progress">
-    <div class="small fw-semibold mb-1">{{ i.percent_left }}% left</div>
-    <div class="progress" role="progressbar" aria-valuenow="{{ i.percent_left }}" aria-valuemin="0" aria-valuemax="100">
-        <div class="progress-bar {{ i.status_class }}" style="width: {{ i.percent_left }}%"></div>
+    <div class="stock-status-meta small mb-1">
+        <span class="stock-badge {{ i.badge_class }}">{{ i.status_label }}</span>
+        <span class="fw-semibold">{{ i.percent_left }}% left</span>
+    </div>
+    <div class="progress" role="progressbar" aria-label="{{ i.status_label }} stock status" aria-valuenow="{{ i.percent_left }}" aria-valuemin="0" aria-valuemax="100">
+        <div class="progress-bar {{ i.progress_class }}" style="width: {{ i.percent_left }}%"></div>
     </div>
 </div>
 </td>
+</tr>
+{% empty %}
+<tr>
+<td colspan="8" class="text-center text-muted py-3">No inventory items recorded yet.</td>
 </tr>
 {% endfor %}
 </tbody>
