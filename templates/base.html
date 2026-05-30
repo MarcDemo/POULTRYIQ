@@ -321,6 +321,12 @@
                     <i class="bi bi-cash-coin"></i><span>Expenses</span>
                 </a>
             </li>
+
+            <li class="nav-item">
+                <a class="nav-link {% if request.resolver_match.url_name == 'salaries' %}active{% endif %}" href="{% url 'salaries' %}">
+                    <i class="bi bi-currency-dollar"></i><span>Salaries</span>
+                </a>
+            </li>
             <li class="nav-item">
                 <a class="nav-link {% if request.resolver_match.url_name == 'manage_users' %}active{% endif %}" href="{% url 'manage_users' %}">
                     <i class="bi bi-people-fill"></i><span>Manage Users</span>
