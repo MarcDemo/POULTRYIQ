@@ -1,0 +1,259 @@
+{% extends 'base.html' %}
+{% block content %}
+
+<div class="container-fluid">
+
+<style>
+.store-status {
+    min-width: 160px;
+}
+
+.store-status .progress {
+    height: 10px;
+    background: #edf2f7;
+}
+
+.stock-status-meta {
+    align-items: center;
+    display: flex;
+    gap: .5rem;
+    justify-content: space-between;
+}
+
+.stock-badge {
+    border-radius: 999px;
+    display: inline-flex;
+    font-size: .72rem;
+    font-weight: 700;
+    min-width: 78px;
+    justify-content: center;
+    padding: .25rem .55rem;
+}
+
+.stock-progress-enough,
+.stock-badge-enough {
+    background: #198754;
+    color: #fff;
+}
+
+.stock-progress-moderate,
+.stock-badge-moderate {
+    background: #f59e0b;
+    color: #111827;
+}
+
+.stock-progress-low,
+.stock-badge-low {
+    background: #dc3545;
+    color: #fff;
+}
+</style>
+
+<div class="page-header-row mb-4">
+<h3>
+    <i class="bi bi-box-arrow-up me-2"></i>Store
+</h3>
+</div>
+
+<div class="row g-4">
+
+<div class="col-lg-4">
+<div class="card">
+<div class="card-header">
+    <i class="bi bi-clipboard-minus me-2"></i>Record Store Out
+</div>
+
+<div class="card-body">
+<form method="POST" novalidate>
+{% csrf_token %}
+
+<div class="mb-3">
+    <label for="tx_date" class="form-label">
+        <i class="bi bi-calendar-event me-1"></i>Date
+    </label>
+    <input class="form-control" id="tx_date" name="tx_date" type="date" value="{{ form_data.tx_date }}" required>
+</div>
+
+<div class="mb-3">
+    <label for="item" class="form-label">
+        <i class="bi bi-box me-1"></i>Item
+    </label>
+    <select class="form-select" id="item" name="item" required {% if not available_rows %}disabled{% endif %}>
+        <option value="">-- Select item --</option>
+        {% for row in available_rows %}
+        {% with row_id=row.item_id|stringformat:"s" %}
+        <option value="{{ row_id }}" data-unit="{{ row.unit }}" data-available="{{ row.current_qty|floatformat:3 }}" {% if form_data.item_id == row_id %}selected{% endif %}>
+            {{ row.item }} - {{ row.current_qty|floatformat:3 }} {{ row.unit }}
+        </option>
+        {% endwith %}
+        {% endfor %}
+    </select>
+    <div class="form-text" id="stockHint"></div>
+</div>
+
+<div class="mb-3">
+    <label for="quantity" class="form-label">
+        <i class="bi bi-collection me-1"></i>Quantity Taken
+    </label>
+    <div class="input-group">
+        <input class="form-control" id="quantity" name="quantity" value="{{ form_data.quantity }}" type="number" min="0" step="0.001" required {% if not available_rows %}disabled{% endif %}>
+        <span class="input-group-text" id="unitLabel">Unit</span>
+    </div>
+</div>
+
+<div class="mb-3">
+    <label for="batch" class="form-label">
+        <i class="bi bi-egg me-1"></i>Batch
+    </label>
+    <select class="form-select" id="batch" name="batch">
+        <option value="">-- Not batch-specific --</option>
+        {% for batch in batches %}
+        {% with batch_id=batch.pk|stringformat:"s" %}
+        <option value="{{ batch_id }}" {% if form_data.batch_id == batch_id %}selected{% endif %}>{{ batch.batch_code }}</option>
+        {% endwith %}
+        {% endfor %}
+    </select>
+</div>
+
+<div class="mb-3">
+    <label for="reference" class="form-label">
+        <i class="bi bi-person-check me-1"></i>Taken By / Reference
+    </label>
+    <input class="form-control" id="reference" name="reference" value="{{ form_data.reference }}" placeholder="Name or reference">
+</div>
+
+<div class="mb-3">
+    <label for="notes" class="form-label">
+        <i class="bi bi-journal-text me-1"></i>Notes
+    </label>
+    <textarea class="form-control" id="notes" name="notes" rows="3" placeholder="Purpose or remarks">{{ form_data.notes }}</textarea>
+</div>
+
+<div class="d-grid">
+    <button class="btn btn-success" type="submit" {% if not available_rows %}disabled{% endif %}>
+        <i class="bi bi-check-circle me-2"></i>Save
+    </button>
+</div>
+
+</form>
+</div>
+</div>
+</div>
+
+<div class="col-lg-8">
+<div class="card mb-4">
+<div class="card-header">
+    <i class="bi bi-boxes me-2"></i>Available Stock
+</div>
+<div class="card-body">
+<div class="table-responsive">
+<table class="table table-hover align-middle">
+<thead>
+<tr>
+<th>Item</th>
+<th>Category</th>
+<th>Available</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+{% for row in available_rows %}
+<tr>
+<td><i class="bi bi-box-seam me-2"></i>{{ row.item }}</td>
+<td>{{ row.category }}</td>
+<td><strong>{{ row.current_qty|floatformat:3 }}</strong> {{ row.unit }}</td>
+<td>
+    <div class="store-status">
+        <div class="stock-status-meta small mb-1">
+            <span class="stock-badge {{ row.badge_class }}">{{ row.status_label }}</span>
+            <span class="fw-semibold">{{ row.percent_left }}%</span>
+        </div>
+        <div class="progress" role="progressbar" aria-label="{{ row.status_label }} stock status" aria-valuenow="{{ row.percent_left }}" aria-valuemin="0" aria-valuemax="100">
+            <div class="progress-bar {{ row.progress_class }}" style="width: {{ row.percent_left }}%"></div>
+        </div>
+    </div>
+</td>
+</tr>
+{% empty %}
+<tr>
+<td colspan="4" class="text-center text-muted py-3">No stock available.</td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+</div>
+</div>
+
+<div class="card">
+<div class="card-header">
+    <i class="bi bi-clock-history me-2"></i>Store Out Records
+</div>
+<div class="card-body">
+<div class="table-responsive">
+<table class="table table-hover align-middle">
+<thead>
+<tr>
+<th>Date</th>
+<th>Item</th>
+<th>Quantity</th>
+<th>Batch</th>
+<th>Taken By / Reference</th>
+<th>Recorded By</th>
+</tr>
+</thead>
+<tbody>
+{% for record in stock_out_records %}
+<tr>
+<td>{{ record.tx_date }}</td>
+<td>{{ record.item.name }}</td>
+<td><strong>{{ record.quantity|floatformat:3 }}</strong> {{ record.item.unit }}</td>
+<td>{{ record.batch.batch_code|default:"-" }}</td>
+<td>{{ record.reference|default:"-" }}</td>
+<td>{{ record.created_by.display_name|default:record.created_by.username }}</td>
+</tr>
+{% empty %}
+<tr>
+<td colspan="6" class="text-center text-muted py-3">No store out records yet.</td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+</div>
+</div>
+{% include "partials/pagination.html" %}
+
+</div>
+
+</div>
+
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const itemSelect = document.getElementById('item');
+    const unitLabel = document.getElementById('unitLabel');
+    const stockHint = document.getElementById('stockHint');
+    const quantityInput = document.getElementById('quantity');
+
+    function refreshItemMeta() {
+        if (!itemSelect || !unitLabel || !stockHint || !quantityInput) return;
+
+        const selected = itemSelect.options[itemSelect.selectedIndex];
+        const unit = selected ? (selected.dataset.unit || 'Unit') : 'Unit';
+        const available = selected ? (selected.dataset.available || '') : '';
+
+        unitLabel.textContent = unit;
+        quantityInput.max = available || '';
+        stockHint.textContent = available ? `${available} ${unit} available` : '';
+    }
+
+    if (itemSelect) {
+        itemSelect.addEventListener('change', refreshItemMeta);
+        refreshItemMeta();
+    }
+});
+</script>
+
+{% endblock %}

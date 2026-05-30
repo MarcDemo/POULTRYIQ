@@ -307,6 +307,11 @@
                 </a>
             </li>
             <li class="nav-item">
+                <a class="nav-link {% if request.resolver_match.url_name == 'store' %}active{% endif %}" href="{% url 'store' %}">
+                    <i class="bi bi-box-arrow-up"></i><span>Store</span>
+                </a>
+            </li>
+            <li class="nav-item">
                 <a class="nav-link {% if request.resolver_match.url_name == 'reports' %}active{% endif %}" href="{% url 'reports' %}">
                     <i class="bi bi-file-earmark-pdf"></i><span>Reports</span>
                 </a>
