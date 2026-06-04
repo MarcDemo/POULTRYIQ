@@ -1,125 +1,434 @@
 {% extends 'base.html' %}
+{% block title %}Reports Center - PoultryIQ{% endblock %}
+
 {% block content %}
+<style>
+    .reports-center {
+        color: #1f2933;
+    }
 
-<style>.report-card {
-    cursor: pointer;
-    transition: 0.3s;
-    border-radius: 12px;
-}
+    .reports-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 1rem;
+        margin-bottom: 1.25rem;
+    }
 
-.report-card:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 8px 20px rgba(0,0,0,0.15);
-}
+    .reports-eyebrow {
+        color: #208447;
+        font-size: .78rem;
+        font-weight: 700;
+        letter-spacing: .08em;
+        margin-bottom: .25rem;
+        text-transform: uppercase;
+    }
+
+    .reports-title {
+        font-size: clamp(1.5rem, 2vw, 2rem);
+        font-weight: 800;
+        margin-bottom: .3rem;
+    }
+
+    .reports-subtitle {
+        color: #6b7280;
+        margin: 0;
+    }
+
+    .month-pill {
+        background: #e9f7ef;
+        border: 1px solid #bfe6cd;
+        border-radius: 8px;
+        color: #166534;
+        font-weight: 700;
+        padding: .7rem .9rem;
+        white-space: nowrap;
+    }
+
+    .reports-actions {
+        align-items: flex-end;
+        display: flex;
+        flex-direction: column;
+        gap: .6rem;
+    }
+
+    .period-tabs {
+        display: flex;
+        flex-wrap: wrap;
+        gap: .5rem;
+        justify-content: flex-end;
+    }
+
+    .period-tab {
+        background: #fff;
+        border: 1px solid #d7ded9;
+        border-radius: 8px;
+        color: #374151;
+        display: inline-flex;
+        flex-direction: column;
+        line-height: 1.2;
+        min-width: 9.5rem;
+        padding: .55rem .7rem;
+        text-decoration: none;
+    }
+
+    .period-tab:hover,
+    .period-tab.is-active {
+        border-color: #208447;
+        color: #166534;
+    }
+
+    .period-tab.is-active {
+        background: #f1fbf5;
+        font-weight: 800;
+    }
+
+    .period-tab small {
+        color: #6b7280;
+        margin-top: .15rem;
+    }
+
+    .report-card-link {
+        color: inherit;
+        display: block;
+        height: 100%;
+        text-decoration: none;
+    }
+
+    .report-card {
+        border-radius: 8px;
+        border-width: 1px;
+        height: 100%;
+        padding: 1rem;
+        transition: transform .2s ease, box-shadow .2s ease, border-width .2s ease;
+    }
+
+    .report-card:hover,
+    .report-card.is-active {
+        box-shadow: 0 10px 24px rgba(31, 41, 51, .12);
+        transform: translateY(-2px);
+    }
+
+    .report-card.is-active {
+        border-width: 2px;
+        background: #fbfdfc;
+    }
+
+    .report-card__top {
+        align-items: center;
+        display: flex;
+        gap: .75rem;
+        margin-bottom: .85rem;
+    }
+
+    .report-card__icon {
+        align-items: center;
+        background: #f3f6f4;
+        border-radius: 8px;
+        display: inline-flex;
+        flex: 0 0 2.4rem;
+        height: 2.4rem;
+        justify-content: center;
+        width: 2.4rem;
+    }
+
+    .report-card h5 {
+        font-size: 1rem;
+        font-weight: 800;
+        margin: 0;
+    }
+
+    .report-card p {
+        color: #6b7280;
+        font-size: .9rem;
+        margin: .2rem 0 0;
+    }
+
+    .report-card__metric {
+        display: block;
+        font-size: 1.05rem;
+        font-weight: 800;
+        line-height: 1.2;
+        word-break: break-word;
+    }
+
+    .report-card__label {
+        color: #7b8794;
+        display: block;
+        font-size: .8rem;
+        margin-top: .15rem;
+    }
+
+    .report-detail {
+        background: #fff;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        margin-top: 1.25rem;
+        padding: 1.25rem;
+    }
+
+    .report-detail__heading {
+        align-items: flex-start;
+        display: flex;
+        gap: 1rem;
+        justify-content: space-between;
+        margin-bottom: 1rem;
+    }
+
+    .report-detail__heading h4 {
+        font-weight: 800;
+        margin-bottom: .25rem;
+    }
+
+    .report-detail__heading p {
+        color: #6b7280;
+        margin: 0;
+    }
+
+    .report-detail__actions {
+        align-items: flex-end;
+        display: flex;
+        flex-direction: column;
+        gap: .55rem;
+    }
+
+    .report-period {
+        color: #4b5563;
+        font-size: .9rem;
+        font-weight: 700;
+        white-space: nowrap;
+    }
+
+    .download-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: .45rem;
+        justify-content: flex-end;
+    }
+
+    .report-stat-grid {
+        display: grid;
+        gap: .85rem;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        margin: 1rem 0 1.25rem;
+    }
+
+    .report-stat {
+        background: #f8faf9;
+        border: 1px solid #edf2ee;
+        border-radius: 8px;
+        padding: .9rem;
+    }
+
+    .report-stat span {
+        color: #6b7280;
+        display: block;
+        font-size: .82rem;
+        font-weight: 700;
+        margin-bottom: .25rem;
+        text-transform: uppercase;
+    }
+
+    .report-stat strong {
+        display: block;
+        font-size: 1.1rem;
+        line-height: 1.25;
+        word-break: break-word;
+    }
+
+    .report-stat small {
+        color: #7b8794;
+        display: block;
+        margin-top: .2rem;
+    }
+
+    .report-table-section {
+        border-top: 1px solid #edf2ee;
+        padding-top: 1.1rem;
+    }
+
+    .report-table-section + .report-table-section {
+        margin-top: 1.2rem;
+    }
+
+    .report-table-section h5 {
+        font-size: 1rem;
+        font-weight: 800;
+        margin-bottom: .8rem;
+    }
+
+    .report-table {
+        margin-bottom: 0;
+    }
+
+    .report-table th {
+        color: #4b5563;
+        font-size: .82rem;
+        text-transform: uppercase;
+    }
+
+    .report-table td {
+        vertical-align: middle;
+    }
+
+    .report-empty {
+        background: #f8faf9;
+        border: 1px dashed #cfd8d3;
+        border-radius: 8px;
+        color: #6b7280;
+        padding: 1rem;
+        text-align: center;
+    }
+
+    @media (max-width: 992px) {
+        .reports-header,
+        .report-detail__heading {
+            display: block;
+        }
+
+        .reports-actions,
+        .report-detail__actions,
+        .month-pill,
+        .report-period {
+            display: inline-block;
+            margin-top: .8rem;
+            white-space: normal;
+        }
+
+        .reports-actions {
+            align-items: flex-start;
+            display: flex;
+        }
+
+        .report-detail__actions {
+            align-items: flex-start;
+            display: flex;
+        }
+
+        .download-actions {
+            justify-content: flex-start;
+        }
+
+        .period-tabs {
+            justify-content: flex-start;
+        }
+
+        .report-stat-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+
+    @media (max-width: 576px) {
+        .report-stat-grid {
+            grid-template-columns: 1fr;
+        }
+    }
 </style>
-<div class="container-fluid">
 
-<h3 class="mb-4">Reports Center</h3>
-
-<div class="row g-4">
-
-    <!-- Egg Production -->
-    <div class="col-md-3">
-        <a href="#" class="text-decoration-none text-dark">
-            <div class="card border-success report-card text-center p-4">
-                <h5>Egg Production</h5>
-                <p class="text-muted">Daily, house & trends</p>
+<div class="container-fluid reports-center">
+    <div class="reports-header">
+        <div>
+            <div class="reports-eyebrow">Manager Reports</div>
+            <h3 class="reports-title">Reports Center</h3>
+            <p class="reports-subtitle">Choose current or previous month, then open a report card for the details.</p>
+        </div>
+        <div class="reports-actions">
+            <div class="month-pill">
+                <i class="bi bi-calendar3 me-1"></i>{{ period_label }}: {{ month_label }}
             </div>
-        </a>
+            <div class="period-tabs" aria-label="Report period">
+                {% for option in period_options %}
+                <a href="{% url 'reports' %}?period={{ option.key }}&report={{ selected_report.key }}" class="period-tab {% if selected_period == option.key %}is-active{% endif %}">
+                    <span>{{ option.label }}</span>
+                    <small>{{ option.month_label }}</small>
+                </a>
+                {% endfor %}
+            </div>
+        </div>
     </div>
 
-    <!-- Sales Report -->
-    <div class="col-md-3">
-        <a href="#" class="text-decoration-none text-dark">
-            <div class="card border-primary report-card text-center p-4">
-                <h5>Sales Report</h5>
-                <p class="text-muted">Revenue & transactions</p>
-            </div>
-        </a>
+    <div class="row g-3">
+        {% for card in report_cards %}
+        <div class="col-12 col-sm-6 col-xl-3">
+            <a href="{% url 'reports' %}?period={{ selected_period }}&report={{ card.key }}#report-detail" class="report-card-link" aria-label="Open {{ card.title }}">
+                <div class="card border-{{ card.border }} report-card {% if selected_report.key == card.key %}is-active{% endif %}">
+                    <div class="report-card__top">
+                        <span class="report-card__icon text-{{ card.border }}">
+                            <i class="bi {{ card.icon }}"></i>
+                        </span>
+                        <div>
+                            <h5>{{ card.title }}</h5>
+                            <p>{{ card.subtitle }}</p>
+                        </div>
+                    </div>
+                    <span class="report-card__metric">{{ card.metric }}</span>
+                    <span class="report-card__label">{{ card.metric_label }}</span>
+                </div>
+            </a>
+        </div>
+        {% endfor %}
     </div>
 
-    <!-- Expenses -->
-    <div class="col-md-3">
-        <a href="#" class="text-decoration-none text-dark">
-            <div class="card border-danger report-card text-center p-4">
-                <h5>Expense Report</h5>
-                <p class="text-muted">Spending analysis</p>
+    <div class="report-detail" id="report-detail">
+        <div class="report-detail__heading">
+            <div>
+                <h4>{{ selected_report.title }}</h4>
+                <p>{{ selected_report.summary }}</p>
             </div>
-        </a>
-    </div>
-
-    <!-- Profit -->
-    <div class="col-md-3">
-        <a href="#" class="text-decoration-none text-dark">
-            <div class="card border-dark report-card text-center p-4">
-                <h5>Profit & Loss</h5>
-                <p class="text-muted">Revenue vs Expenses</p>
+            <div class="report-detail__actions">
+                <div class="report-period">
+                    {{ period_label }}: {{ month_start|date:"d M Y" }} - {{ month_end|date:"d M Y" }}
+                </div>
+                <div class="download-actions">
+                    <a class="btn btn-outline-danger btn-sm" href="{% url 'reports' %}?period={{ selected_period }}&report={{ selected_report.key }}&download=pdf">
+                        <i class="bi bi-file-earmark-pdf me-1"></i>PDF
+                    </a>
+                    <a class="btn btn-outline-success btn-sm" href="{% url 'reports' %}?period={{ selected_period }}&report={{ selected_report.key }}&download=excel">
+                        <i class="bi bi-file-earmark-excel me-1"></i>Excel
+                    </a>
+                </div>
             </div>
-        </a>
-    </div>
+        </div>
 
-    <!-- Mortality -->
-    <div class="col-md-3">
-        <a href="#" class="text-decoration-none text-dark">
-            <div class="card border-warning report-card text-center p-4">
-                <h5>Mortality Report</h5>
-                <p class="text-muted">Deaths & trends</p>
+        <div class="report-stat-grid">
+            {% for stat in selected_report.stat_cards %}
+            <div class="report-stat">
+                <span>{{ stat.label }}</span>
+                <strong>{{ stat.value }}</strong>
+                <small>{{ stat.hint }}</small>
             </div>
-        </a>
-    </div>
+            {% endfor %}
+        </div>
 
-    <!-- Feed -->
-    <div class="col-md-3">
-        <a href="#" class="text-decoration-none text-dark">
-            <div class="card border-info report-card text-center p-4">
-                <h5>Feed Usage</h5>
-                <p class="text-muted">Consumption tracking</p>
+        {% for section in selected_report.sections %}
+        <div class="report-table-section">
+            <h5>{{ section.title }}</h5>
+            {% if section.rows %}
+            <div class="table-responsive">
+                <table class="table table-hover align-middle report-table">
+                    <thead>
+                        <tr>
+                            {% for header in section.headers %}
+                            <th>{{ header }}</th>
+                            {% endfor %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in section.rows %}
+                        <tr>
+                            {% for cell in row %}
+                            <td>{{ cell }}</td>
+                            {% endfor %}
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
             </div>
-        </a>
+            {% else %}
+            <div class="report-empty">{{ section.empty_text }}</div>
+            {% endif %}
+        </div>
+        {% endfor %}
     </div>
-
-    <!-- Stock -->
-    <div class="col-md-3">
-        <a href="#" class="text-decoration-none text-dark">
-            <div class="card border-secondary report-card text-center p-4">
-                <h5>Stock Report</h5>
-                <p class="text-muted">Eggs, birds, feed</p>
-            </div>
-        </a>
-    </div>
-
-    <!-- Creditors -->
-    <div class="col-md-3">
-        <a href="#" class="text-decoration-none text-dark">
-            <div class="card border-danger report-card text-center p-4">
-                <h5>Creditors</h5>
-                <p class="text-muted">Outstanding balances</p>
-            </div>
-        </a>
-    </div>
-
-    <!-- Bookings -->
-    <div class="col-md-3">
-        <a href="#" class="text-decoration-none text-dark">
-            <div class="card border-primary report-card text-center p-4">
-                <h5>Bookings</h5>
-                <p class="text-muted">Future orders</p>
-            </div>
-        </a>
-    </div>
-
-    <!-- Staff Activity -->
-    <div class="col-md-3">
-        <a href="#" class="text-decoration-none text-dark">
-            <div class="card border-dark report-card text-center p-4">
-                <h5>Staff Activity</h5>
-                <p class="text-muted">User actions</p>
-            </div>
-        </a>
-    </div>
-
 </div>
-
-</div>
-
 {% endblock %}
