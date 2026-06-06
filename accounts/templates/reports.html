@@ -1,8 +1,526 @@
 {% extends 'base.html' %}
+{% load static %}
+
 {% block title %}Reports Center - PoultryIQ{% endblock %}
 
 {% block content %}
 <style>
+    .reports-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 16px;
+        flex-wrap: wrap;
+        margin-bottom: 18px;
+    }
+
+    .reports-title {
+        color: #17324d;
+        font-size: 26px;
+        font-weight: 800;
+        margin: 0 0 4px;
+    }
+
+    .reports-subtitle {
+        color: #687685;
+        margin: 0;
+    }
+
+    .report-card {
+        display: block;
+        min-height: 132px;
+        color: #17324d;
+        text-decoration: none;
+        border: 1px solid #e1e8ee;
+        border-radius: 8px;
+        background: #fff;
+        box-shadow: 0 4px 14px rgba(20, 39, 56, 0.06);
+        padding: 18px;
+        transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+    }
+
+    .report-card:hover,
+    .report-card.active {
+        color: #17324d;
+        transform: translateY(-3px);
+        border-color: #2f80ed;
+        box-shadow: 0 8px 20px rgba(20, 39, 56, 0.12);
+    }
+
+    .report-card i {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 38px;
+        height: 38px;
+        border-radius: 8px;
+        color: #fff;
+        background: #1f3c88;
+        margin-bottom: 12px;
+        font-size: 19px;
+    }
+
+    .report-card h5 {
+        font-weight: 800;
+        margin-bottom: 4px;
+    }
+
+    .report-card p {
+        color: #687685;
+        margin-bottom: 0;
+        font-size: 14px;
+    }
+
+    .report-panel {
+        border: 1px solid #e1e8ee;
+        border-radius: 8px;
+        background: #fff;
+        box-shadow: 0 4px 14px rgba(20, 39, 56, 0.06);
+        margin-top: 18px;
+    }
+
+    .report-panel-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+        padding: 14px 16px;
+        border-bottom: 1px solid #e8eef2;
+    }
+
+    .report-panel-header h4,
+    .report-panel-header h5 {
+        color: #17324d;
+        font-weight: 800;
+        margin: 0;
+    }
+
+    .report-panel-body {
+        padding: 16px;
+    }
+
+    .report-filter {
+        border: 1px solid #e1e8ee;
+        border-radius: 8px;
+        background: #fff;
+        padding: 16px;
+        margin-top: 18px;
+    }
+
+    .report-metrics {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 12px;
+        margin-bottom: 16px;
+    }
+
+    .report-metric {
+        border: 1px solid #e8eef2;
+        border-radius: 8px;
+        padding: 14px;
+        background: #fbfcfd;
+    }
+
+    .report-metric span {
+        display: block;
+        color: #687685;
+        font-size: 12px;
+        text-transform: uppercase;
+        font-weight: 700;
+        margin-bottom: 6px;
+    }
+
+    .report-metric strong {
+        display: block;
+        color: #17324d;
+        font-size: 20px;
+        overflow-wrap: anywhere;
+    }
+
+    .report-chart {
+        height: 340px;
+        position: relative;
+    }
+
+    @media (max-width: 1100px) {
+        .report-metrics {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+
+    @media (max-width: 576px) {
+        .report-metrics {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+
+<div class="container-fluid">
+    <div class="reports-header">
+        <div>
+            <h1 class="reports-title">Reports Center</h1>
+            <p class="reports-subtitle">Choose a report card to open its details.</p>
+        </div>
+        {% if selected_report %}
+        <a href="{% url 'reports' %}" class="btn btn-light">
+            <i class="bi bi-grid me-1"></i>All Report Cards
+        </a>
+        {% endif %}
+    </div>
+
+    <div class="row g-3">
+        <div class="col-sm-6 col-lg-3">
+            <a class="report-card {% if selected_report == 'eggs' %}active{% endif %}" href="{% url 'reports' %}?report_type=eggs">
+                <i class="bi bi-basket"></i>
+                <h5>Egg Production</h5>
+                <p>Daily, house and trend report.</p>
+            </a>
+        </div>
+        <div class="col-sm-6 col-lg-3">
+            <a class="report-card {% if selected_report == 'sales' %}active{% endif %}" href="{% url 'reports' %}?report_type=sales">
+                <i class="bi bi-graph-up"></i>
+                <h5>Sales Report</h5>
+                <p>Revenue, cash and transactions.</p>
+            </a>
+        </div>
+        <div class="col-sm-6 col-lg-3">
+            <a class="report-card {% if selected_report == 'expenses' %}active{% endif %}" href="{% url 'reports' %}?report_type=expenses">
+                <i class="bi bi-cash-coin"></i>
+                <h5>Expense Report</h5>
+                <p>Spending categories and details.</p>
+            </a>
+        </div>
+        <!-- <div class="col-sm-6 col-lg-3">
+            <a class="report-card {% if selected_report == 'profit' %}active{% endif %}" href="{% url 'reports' %}?report_type=profit">
+                <i class="bi bi-bar-chart-line"></i>
+                <h5>Profit & Loss</h5>
+                <p>Revenue versus expenses.</p>
+            </a>
+        </div> -->
+        <div class="col-sm-6 col-lg-3">
+            <a class="report-card {% if selected_report == 'mortality' %}active{% endif %}" href="{% url 'reports' %}?report_type=mortality">
+                <i class="bi bi-exclamation-triangle"></i>
+                <h5>Mortality Report</h5>
+                <p>Deaths, causes and trends.</p>
+            </a>
+        </div>
+        <div class="col-sm-6 col-lg-3">
+            <a class="report-card {% if selected_report == 'feed' %}active{% endif %}" href="{% url 'reports' %}?report_type=feed">
+                <i class="bi bi-bag-fill"></i>
+                <h5>Feed Usage</h5>
+                <p>Approved feed consumption.</p>
+            </a>
+        </div>
+        <div class="col-sm-6 col-lg-3">
+            <a class="report-card {% if selected_report == 'stock' %}active{% endif %}" href="{% url 'reports' %}?report_type=stock">
+                <i class="bi bi-boxes"></i>
+                <h5>Stock Report</h5>
+                <p>Inventory and last movements.</p>
+            </a>
+        </div>
+        <div class="col-sm-6 col-lg-3">
+            <a class="report-card {% if selected_report == 'creditors' %}active{% endif %}" href="{% url 'reports' %}?report_type=creditors">
+                <i class="bi bi-wallet2"></i>
+                <h5>Creditors</h5>
+                <p>Outstanding customer balances.</p>
+            </a>
+        </div>
+        <div class="col-sm-6 col-lg-3">
+            <a class="report-card {% if selected_report == 'bookings' %}active{% endif %}" href="{% url 'reports' %}?report_type=bookings">
+                <i class="bi bi-calendar-check"></i>
+                <h5>Bookings</h5>
+                <p>Pending and future orders.</p>
+            </a>
+        </div>
+        <div class="col-sm-6 col-lg-3">
+            <a class="report-card {% if selected_report == 'staff' %}active{% endif %}" href="{% url 'reports' %}?report_type=staff">
+                <i class="bi bi-people"></i>
+                <h5>Staff Activity</h5>
+                <p>Users grouped by role.</p>
+            </a>
+        </div>
+    </div>
+
+    {% if selected_report %}
+    <form method="get" class="report-filter">
+        <input type="hidden" name="report_type" value="{{ selected_report }}">
+        <div class="row g-3 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label">Start Date</label>
+                <input type="date" class="form-control" name="start_date" value="{{ start_date|date:'Y-m-d' }}">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">End Date</label>
+                <input type="date" class="form-control" name="end_date" value="{{ end_date|date:'Y-m-d' }}">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Group By</label>
+                <select class="form-select" name="group_by">
+                    <option value="day" {% if selected_group_by == "day" %}selected{% endif %}>Daily</option>
+                    <option value="week" {% if selected_group_by == "week" %}selected{% endif %}>Weekly</option>
+                    <option value="month" {% if selected_group_by == "month" %}selected{% endif %}>Monthly</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">House</label>
+                <select class="form-select" name="house">
+                    <option value="">All houses</option>
+                    {% for house in houses %}
+                    <option value="{{ house.pk }}" {% if selected_house == house.pk|stringformat:"s" %}selected{% endif %}>{{ house.house_code }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <button class="btn btn-primary w-100">
+                    <i class="bi bi-funnel me-1"></i>Generate
+                </button>
+            </div>
+        </div>
+    </form>
+    {% endif %}
+
+    {% if selected_report == "eggs" %}
+    <div class="report-panel">
+        <div class="report-panel-header">
+            <h4>Egg Production Report</h4>
+            <a href="{% url 'eggrec' %}" class="btn btn-light btn-sm">Open Egg Records</a>
+        </div>
+        <div class="report-panel-body">
+            <div class="report-metrics">
+                <div class="report-metric"><span>Collected</span><strong>{{ metrics.eggs|floatformat:0 }} eggs</strong></div>
+                <div class="report-metric"><span>Rejected</span><strong>{{ metrics.rejected_eggs|floatformat:0 }} eggs</strong></div>
+                <div class="report-metric"><span>Live Birds</span><strong>{{ metrics.current_birds|floatformat:0 }}</strong></div>
+                <div class="report-metric"><span>Period</span><strong>{{ start_date }} - {{ end_date }}</strong></div>
+            </div>
+            <div class="report-chart mb-3"><canvas id="productionChart"></canvas></div>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead><tr><th>Date</th><th>House</th><th>Batch</th><th class="text-end">Collected</th><th class="text-end">Rejected</th></tr></thead>
+                    <tbody>
+                        {% for record in recent_eggs %}
+                        <tr><td>{{ record.collection_date }}</td><td>{{ record.batch.house.house_code }}</td><td>{{ record.batch.batch_code }}</td><td class="text-end">{{ record.eggs_collected }}</td><td class="text-end">{{ record.eggs_rejected }}</td></tr>
+                        {% empty %}
+                        <tr><td colspan="5" class="text-center text-muted py-3">No egg records in this period.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% elif selected_report == "sales" %}
+    <div class="report-panel">
+        <div class="report-panel-header">
+            <h4>Sales Report</h4>
+            <a href="{% url 'sales' %}" class="btn btn-light btn-sm">Open Sales</a>
+        </div>
+        <div class="report-panel-body">
+            <div class="report-metrics">
+                <div class="report-metric"><span>Revenue</span><strong>UGX {{ metrics.revenue|floatformat:0 }}</strong></div>
+                <div class="report-metric"><span>Cash Received</span><strong>UGX {{ metrics.cash_received|floatformat:0 }}</strong></div>
+                <div class="report-metric"><span>Outstanding</span><strong>UGX {{ metrics.outstanding_balances|floatformat:0 }}</strong></div>
+                <div class="report-metric"><span>Pending Orders</span><strong>{{ metrics.pending_orders }}</strong></div>
+            </div>
+            <div class="report-chart mb-3"><canvas id="financialChart"></canvas></div>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead><tr><th>Date</th><th>Invoice</th><th>Customer</th><th class="text-end">Amount</th></tr></thead>
+                    <tbody>
+                        {% for sale in recent_sales %}
+                        <tr><td>{{ sale.invoice_date }}</td><td>{{ sale.invoice_no }}</td><td>{{ sale.customer.name }}</td><td class="text-end">UGX {{ sale.total_amount|floatformat:0 }}</td></tr>
+                        {% empty %}
+                        <tr><td colspan="4" class="text-center text-muted py-3">No sales in this period.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% elif selected_report == "expenses" %}
+    <div class="report-panel">
+        <div class="report-panel-header">
+            <h4>Expense Report</h4>
+            <a href="{% url 'expenses' %}" class="btn btn-light btn-sm">Open Expenses</a>
+        </div>
+        <div class="report-panel-body">
+            <div class="report-metrics">
+                <div class="report-metric"><span>Total Expenses</span><strong>UGX {{ metrics.expenses|floatformat:0 }}</strong></div>
+                <div class="report-metric"><span>Profit Impact</span><strong>UGX {{ metrics.profit|floatformat:0 }}</strong></div>
+            </div>
+            <div class="report-chart mb-3"><canvas id="expenseChart"></canvas></div>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead><tr><th>Date</th><th>Category</th><th>Description</th><th class="text-end">Amount</th></tr></thead>
+                    <tbody>
+                        {% for expense in recent_expenses %}
+                        <tr><td>{{ expense.expense_date }}</td><td>{{ expense.category.name }}</td><td>{{ expense.description }}</td><td class="text-end">UGX {{ expense.total_amount|floatformat:0 }}</td></tr>
+                        {% empty %}
+                        <tr><td colspan="4" class="text-center text-muted py-3">No expenses in this period.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% elif selected_report == "profit" %}
+    <div class="report-panel">
+        <div class="report-panel-header"><h4>Profit & Loss Report</h4></div>
+        <div class="report-panel-body">
+            <div class="report-metrics">
+                <div class="report-metric"><span>Revenue</span><strong>UGX {{ metrics.revenue|floatformat:0 }}</strong></div>
+                <div class="report-metric"><span>Expenses</span><strong>UGX {{ metrics.expenses|floatformat:0 }}</strong></div>
+                <div class="report-metric"><span>Profit</span><strong>UGX {{ metrics.profit|floatformat:0 }}</strong></div>
+                <div class="report-metric"><span>Cash Received</span><strong>UGX {{ metrics.cash_received|floatformat:0 }}</strong></div>
+            </div>
+            <div class="report-chart"><canvas id="financialChart"></canvas></div>
+        </div>
+    </div>
+    {% elif selected_report == "mortality" %}
+    <div class="report-panel">
+        <div class="report-panel-header"><h4>Mortality Report</h4></div>
+        <div class="report-panel-body">
+            <div class="report-metrics">
+                <div class="report-metric"><span>Deaths</span><strong>{{ metrics.deaths|floatformat:0 }}</strong></div>
+                <div class="report-metric"><span>Live Birds</span><strong>{{ metrics.current_birds|floatformat:0 }}</strong></div>
+            </div>
+            <div class="report-chart"><canvas id="mortalityChart"></canvas></div>
+        </div>
+    </div>
+    {% elif selected_report == "feed" %}
+    <div class="report-panel">
+        <div class="report-panel-header">
+            <h4>Feed Usage Report</h4>
+            <a href="{% url 'feedrec' %}" class="btn btn-light btn-sm">Open Feed Records</a>
+        </div>
+        <div class="report-panel-body">
+            <div class="report-metrics">
+                <div class="report-metric"><span>Feed Used</span><strong>{{ metrics.feed_used_kg|floatformat:1 }} kg</strong></div>
+                <div class="report-metric"><span>Eggs</span><strong>{{ metrics.eggs|floatformat:0 }}</strong></div>
+            </div>
+            <div class="report-chart"><canvas id="productionChart"></canvas></div>
+        </div>
+    </div>
+    {% elif selected_report == "stock" %}
+    <div class="report-panel">
+        <div class="report-panel-header">
+            <h4>Stock Report</h4>
+            <a href="{% url 'inventory_management' %}" class="btn btn-light btn-sm">Open Inventory</a>
+        </div>
+        <div class="report-panel-body">
+            <div class="report-metrics">
+                <div class="report-metric"><span>Low Stock Items</span><strong>{{ metrics.low_stock_items }}</strong></div>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead><tr><th>Item</th><th class="text-end">Quantity</th><th>Unit</th><th>Last Movement</th></tr></thead>
+                    <tbody>
+                        {% for row in inventory_rows %}
+                        <tr><td>{{ row.item }}</td><td class="text-end">{{ row.quantity|floatformat:2 }}</td><td>{{ row.unit }}</td><td>{{ row.last_date }}</td></tr>
+                        {% empty %}
+                        <tr><td colspan="4" class="text-center text-muted py-3">No stock movements recorded.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% elif selected_report == "creditors" %}
+    <div class="report-panel">
+        <div class="report-panel-header"><h4>Creditors / Outstanding Balances</h4></div>
+        <div class="report-panel-body">
+            <div class="report-metrics">
+                <div class="report-metric"><span>Outstanding</span><strong>UGX {{ metrics.outstanding_balances|floatformat:0 }}</strong></div>
+                <div class="report-metric"><span>Cash Received</span><strong>UGX {{ metrics.cash_received|floatformat:0 }}</strong></div>
+            </div>
+            <p class="text-muted mb-0">Use the Sales Report and Orders page to follow individual customer balances.</p>
+        </div>
+    </div>
+    {% elif selected_report == "bookings" %}
+    <div class="report-panel">
+        <div class="report-panel-header">
+            <h4>Bookings / Pending Orders</h4>
+            <a href="{% url 'orders' %}" class="btn btn-light btn-sm">Open Orders</a>
+        </div>
+        <div class="report-panel-body">
+            <div class="report-metrics">
+                <div class="report-metric"><span>Pending Orders</span><strong>{{ metrics.pending_orders }}</strong></div>
+                <div class="report-metric"><span>Outstanding</span><strong>UGX {{ metrics.outstanding_balances|floatformat:0 }}</strong></div>
+            </div>
+        </div>
+    </div>
+    {% elif selected_report == "staff" %}
+    <div class="report-panel">
+        <div class="report-panel-header">
+            <h4>Staff Activity Report</h4>
+            <a href="{% url 'manage_users' %}" class="btn btn-light btn-sm">Manage Users</a>
+        </div>
+        <div class="report-panel-body">
+            <div class="report-chart"><canvas id="staffChart"></canvas></div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+{{ chart_data|json_script:"reports-chart-data" }}
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+(function () {
+    if (typeof Chart === "undefined") return;
+    const node = document.getElementById("reports-chart-data");
+    if (!node) return;
+    const data = JSON.parse(node.textContent);
+    const palette = ["#2563eb", "#16a34a", "#dc2626", "#f59e0b", "#7c3aed", "#0891b2", "#475569", "#be123c"];
+
+    function line(canvasId, chartData) {
+        const canvas = document.getElementById(canvasId);
+        if (!canvas || !chartData) return;
+        new Chart(canvas, {
+            type: "line",
+            data: {
+                labels: chartData.labels || [],
+                datasets: (chartData.datasets || []).map(function (series, index) {
+                    return {
+                        label: series.label,
+                        data: series.values,
+                        borderColor: palette[index % palette.length],
+                        backgroundColor: palette[index % palette.length] + "22",
+                        borderWidth: 2,
+                        tension: 0.25,
+                    };
+                }),
+            },
+            options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } },
+        });
+    }
+
+    function pie(canvasId, rows) {
+        const canvas = document.getElementById(canvasId);
+        const cleanRows = (rows || []).filter(function (row) { return Number(row.value || 0) > 0; });
+        if (!canvas || !cleanRows.length) return;
+        new Chart(canvas, {
+            type: "pie",
+            data: {
+                labels: cleanRows.map(function (row) { return row.label; }),
+                datasets: [{
+                    data: cleanRows.map(function (row) { return row.value; }),
+                    backgroundColor: palette,
+                    borderColor: "#fff",
+                    borderWidth: 2,
+                }],
+            },
+            options: { responsive: true, maintainAspectRatio: false },
+        });
+    }
+
+    line("financialChart", data.financial);
+    line("productionChart", data.production);
+    pie("expenseChart", data.expenses);
+    pie("salesChart", data.sales);
+    pie("mortalityChart", data.mortality);
+    pie("staffChart", data.staff);
+})();
+</script>
     .reports-center {
         color: #1f2933;
     }

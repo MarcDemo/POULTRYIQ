@@ -2,99 +2,123 @@
 {% load static %}
 
 {% block content %}
-
 <div class="container-fluid">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <div class="card shadow">
+                <div class="card-header">
+                    <h4 class="mb-0">
+                        {% if editing_user %}
+                        <i class="bi bi-pencil-square me-2"></i>Edit User
+                        {% else %}
+                        <i class="bi bi-person-plus me-2"></i>Add New User
+                        {% endif %}
+                    </h4>
+                </div>
 
-<div class="row justify-content-center">
-<div class="col-lg-6">
+                <div class="card-body">
+                    <form method="POST" novalidate>
+                        {% csrf_token %}
 
-<div class="card shadow">
-<div class="card-header">
-    <h4 class="mb-0">
-        <i class="bi bi-person-plus me-2"></i>Add New User
-    </h4>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label for="username" class="form-label">
+                                    <i class="bi bi-at me-1"></i>Username
+                                </label>
+                                <input type="text" id="username" class="form-control" name="username" value="{{ form_data.username }}" placeholder="username123" required>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label for="full_name" class="form-label">
+                                    <i class="bi bi-person me-1"></i>Full Name
+                                </label>
+                                <input type="text" id="full_name" class="form-control" name="full_name" value="{{ form_data.full_name }}" placeholder="John Doe">
+                            </div>
+
+                            <div class="col-md-6">
+                                <label for="email" class="form-label">
+                                    <i class="bi bi-envelope me-1"></i>Email
+                                </label>
+                                <input type="email" id="email" class="form-control" name="email" value="{{ form_data.email }}" placeholder="person@example.com">
+                            </div>
+
+                            <div class="col-md-6">
+                                <label for="phone_number" class="form-label">
+                                    <i class="bi bi-telephone me-1"></i>Telephone
+                                </label>
+                                <input type="tel" id="phone_number" class="form-control" name="phone_number" value="{{ form_data.phone_number }}" placeholder="+256 700 000000">
+                            </div>
+
+                            {% if not editing_user %}
+                            <div class="col-md-6">
+                                <label for="password" class="form-label">
+                                    <i class="bi bi-lock me-1"></i>Password
+                                </label>
+                                <input type="password" id="password" class="form-control" name="password" required autocomplete="new-password">
+                            </div>
+
+                            <div class="col-md-6">
+                                <label for="confirm_password" class="form-label">
+                                    <i class="bi bi-lock-fill me-1"></i>Confirm Password
+                                </label>
+                                <input type="password" id="confirm_password" class="form-control" name="confirm_password" required autocomplete="new-password">
+                            </div>
+                            {% endif %}
+
+                            <div class="col-md-6">
+                                <label for="role" class="form-label">
+                                    <i class="bi bi-briefcase me-1"></i>Role
+                                </label>
+                                <select id="role" class="form-select" name="role" required>
+                                    <option value="">Select role</option>
+                                    {% for role in roles %}
+                                    <option value="{{ role.pk }}" {% if form_data.role == role.pk|stringformat:"s" %}selected{% endif %}>{{ role.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label for="is_active" class="form-label">
+                                    <i class="bi bi-toggle-on me-1"></i>Status
+                                </label>
+                                <select id="is_active" class="form-select" name="is_active">
+                                    <option value="True" {% if form_data.is_active != "False" %}selected{% endif %}>Active</option>
+                                    <option value="False" {% if form_data.is_active == "False" %}selected{% endif %}>Inactive</option>
+                                </select>
+                            </div>
+
+                            <div class="col-12">
+                                <label for="houses" class="form-label">
+                                    <i class="bi bi-house me-1"></i>Poultry Houses
+                                </label>
+                                <select id="houses" class="form-select" name="houses" multiple size="5">
+                                    {% for house in houses %}
+                                    <option value="{{ house.pk }}" {% if house.pk|stringformat:"s" in selected_house_ids %}selected{% endif %}>
+                                        {{ house.house_code }} - {{ house.name|default:"Unnamed house" }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                                <small class="form-text text-muted">Workers and supervisors must be assigned to at least one house.</small>
+                            </div>
+                        </div>
+
+                        <div class="d-flex gap-2 mt-4 flex-wrap">
+                            <button class="btn btn-success">
+                                {% if editing_user %}
+                                <i class="bi bi-check-circle me-1"></i>Save Changes
+                                {% else %}
+                                <i class="bi bi-person-plus me-1"></i>Create User
+                                {% endif %}
+                            </button>
+
+                            <a href="{% url 'manage_users' %}" class="btn btn-secondary">
+                                Cancel
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
-
-<div class="card-body">
-
-<form method="POST" novalidate>
-{% csrf_token %}
-
-<div class="mb-3">
-<label for="username" class="form-label">
-    <i class="bi bi-at me-1"></i>Username
-</label>
-<input type="text" id="username" class="form-control" name="username" placeholder="username123" required>
-<small class="form-text text-muted">Must be unique</small>
-</div>
-
-<div class="mb-3">
-<label for="full_name" class="form-label">
-    <i class="bi bi-person me-1"></i>Full Name
-</label>
-<input type="text" id="full_name" class="form-control" name="full_name" placeholder="John Doe">
-</div>
-
-<div class="mb-3">
-<label for="password" class="form-label">
-    <i class="bi bi-lock me-1"></i>Password
-</label>
-<input type="password" id="password" class="form-control" name="password" placeholder="••••••••" required>
-<small class="form-text text-muted">Minimum 8 characters</small>
-</div>
-
-<div class="mb-3">
-<label for="confirm_password" class="form-label">
-    <i class="bi bi-lock-fill me-1"></i>Confirm Password
-</label>
-<input type="password" id="confirm_password" class="form-control" name="confirm_password" placeholder="••••••••" required>
-<small class="form-text text-muted">Must match password above</small>
-</div>
-
-<div class="mb-3">
-<label for="salary" class="form-label">
-    <i class="bi bi-cash-coin me-1"></i>Salary (UGX)
-</label>
-<input type="number" id="salary" class="form-control" name="salary" placeholder="0" required min="0" step="1000">
-</div>
-
-<div class="mb-3">
-<label for="role" class="form-label">
-    <i class="bi bi-briefcase me-1"></i>Role
-</label>
-<select id="role" class="form-select" name="role">
-<option value="manager">Manager</option>
-<option value="supervisor">Supervisor</option>
-<option value="worker">Worker</option>
-</select>
-</div>
-
-<div class="mb-3">
-<label for="is_active" class="form-label">
-    <i class="bi bi-toggle-on me-1"></i>Status
-</label>
-<select id="is_active" class="form-select" name="is_active">
-<option value="True">Active</option>
-<option value="False">Inactive</option>
-</select>
-</div>
-
-<button class="btn btn-success w-100">
-Create User
-</button>
-
-<a href="{% url 'manage_users' %}" class="btn btn-secondary w-100 mt-2">
-Cancel
-</a>
-
-</form>
-
-</div>
-</div>
-
-</div>
-</div>
-
-</div>
-
 {% endblock %}

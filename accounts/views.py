@@ -18,6 +18,8 @@ from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
 
 from finance.models import ExpenseTransaction
+from inventory.models import InventoryTransaction, ReorderRule
+from poultry.models import ApprovalStatus, FeedRecord, MortalityRecord, PoultryBatch, PoultryHouse, egg_collection
 from inventory.models import InventoryTransaction
 from poultry.models import (
     ApprovalStatus,
@@ -1666,6 +1668,217 @@ def logout_view(request):
 
 @login_required(login_url='login')
 def reports(request):
+    today = date.today()
+
+    def parse_date_param(name, fallback):
+        raw_value = request.GET.get(name, "").strip()
+        if not raw_value:
+            return fallback
+        try:
+            return date.fromisoformat(raw_value)
+        except ValueError:
+            return fallback
+
+    start_date = parse_date_param("start_date", date(today.year, 1, 1))
+    end_date = parse_date_param("end_date", today)
+    if start_date > end_date:
+        start_date, end_date = end_date, start_date
+
+    selected_group_by = request.GET.get("group_by", "month")
+    selected_house = request.GET.get("house", "").strip()
+    selected_report = request.GET.get("report_type", "").strip()
+
+    def decimal_total(queryset, field_name):
+        return queryset.aggregate(
+            total=Coalesce(
+                Sum(field_name),
+                Value(0),
+                output_field=DecimalField(max_digits=14, decimal_places=2),
+            )
+        )["total"]
+
+    def number(value):
+        return float(value or 0)
+
+    def grouped_series(queryset, date_field, value_field, group_by, start, end):
+        grouped = {}
+        current = start
+        while current <= end:
+            if group_by == "week":
+                key_date = current - timedelta(days=current.weekday())
+                label = f"Week of {key_date.strftime('%d %b')}"
+            elif group_by == "month":
+                label = current.strftime("%b %Y")
+            else:
+                label = current.strftime("%d %b")
+            grouped.setdefault(label, Decimal("0"))
+            current += timedelta(days=1)
+
+        for row in queryset.values(date_field).annotate(total=Sum(value_field)).order_by(date_field):
+            row_date = row[date_field]
+            if not row_date:
+                continue
+            if group_by == "week":
+                key_date = row_date - timedelta(days=row_date.weekday())
+                label = f"Week of {key_date.strftime('%d %b')}"
+            elif group_by == "month":
+                label = row_date.strftime("%b %Y")
+            else:
+                label = row_date.strftime("%d %b")
+            grouped[label] = grouped.get(label, Decimal("0")) + (row["total"] or Decimal("0"))
+        return {"labels": list(grouped.keys()), "values": [number(value) for value in grouped.values()]}
+
+    sales_qs = SaleInvoice.objects.exclude(status=SaleInvoice.Status.CANCELLED).filter(
+        invoice_date__range=(start_date, end_date)
+    )
+    payments_qs = CustomerPayment.objects.filter(payment_date__range=(start_date, end_date))
+    expenses_qs = ExpenseTransaction.objects.exclude(status=ExpenseTransaction.Status.REJECTED).filter(
+        expense_date__range=(start_date, end_date)
+    )
+    eggs_qs = egg_collection.objects.filter(
+        collection_date__range=(start_date, end_date),
+        status=ApprovalStatus.APPROVED,
+    )
+    feed_qs = FeedRecord.objects.filter(
+        record_date__range=(start_date, end_date),
+        status=ApprovalStatus.APPROVED,
+    )
+    mortality_qs = MortalityRecord.objects.filter(
+        record_date__range=(start_date, end_date),
+        status=ApprovalStatus.APPROVED,
+    )
+
+    if selected_house:
+        eggs_qs = eggs_qs.filter(batch__house_id=selected_house)
+        feed_qs = feed_qs.filter(batch__house_id=selected_house)
+        mortality_qs = mortality_qs.filter(batch__house_id=selected_house)
+
+    total_revenue = decimal_total(sales_qs, "total_amount")
+    cash_received = decimal_total(payments_qs, "amount")
+    total_expenses = decimal_total(expenses_qs, "total_amount")
+    profit = total_revenue - total_expenses
+    total_eggs = eggs_qs.aggregate(total=Sum("eggs_collected"))["total"] or 0
+    rejected_eggs = eggs_qs.aggregate(total=Sum("eggs_rejected"))["total"] or 0
+    feed_used_kg = feed_qs.aggregate(total=Sum("quantity_kg"))["total"] or Decimal("0")
+    deaths = mortality_qs.aggregate(total=Sum("number_dead"))["total"] or 0
+    outstanding_balances = decimal_total(ReceivableLedger.objects.all(), "balance")
+    pending_orders = SaleInvoice.objects.filter(
+        delivery_status=SaleInvoice.DeliveryStatus.PENDING
+    ).exclude(status=SaleInvoice.Status.CANCELLED).count()
+
+    active_batches = PoultryBatch.objects.filter(status=PoultryBatch.Status.ACTIVE).select_related("house")
+    if selected_house:
+        active_batches = active_batches.filter(house_id=selected_house)
+
+    current_birds = 0
+    for batch in active_batches:
+        approved_deaths = batch.mortality_records.filter(
+            status=ApprovalStatus.APPROVED
+        ).aggregate(total=Sum("number_dead"))["total"] or 0
+        birds_sold = SaleItem.objects.filter(batch=batch).filter(
+            Q(product_name__icontains="bird") | Q(product_name__icontains="off layer")
+        ).aggregate(total=Sum("quantity"))["total"] or 0
+        current_birds += max(batch.initial_quantity - approved_deaths - int(birds_sold), 0)
+
+    low_stock_items = 0
+    for rule in ReorderRule.objects.filter(alerts_enabled=True).select_related("store", "item"):
+        transactions = InventoryTransaction.objects.filter(store=rule.store, item=rule.item)
+        stock_in = transactions.filter(tx_type=InventoryTransaction.TxType.IN_).aggregate(total=Sum("quantity"))["total"] or Decimal("0")
+        stock_out = transactions.filter(tx_type=InventoryTransaction.TxType.OUT).aggregate(total=Sum("quantity"))["total"] or Decimal("0")
+        adjustments = transactions.filter(tx_type=InventoryTransaction.TxType.ADJUST).aggregate(total=Sum("quantity"))["total"] or Decimal("0")
+        if stock_in - stock_out + adjustments <= rule.reorder_level:
+            low_stock_items += 1
+
+    expense_breakdown = [
+        {"label": row["category__name"] or "Uncategorised", "value": number(row["total"])}
+        for row in expenses_qs.values("category__name").annotate(total=Sum("total_amount")).order_by("-total")[:8]
+    ]
+    sales_breakdown = [
+        {"label": row["product_name"] or "Sales", "value": number(row["total"])}
+        for row in SaleItem.objects.filter(invoice__in=sales_qs)
+        .values("product_name")
+        .annotate(total=Sum("line_total"))
+        .order_by("-total")[:8]
+    ]
+    mortality_breakdown = [
+        {"label": row["cause__name"] or "Unspecified", "value": number(row["total"])}
+        for row in mortality_qs.values("cause__name").annotate(total=Sum("number_dead")).order_by("-total")[:8]
+    ]
+    staff_activity = [
+        {"label": row["role__name"] or "No role", "value": row["total"]}
+        for row in User.objects.values("role__name").annotate(total=Count("id")).order_by("role__name")
+    ]
+
+    inventory_rows = []
+    item_ids = InventoryTransaction.objects.values_list("item_id", flat=True).distinct()
+    for item_id in item_ids:
+        item_transactions = InventoryTransaction.objects.filter(item_id=item_id).select_related("item", "store")
+        latest = item_transactions.order_by("-tx_date", "-tx_id").first()
+        if not latest:
+            continue
+        stock_in = item_transactions.filter(tx_type=InventoryTransaction.TxType.IN_).aggregate(total=Sum("quantity"))["total"] or Decimal("0")
+        stock_out = item_transactions.filter(tx_type=InventoryTransaction.TxType.OUT).aggregate(total=Sum("quantity"))["total"] or Decimal("0")
+        adjustments = item_transactions.filter(tx_type=InventoryTransaction.TxType.ADJUST).aggregate(total=Sum("quantity"))["total"] or Decimal("0")
+        inventory_rows.append({
+            "item": latest.item.name,
+            "unit": latest.item.unit,
+            "quantity": stock_in - stock_out + adjustments,
+            "last_date": latest.tx_date,
+        })
+    inventory_rows.sort(key=lambda row: row["item"].lower())
+
+    chart_data = {
+        "financial": {
+            "labels": grouped_series(sales_qs, "invoice_date", "total_amount", selected_group_by, start_date, end_date)["labels"],
+            "datasets": [
+                {"label": "Revenue", "values": grouped_series(sales_qs, "invoice_date", "total_amount", selected_group_by, start_date, end_date)["values"]},
+                {"label": "Expenses", "values": grouped_series(expenses_qs, "expense_date", "total_amount", selected_group_by, start_date, end_date)["values"]},
+                {"label": "Cash received", "values": grouped_series(payments_qs, "payment_date", "amount", selected_group_by, start_date, end_date)["values"]},
+            ],
+        },
+        "production": {
+            "labels": grouped_series(eggs_qs, "collection_date", "eggs_collected", selected_group_by, start_date, end_date)["labels"],
+            "datasets": [
+                {"label": "Eggs collected", "values": grouped_series(eggs_qs, "collection_date", "eggs_collected", selected_group_by, start_date, end_date)["values"]},
+                {"label": "Rejected eggs", "values": grouped_series(eggs_qs, "collection_date", "eggs_rejected", selected_group_by, start_date, end_date)["values"]},
+                {"label": "Deaths", "values": grouped_series(mortality_qs, "record_date", "number_dead", selected_group_by, start_date, end_date)["values"]},
+            ],
+        },
+        "expenses": expense_breakdown,
+        "sales": sales_breakdown,
+        "mortality": mortality_breakdown,
+        "staff": staff_activity,
+    }
+
+    context = {
+        "start_date": start_date,
+        "end_date": end_date,
+        "selected_group_by": selected_group_by,
+        "selected_house": selected_house,
+        "selected_report": selected_report,
+        "houses": PoultryHouse.objects.filter(is_active=True).order_by("house_code", "name"),
+        "metrics": {
+            "revenue": total_revenue,
+            "cash_received": cash_received,
+            "expenses": total_expenses,
+            "profit": profit,
+            "eggs": total_eggs,
+            "rejected_eggs": rejected_eggs,
+            "feed_used_kg": feed_used_kg,
+            "deaths": deaths,
+            "current_birds": current_birds,
+            "outstanding_balances": outstanding_balances,
+            "pending_orders": pending_orders,
+            "low_stock_items": low_stock_items,
+        },
+        "expense_breakdown": expense_breakdown,
+        "sales_breakdown": sales_breakdown,
+        "mortality_breakdown": mortality_breakdown,
+        "inventory_rows": inventory_rows[:20],
+        "recent_sales": sales_qs.select_related("customer", "created_by").order_by("-invoice_date", "-created_at")[:8],
+        "recent_expenses": expenses_qs.select_related("category", "created_by").order_by("-expense_date", "-created_at")[:8],
+        "recent_eggs": eggs_qs.select_related("batch__house", "collected_by").order_by("-collection_date", "-collected_at")[:8],
+        "chart_data": chart_data,
     period_key = request.GET.get("period", "current")
     if period_key not in {"current", "previous"}:
         period_key = "current"
