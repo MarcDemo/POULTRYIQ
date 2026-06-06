@@ -69,7 +69,7 @@ class PoultryBatch(models.Model):
         Assumes laying starts at 20 weeks.
         """
 
-        LAY_START_WEEK = 140
+        LAY_START_WEEK = 126
 
         if not self.date_stocked:
             return None
