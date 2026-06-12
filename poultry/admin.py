@@ -61,6 +61,7 @@ class PoultryBatchAdmin(admin.ModelAdmin):
             "supplier_name",
             "date_stocked",
             "initial_quantity",
+            "initial_age_days",
             "expected_lay_start",
             "status",
             "notes",

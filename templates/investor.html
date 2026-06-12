@@ -159,24 +159,873 @@
         margin-top: 4px;
     }
 
+    .financial-metrics {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .investor-metric.is-positive strong { color: #087f5b; }
+    .investor-metric.is-negative strong { color: #c92a2a; }
+    .investor-metric.is-warning strong { color: #b7791f; }
+
+    .financial-health-card {
+        margin-bottom: 18px;
+        overflow: hidden;
+    }
+
+    .financial-health {
+        display: grid;
+        grid-template-columns: minmax(0, 1.7fr) minmax(280px, 1fr);
+        gap: 16px;
+        padding: 18px;
+        align-items: stretch;
+    }
+
+    .health-lead {
+        border-left: 5px solid #198754;
+        border-radius: 8px;
+        background: #f8fbfd;
+        padding: 16px;
+    }
+
+    .health-lead.danger { border-color: #dc3545; }
+    .health-lead.warning { border-color: #f0ad4e; }
+    .health-lead.success { border-color: #198754; }
+
+    .health-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        border-radius: 999px;
+        padding: 6px 10px;
+        font-size: 12px;
+        font-weight: 800;
+        text-transform: uppercase;
+        margin-bottom: 10px;
+    }
+
+    .health-badge.danger { background: #ffe3e3; color: #a61e4d; }
+    .health-badge.warning { background: #fff3bf; color: #8a5a00; }
+    .health-badge.success { background: #d3f9d8; color: #087f5b; }
+
+    .health-lead h2 {
+        color: #17324d;
+        font-size: 22px;
+        font-weight: 900;
+        margin: 0 0 8px;
+    }
+
+    .health-lead p {
+        color: #526273;
+        font-weight: 600;
+        margin: 0 0 12px;
+    }
+
+    .health-action {
+        color: #17324d;
+        font-weight: 800;
+        margin: 0;
+    }
+
+    .health-snapshot {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+    }
+
+    .health-snapshot .report-fact {
+        min-height: 82px;
+    }
+
+    .advisor-item span,
+    .advisor-item small {
+        display: block;
+        color: #526273;
+        font-weight: 600;
+    }
+
+    .advisor-meta {
+        display: grid;
+        gap: 7px;
+        margin-top: 8px;
+    }
+
+    .advisor-meta div {
+        border: 1px solid #e8eef2;
+        border-radius: 8px;
+        background: #ffffff;
+        padding: 8px 10px;
+    }
+
+    .advisor-meta b {
+        color: #17324d;
+    }
+
+    .analytics-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 16px;
+        margin-bottom: 18px;
+    }
+
+    .analysis-card .investor-body {
+        display: grid;
+        gap: 14px;
+    }
+
+    .analysis-chart {
+        height: 300px;
+        position: relative;
+    }
+
+    .analysis-kpis {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+    }
+
+    .analysis-kpis .report-fact {
+        min-height: 86px;
+    }
+
+    .driver-list {
+        display: grid;
+        gap: 8px;
+    }
+
+    .driver-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 10px;
+        align-items: center;
+        border: 1px solid #e8eef2;
+        border-radius: 8px;
+        padding: 9px 10px;
+        background: #fbfcfd;
+    }
+
+    .driver-row span {
+        color: #17324d;
+        font-weight: 800;
+    }
+
+    .driver-row small {
+        color: #687685;
+        font-weight: 700;
+    }
+
+    .full-width-card {
+        margin-bottom: 18px;
+    }
+
+    .builder-shell {
+        border: 1px solid #dbe6ee;
+        border-radius: 8px;
+        background: #f7fafc;
+        box-shadow: 0 8px 24px rgba(20, 39, 56, 0.08);
+        overflow: hidden;
+        margin-bottom: 18px;
+    }
+
+    .builder-topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+        flex-wrap: wrap;
+        padding: 16px;
+        background: #ffffff;
+        border-bottom: 1px solid #dbe6ee;
+    }
+
+    .builder-title {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .builder-title h2 {
+        margin: 0;
+        color: #17324d;
+        font-size: 22px;
+        font-weight: 800;
+    }
+
+    .builder-title i {
+        color: #0b73b9;
+        font-size: 22px;
+    }
+
+    .builder-mode {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 4px;
+        border-radius: 999px;
+        background: #e9eef2;
+    }
+
+    .builder-mode button,
+    .builder-view button {
+        border: 0;
+        background: transparent;
+        color: #526273;
+        font-weight: 700;
+        border-radius: 999px;
+        padding: 8px 12px;
+        line-height: 1;
+    }
+
+    .builder-mode button.is-active,
+    .builder-view button.is-active {
+        background: #0b73b9;
+        color: #fff;
+        box-shadow: 0 4px 12px rgba(11, 115, 185, 0.24);
+    }
+
+    .builder-stepper {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-wrap: wrap;
+        gap: 0;
+        padding: 18px 16px;
+        background: #ffffff;
+        border-bottom: 1px solid #dbe6ee;
+    }
+
+    .builder-step {
+        border: 0;
+        background: transparent;
+        color: #5f6f82;
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        font-weight: 800;
+        padding: 0;
+        line-height: 1;
+    }
+
+    .builder-step::after {
+        content: "";
+        display: inline-block;
+        width: 56px;
+        height: 3px;
+        border-radius: 999px;
+        background: #dce2e8;
+        margin: 0 20px;
+    }
+
+    .builder-step:last-child::after {
+        display: none;
+    }
+
+    .builder-step-number {
+        width: 40px;
+        height: 40px;
+        border-radius: 999px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: #e4e9ef;
+        color: #5f6f82;
+        font-weight: 900;
+        font-size: 18px;
+    }
+
+    .builder-step.is-active {
+        color: #0b73b9;
+    }
+
+    .builder-step.is-active .builder-step-number {
+        background: #0b73b9;
+        color: #fff;
+    }
+
+    .builder-step.is-complete {
+        color: #099567;
+    }
+
+    .builder-step.is-complete .builder-step-number {
+        background: #099567;
+        color: #fff;
+    }
+
+    .builder-step.is-complete::after {
+        background: #099567;
+    }
+
+    .builder-guide-note {
+        border: 1px solid #cfe1ee;
+        border-radius: 8px;
+        background: #f0f7fc;
+        color: #17324d;
+        padding: 14px 16px;
+    }
+
+    .builder-guide-note strong {
+        display: block;
+        font-size: 17px;
+        margin-bottom: 4px;
+    }
+
+    .builder-guide-note span {
+        color: #526273;
+        font-weight: 600;
+    }
+
+    .builder-guide-nav {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+    }
+
+    .builder-shell[data-builder-mode-state="guided"] [data-guide-panel] {
+        display: none !important;
+    }
+
+    .builder-shell[data-builder-mode-state="guided"] [data-guide-panel].is-guide-visible {
+        display: block !important;
+    }
+
+    .builder-shell[data-builder-mode-state="guided"] .builder-guide-nav.is-guide-visible,
+    .builder-shell[data-builder-mode-state="guided"] .builder-selected.is-guide-visible,
+    .builder-shell[data-builder-mode-state="guided"] .builder-actions.is-guide-visible {
+        display: flex !important;
+    }
+
+    .builder-shell[data-builder-mode-state="guided"] .builder-rail.is-guide-visible {
+        display: flex !important;
+    }
+
+    .builder-shell[data-builder-mode-state="guided"] .builder-theme-list.is-guide-visible,
+    .builder-shell[data-builder-mode-state="guided"] .indicator-list.is-guide-visible,
+    .builder-shell[data-builder-mode-state="guided"] .builder-presets.is-guide-visible,
+    .builder-shell[data-builder-mode-state="guided"] .builder-summarybar.is-guide-visible,
+    .builder-shell[data-builder-mode-state="guided"] .builder-controlbar.is-guide-visible,
+    .builder-shell[data-builder-mode-state="guided"] .builder-timebar.is-guide-visible,
+    .builder-shell[data-builder-mode-state="guided"] .builder-visualbar.is-guide-visible {
+        display: grid !important;
+    }
+
+    .builder-shell[data-builder-mode-state="advanced"] .builder-guide-note,
+    .builder-shell[data-builder-mode-state="advanced"] .builder-guide-nav {
+        display: none;
+    }
+
+    .builder-shell[data-builder-mode-state="guided"]:not(.is-generated) .builder-output.is-guide-visible {
+        display: none !important;
+    }
+
+    .builder-shell.is-generated[data-builder-mode-state] .builder-layout {
+        grid-template-columns: 1fr;
+    }
+
+    .builder-shell.is-generated[data-builder-mode-state] .builder-presets,
+    .builder-shell.is-generated[data-builder-mode-state] .builder-rail.is-guide-visible,
+    .builder-shell.is-generated[data-builder-mode-state] .builder-guide-note,
+    .builder-shell.is-generated[data-builder-mode-state] .builder-controlbar.is-guide-visible,
+    .builder-shell.is-generated[data-builder-mode-state] .builder-timebar.is-guide-visible,
+    .builder-shell.is-generated[data-builder-mode-state] .builder-summarybar.is-guide-visible,
+    .builder-shell.is-generated[data-builder-mode-state] .builder-selected.is-guide-visible,
+    .builder-shell.is-generated[data-builder-mode-state] .builder-guide-nav.is-guide-visible {
+        display: none !important;
+    }
+
+    .builder-shell.is-generated .builder-visualbar.is-guide-visible {
+        margin-bottom: 1rem;
+    }
+
+    .builder-shell.is-generated #builderGenerate {
+        display: none;
+    }
+
+    .builder-shell.is-generated[data-builder-mode-state] .builder-workspace {
+        padding: 0;
+    }
+
+    .builder-shell.is-generated[data-builder-mode-state] .builder-output.is-guide-visible {
+        display: block !important;
+    }
+
+    .builder-shell.is-generated[data-builder-mode-state] .builder-output {
+        border: 0;
+        border-radius: 0;
+        min-height: 620px;
+    }
+
+    .builder-shell.is-generated[data-builder-mode-state] .builder-chart-wrap {
+        height: 560px;
+    }
+
+    .builder-presets {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 8px;
+        padding: 12px 16px;
+        background: #f0f6fb;
+        border-bottom: 1px solid #dbe6ee;
+    }
+
+    .builder-preset {
+        border: 1px solid #b9d2e6;
+        background: #fff;
+        color: #174364;
+        border-radius: 8px;
+        padding: 10px 12px;
+        font-size: 13px;
+        font-weight: 700;
+        text-align: left;
+        min-height: 78px;
+    }
+
+    .builder-preset span {
+        display: block;
+        color: #17324d;
+        font-weight: 900;
+        margin-bottom: 4px;
+    }
+
+    .builder-preset small {
+        display: block;
+        color: #687685;
+        font-weight: 700;
+        line-height: 1.25;
+    }
+
+    .builder-preset.is-hidden {
+        display: none;
+    }
+
+    .builder-preset:hover,
+    .builder-preset.is-active {
+        border-color: #0b73b9;
+        background: #e8f4fd;
+        color: #07598f;
+    }
+
+    .builder-layout {
+        display: grid;
+        grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
+        min-height: 620px;
+    }
+
+    .builder-rail {
+        background: #ffffff;
+        border-right: 1px solid #dbe6ee;
+        padding: 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .builder-search {
+        position: relative;
+    }
+
+    .builder-search i {
+        position: absolute;
+        left: 12px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: #6b7c8f;
+    }
+
+    .builder-search input {
+        padding-left: 38px;
+        border-width: 1px;
+        min-height: 42px;
+    }
+
+    .builder-theme-list {
+        display: grid;
+        gap: 8px;
+    }
+
+    .builder-theme {
+        border: 1px solid #e1e8ee;
+        border-radius: 8px;
+        background: #fbfcfd;
+        color: #17324d;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 10px 12px;
+        font-weight: 800;
+        text-align: left;
+    }
+
+    .builder-theme span {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .builder-theme small {
+        color: #6b7c8f;
+        font-weight: 800;
+    }
+
+    .builder-theme.is-active {
+        border-color: #0b73b9;
+        background: #e8f4fd;
+        color: #07598f;
+    }
+
+    .indicator-list {
+        overflow: auto;
+        max-height: 360px;
+        padding-right: 2px;
+        display: grid;
+        gap: 8px;
+    }
+
+    .indicator-option {
+        border: 1px solid #e1e8ee;
+        border-radius: 8px;
+        background: #ffffff;
+        padding: 10px;
+        display: grid;
+        grid-template-columns: 24px minmax(0, 1fr);
+        gap: 9px;
+        align-items: start;
+        cursor: pointer;
+    }
+
+    .indicator-option.is-hidden {
+        display: none;
+    }
+
+    .indicator-option.is-selected {
+        border-color: #0b73b9;
+        background: #f1f8fe;
+    }
+
+    .indicator-option input {
+        width: 18px;
+        height: 18px;
+        margin-top: 2px;
+    }
+
+    .indicator-option strong {
+        display: block;
+        color: #17324d;
+        font-size: 14px;
+        line-height: 1.2;
+    }
+
+    .indicator-option span {
+        color: #6b7c8f;
+        font-size: 12px;
+        font-weight: 700;
+    }
+
+    .builder-workspace {
+        padding: 16px;
+        display: grid;
+        gap: 14px;
+        align-content: start;
+    }
+
+    .builder-controlbar,
+    .builder-timebar,
+    .builder-visualbar,
+    .builder-summarybar {
+        border: 1px solid #dbe6ee;
+        border-radius: 8px;
+        background: #ffffff;
+        padding: 12px;
+    }
+
+    .builder-controlbar,
+    .builder-timebar,
+    .builder-visualbar {
+        display: grid;
+        grid-template-columns: minmax(200px, 1fr) minmax(220px, auto) auto;
+        align-items: end;
+        gap: 12px;
+    }
+
+    .builder-timebar {
+        grid-template-columns: repeat(2, minmax(180px, 1fr));
+    }
+
+    .builder-visualbar {
+        grid-template-columns: minmax(220px, auto) 1fr;
+    }
+
+    .builder-controlbar .form-label,
+    .builder-timebar .form-label,
+    .builder-visualbar .form-label {
+        color: #526273;
+        font-size: 12px;
+        font-weight: 800;
+        text-transform: uppercase;
+        margin-bottom: 6px;
+    }
+
+    .builder-view {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 4px;
+        background: #eef3f7;
+        border-radius: 999px;
+        white-space: nowrap;
+    }
+
+    .builder-actions {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+
+    .builder-summarybar {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+    }
+
+    .builder-summary-item {
+        border: 1px solid #e1e8ee;
+        border-radius: 8px;
+        background: #fbfcfd;
+        padding: 10px;
+        min-height: 70px;
+    }
+
+    .builder-summary-item span {
+        display: block;
+        color: #6b7c8f;
+        font-size: 11px;
+        font-weight: 800;
+        text-transform: uppercase;
+        margin-bottom: 6px;
+    }
+
+    .builder-summary-item strong {
+        display: block;
+        color: #17324d;
+        font-size: 18px;
+        line-height: 1.2;
+        overflow-wrap: anywhere;
+    }
+
+    .builder-selected {
+        border: 1px solid #dbe6ee;
+        border-radius: 8px;
+        background: #ffffff;
+        padding: 10px 12px;
+        min-height: 54px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+
+    .builder-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        border: 1px solid #c9d8e4;
+        background: #f8fbfd;
+        color: #17324d;
+        border-radius: 999px;
+        padding: 6px 10px;
+        font-size: 13px;
+        font-weight: 700;
+    }
+
+    .builder-chip button {
+        border: 0;
+        background: transparent;
+        color: #6b7c8f;
+        padding: 0;
+        line-height: 1;
+    }
+
+    .builder-output {
+        border: 1px solid #dbe6ee;
+        border-radius: 8px;
+        background: #ffffff;
+        overflow: hidden;
+    }
+
+    .builder-output-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+        padding: 12px 14px;
+        border-bottom: 1px solid #e8eef2;
+    }
+
+    .builder-output-head h3 {
+        margin: 0;
+        font-size: 17px;
+        font-weight: 800;
+        color: #17324d;
+    }
+
+    .builder-output-head span {
+        color: #6b7c8f;
+        font-size: 13px;
+        font-weight: 700;
+    }
+
+    .builder-result-brief {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+        padding: 12px 14px;
+        background: #f8fbfd;
+        border-bottom: 1px solid #e8eef2;
+    }
+
+    .builder-result-brief div {
+        border: 1px solid #e1e8ee;
+        border-radius: 8px;
+        background: #ffffff;
+        padding: 10px;
+        min-height: 82px;
+    }
+
+    .builder-result-brief span {
+        display: block;
+        color: #687685;
+        font-size: 11px;
+        font-weight: 800;
+        text-transform: uppercase;
+        margin-bottom: 5px;
+    }
+
+    .builder-result-brief strong {
+        color: #17324d;
+        font-size: 13px;
+        line-height: 1.3;
+    }
+
+    .builder-chart-wrap {
+        height: 430px;
+        padding: 14px;
+        position: relative;
+    }
+
+    .builder-table-wrap {
+        max-height: 420px;
+        overflow: auto;
+        border-top: 1px solid #eef2f5;
+    }
+
+    .builder-table-wrap.is-hidden,
+    .builder-chart-wrap.is-hidden {
+        display: none;
+    }
+
+    .builder-empty {
+        color: #6b7c8f;
+        text-align: center;
+        padding: 48px 12px;
+        font-weight: 700;
+    }
+
     @media (max-width: 1100px) {
         .investor-metrics {
             grid-template-columns: repeat(2, minmax(0, 1fr));
         }
 
-        .investor-grid {
+        .investor-grid,
+        .financial-health,
+        .analytics-grid {
             grid-template-columns: 1fr;
+        }
+
+        .builder-layout {
+            grid-template-columns: 1fr;
+        }
+
+        .builder-rail {
+            border-right: 0;
+            border-bottom: 1px solid #dbe6ee;
+        }
+
+        .builder-controlbar,
+        .builder-timebar,
+        .builder-visualbar {
+            grid-template-columns: 1fr;
+        }
+
+        .builder-summarybar {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .builder-result-brief {
+            grid-template-columns: 1fr;
+        }
+
+        .builder-presets {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
         }
     }
 
     @media (max-width: 576px) {
         .investor-metrics,
-        .report-text {
+        .report-text,
+        .health-snapshot,
+        .analysis-kpis {
             grid-template-columns: 1fr;
         }
 
         .investor-chart-wrap {
             height: 300px;
+        }
+
+        .builder-summarybar {
+            grid-template-columns: 1fr;
+        }
+
+        .builder-presets {
+            grid-template-columns: 1fr;
+        }
+
+        .builder-topbar,
+        .builder-output-head {
+            align-items: stretch;
+            flex-direction: column;
+        }
+
+        .builder-stepper {
+            align-items: stretch;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .builder-step {
+            justify-content: flex-start;
+        }
+
+        .builder-step::after {
+            display: none;
+        }
+
+        .builder-mode,
+        .builder-view,
+        .builder-actions,
+        .builder-actions .btn {
+            width: 100%;
+        }
+
+        .builder-mode button,
+        .builder-view button {
+            flex: 1;
+        }
+
+        .builder-chart-wrap {
+            height: 320px;
         }
     }
 </style>
@@ -185,7 +1034,7 @@
     <div class="investor-header">
         <div>
             <h1 class="investor-title">Investor Decision Panel</h1>
-            <p class="investor-subtitle">Financial, production, cash, and health reports from {{ start_date }} to {{ end_date }}.</p>
+            <p class="investor-subtitle">Profit, cash, cost of production, and investment signals from {{ start_date }} to {{ end_date }}.</p>
         </div>
         <div class="d-flex gap-2 flex-wrap">
             <a href="{% url 'valuation' %}" class="btn btn-outline-primary">
@@ -208,13 +1057,13 @@
                 <input type="date" class="form-control" name="end_date" id="end_date" value="{{ end_date|date:'Y-m-d' }}">
             </div>
             <div class="col-md-2">
-                <label class="form-label">Report Type</label>
+                <label class="form-label">Focus Area</label>
                 <select class="form-select" name="report_type" id="report_type">
                     <option value="profit" {% if selected_report_type == "profit" %}selected{% endif %}>Profit & Loss</option>
-                    <option value="sales" {% if selected_report_type == "sales" %}selected{% endif %}>Sales</option>
-                    <option value="expenses" {% if selected_report_type == "expenses" %}selected{% endif %}>Expenses</option>
-                    <option value="eggs" {% if selected_report_type == "eggs" %}selected{% endif %}>Egg Production</option>
-                    <option value="health" {% if selected_report_type == "health" %}selected{% endif %}>Health & Feed</option>
+                    <option value="sales" {% if selected_report_type == "sales" %}selected{% endif %}>Sales & Pricing</option>
+                    <option value="expenses" {% if selected_report_type == "expenses" %}selected{% endif %}>Cost Drivers</option>
+                    <option value="eggs" {% if selected_report_type == "eggs" %}selected{% endif %}>Production Economics</option>
+                    <option value="health" {% if selected_report_type == "health" %}selected{% endif %}>Risk & Loss</option>
                     <option value="cash" {% if selected_report_type == "cash" %}selected{% endif %}>Cash Collection</option>
                 </select>
             </div>
@@ -242,38 +1091,300 @@
         </div>
     </form>
 
-    <div class="investor-metrics">
-        <div class="investor-card investor-metric">
-            <span>Total Revenue</span>
-            <strong>UGX {{ metrics.total_revenue|floatformat:0 }}</strong>
-            <small>Cash received: UGX {{ metrics.cash_received|floatformat:0 }}</small>
-        </div>
-        <div class="investor-card investor-metric">
-            <span>Total Expenses</span>
-            <strong>UGX {{ metrics.total_expenses|floatformat:0 }}</strong>
-            <small>Outstanding: UGX {{ metrics.outstanding_balance|floatformat:0 }}</small>
-        </div>
-        <div class="investor-card investor-metric">
-            <span>Profit</span>
-            <strong>UGX {{ metrics.profit|floatformat:0 }}</strong>
+    <div class="investor-metrics financial-metrics">
+        <div class="investor-card investor-metric {% if metrics.net_profit < 0 %}is-negative{% else %}is-positive{% endif %}">
+            <span>Net Profit / Loss</span>
+            <strong>UGX {{ metrics.net_profit|floatformat:0 }}</strong>
             <small>Margin: {{ metrics.profit_margin|floatformat:1 }}%</small>
         </div>
         <div class="investor-card investor-metric">
-            <span>Production</span>
-            <strong>{{ metrics.total_eggs|floatformat:0 }} eggs</strong>
-            <small>{{ metrics.current_birds }} live birds, {{ metrics.active_batches }} active batches</small>
+            <span>Revenue</span>
+            <strong>UGX {{ metrics.gross_revenue|floatformat:0 }}</strong>
+            <small>Estimated egg revenue / egg: UGX {{ metrics.revenue_per_egg|floatformat:0 }}</small>
+        </div>
+        <div class="investor-card investor-metric {% if metrics.expense_ratio > 70 %}is-warning{% endif %}">
+            <span>Expenses</span>
+            <strong>UGX {{ metrics.total_expenses|floatformat:0 }}</strong>
+            <small>{{ metrics.expense_ratio|floatformat:1 }}% of revenue</small>
+        </div>
+        <div class="investor-card investor-metric">
+            <span>Cash Collected</span>
+            <strong>UGX {{ metrics.cash_collected|floatformat:0 }}</strong>
+            <small>Collection rate: {{ metrics.collection_rate|floatformat:1 }}%</small>
+        </div>
+        <div class="investor-card investor-metric {% if metrics.unpaid_receivables > 0 %}is-warning{% endif %}">
+            <span>Outstanding Receivables</span>
+            <strong>UGX {{ metrics.unpaid_receivables|floatformat:0 }}</strong>
+            <small>Cash still outside the farm</small>
+        </div>
+        <div class="investor-card investor-metric">
+            <span>Cost Per Egg</span>
+            <strong>UGX {{ metrics.cost_per_egg|floatformat:0 }}</strong>
+            <small>{{ metrics.saleable_eggs|floatformat:0 }} saleable eggs</small>
+        </div>
+        <div class="investor-card investor-metric">
+            <span>Feed Cost / Egg</span>
+            <strong>UGX {{ metrics.feed_cost_per_egg|floatformat:0 }}</strong>
+            <small>{{ metrics.feed_per_egg|floatformat:3 }} kg feed / egg</small>
+        </div>
+        <div class="investor-card investor-metric">
+            <span>Production Risk</span>
+            <strong>{{ metrics.rejected_egg_rate|floatformat:1 }}% rejected</strong>
+            <small>{{ metrics.mortality_rate|floatformat:2 }}% mortality</small>
         </div>
     </div>
 
-    <div class="investor-grid">
-        <div class="investor-card">
-            <div class="investor-section-header">
-                <h5 id="chartTitle">Report Visualization</h5>
-                <span class="badge text-bg-light" id="chartUnit">UGX</span>
+    <section class="investor-card financial-health-card">
+        <div class="financial-health">
+            <div class="health-lead {{ financial_health.level }}">
+                <span class="health-badge {{ financial_health.level }}">
+                    <i class="bi bi-activity"></i>{{ financial_health.label }}
+                </span>
+                <h2>{{ financial_health.title }}</h2>
+                <p>{{ financial_health.summary }}</p>
+                <p class="health-action"><i class="bi bi-arrow-right-circle me-1"></i>{{ financial_health.action }}</p>
             </div>
-            <div class="investor-body">
-                <div class="investor-chart-wrap">
-                    <canvas id="reportChart"></canvas>
+            <div class="health-snapshot">
+                <div class="report-fact">
+                    <span>Feed cost</span>
+                    <strong>UGX {{ metrics.feed_cost|floatformat:0 }}</strong>
+                </div>
+                <div class="report-fact">
+                    <span>Labour cost</span>
+                    <strong>UGX {{ metrics.labour_cost|floatformat:0 }}</strong>
+                </div>
+                <div class="report-fact">
+                    <span>Rejected egg loss</span>
+                    <strong>UGX {{ metrics.rejected_egg_loss|floatformat:0 }}</strong>
+                </div>
+                <div class="report-fact">
+                    <span>Mortality loss est.</span>
+                    <strong>UGX {{ metrics.mortality_loss_estimate|floatformat:0 }}</strong>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="builder-shell" id="investorBuilder" data-builder-mode-state="guided" data-guide-step="theme" hidden>
+        <div class="builder-topbar">
+            <div class="builder-title">
+                <i class="bi bi-bar-chart-steps"></i>
+                <h2>Investor Analysis Builder</h2>
+            </div>
+            <div class="builder-mode" role="group" aria-label="Builder mode">
+                <button type="button" class="is-active" data-builder-mode="guided">
+                    <i class="bi bi-magic me-1"></i>Guided
+                </button>
+                <button type="button" data-builder-mode="advanced">
+                    <i class="bi bi-sliders me-1"></i>Advanced
+                </button>
+            </div>
+        </div>
+
+        <div class="builder-stepper" id="builderStepper" aria-label="Builder process guide">
+            <button type="button" class="builder-step is-active" data-guide-step-target="theme">
+                <span class="builder-step-number">1</span>
+                <span>Theme</span>
+            </button>
+            <button type="button" class="builder-step" data-guide-step-target="question">
+                <span class="builder-step-number">2</span>
+                <span>Question</span>
+            </button>
+            <button type="button" class="builder-step" data-guide-step-target="indicators">
+                <span class="builder-step-number">3</span>
+                <span>Indicators</span>
+            </button>
+            <button type="button" class="builder-step" data-guide-step-target="locations">
+                <span class="builder-step-number">4</span>
+                <span>Location</span>
+            </button>
+            <button type="button" class="builder-step" data-guide-step-target="time">
+                <span class="builder-step-number">5</span>
+                <span>Time range</span>
+            </button>
+            <button type="button" class="builder-step" data-guide-step-target="generate">
+                <span class="builder-step-number">6</span>
+                <span>Generate</span>
+            </button>
+        </div>
+
+        <div class="builder-presets" id="builderPresets" data-guide-panel="question">
+            {% for preset in builder_data.presets %}
+            <button type="button" class="builder-preset" data-preset-key="{{ preset.key }}" data-preset-theme="{{ preset.theme }}">
+                <span>{{ preset.label }}</span>
+                <small>{{ preset.description }}</small>
+            </button>
+            {% endfor %}
+        </div>
+
+        <div class="builder-layout">
+            <aside class="builder-rail is-guide-visible" data-guide-panel="theme indicators">
+                <div class="builder-search" data-guide-panel="indicators">
+                    <i class="bi bi-search"></i>
+                    <input type="search" class="form-control" id="builderSearch" placeholder="Search indicators">
+                </div>
+
+                <div class="builder-theme-list is-guide-visible" id="builderThemes" data-guide-panel="theme">
+                    <button type="button" class="builder-theme is-active" data-theme-key="all">
+                        <span><i class="bi bi-grid"></i>All indicators</span>
+                        <small>{{ builder_data.indicators|length }}</small>
+                    </button>
+                    {% for theme in builder_data.themes %}
+                    <button type="button" class="builder-theme" data-theme-key="{{ theme.key }}">
+                        <span><i class="{{ theme.icon }}"></i>{{ theme.label }}</span>
+                        <small>{{ theme.count }}</small>
+                    </button>
+                    {% endfor %}
+                </div>
+
+                <div class="indicator-list" id="builderIndicatorList" data-guide-panel="indicators">
+                    {% for indicator in builder_data.indicators %}
+                    <label class="indicator-option"
+                           data-indicator-key="{{ indicator.key }}"
+                           data-theme="{{ indicator.theme }}"
+                           data-featured="{{ indicator.featured|yesno:'1,0' }}"
+                           data-search="{{ indicator.label|lower }} {{ indicator.unit|lower }}">
+                        <input type="checkbox" value="{{ indicator.key }}">
+                        <span>
+                            <strong><i class="{{ indicator.icon }} me-1"></i>{{ indicator.label }}</strong>
+                            <span>{{ indicator.unit }}</span>
+                        </span>
+                    </label>
+                    {% endfor %}
+                </div>
+            </aside>
+
+            <div class="builder-workspace">
+                <div class="builder-guide-note" id="builderGuideNote">
+                    <strong>Choose a theme</strong>
+                    <span>Start with the analysis area the investor wants to understand.</span>
+                </div>
+
+                <div class="builder-controlbar" data-guide-panel="locations generate">
+                    <div>
+                        <label class="form-label" for="builderDimension">Location / selection</label>
+                        <select class="form-select" id="builderDimension">
+                            {% for dimension in builder_data.dimensions %}
+                            <option value="{{ dimension.key }}">{{ dimension.label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <div class="builder-timebar" data-guide-panel="time generate">
+                    <div>
+                        <label class="form-label" for="builderStartDate">Start date</label>
+                        <input type="date" class="form-control" id="builderStartDate" value="{{ start_date|date:'Y-m-d' }}">
+                    </div>
+                    <div>
+                        <label class="form-label" for="builderEndDate">End date</label>
+                        <input type="date" class="form-control" id="builderEndDate" value="{{ end_date|date:'Y-m-d' }}">
+                    </div>
+                </div>
+
+                <div class="builder-visualbar" data-guide-panel="generate">
+                    <div>
+                        <label class="form-label">Visualization</label>
+                        <div class="builder-view" id="builderViewMode" role="group" aria-label="Builder view">
+                            <button type="button" class="is-active" data-view-mode="bar" title="Bar chart"><i class="bi bi-bar-chart"></i></button>
+                            <button type="button" data-view-mode="line" title="Line chart"><i class="bi bi-graph-up"></i></button>
+                            <button type="button" data-view-mode="area" title="Area chart"><i class="bi bi-activity"></i></button>
+                            <button type="button" data-view-mode="pie" title="Pie chart"><i class="bi bi-pie-chart"></i></button>
+                            <button type="button" data-view-mode="table" title="Table"><i class="bi bi-table"></i></button>
+                        </div>
+                    </div>
+                    <div class="builder-actions">
+                        <button type="button" class="btn btn-primary" id="builderGenerate">
+                            <i class="bi bi-lightning-charge me-1"></i>Generate
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary" id="builderExportCsv">
+                            <i class="bi bi-filetype-csv me-1"></i>CSV
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary" id="builderExportImage">
+                            <i class="bi bi-image me-1"></i>Image
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary" id="builderFullscreen">
+                            <i class="bi bi-fullscreen"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="builder-summarybar" data-guide-panel="generate">
+                    <div class="builder-summary-item">
+                        <span>Indicators</span>
+                        <strong id="builderIndicatorCount">0 selected</strong>
+                    </div>
+                    <div class="builder-summary-item">
+                        <span>Breakdown</span>
+                        <strong id="builderBreakdownLabel">Monthly trend</strong>
+                    </div>
+                    <div class="builder-summary-item">
+                        <span>Rows</span>
+                        <strong id="builderRowCount">0</strong>
+                    </div>
+                    <div class="builder-summary-item">
+                        <span>Range</span>
+                        <strong id="builderRangeLabel">{{ start_date|date:"d M Y" }} - {{ end_date|date:"d M Y" }}</strong>
+                    </div>
+                </div>
+
+                <div class="builder-selected" id="builderSelectedChips" data-guide-panel="generate"></div>
+
+                <div class="builder-output" id="builderOutput" data-guide-panel="generate">
+                    <div class="builder-output-head">
+                        <div>
+                            <h3 id="builderChartTitle">Custom farm indicators</h3>
+                            <span id="builderChartSubtitle">Generated from PoultryIQ farm records</span>
+                        </div>
+                        <span id="builderGeneratedMeta">Ready</span>
+                    </div>
+                    <div class="builder-result-brief" id="builderResultBrief">
+                        <div>
+                            <span>Summary</span>
+                            <strong id="builderResultSummary">Choose indicators to generate an investor view.</strong>
+                        </div>
+                        <div>
+                            <span>Key finding</span>
+                            <strong id="builderResultFinding">The strongest signal will appear here.</strong>
+                        </div>
+                        <div>
+                            <span>Recommendation</span>
+                            <strong id="builderResultRecommendation">Select a business question to guide the analysis.</strong>
+                        </div>
+                    </div>
+                    <div class="builder-chart-wrap" id="builderChartWrap">
+                        <canvas id="builderChart"></canvas>
+                    </div>
+                    <div class="builder-table-wrap" id="builderTableWrap">
+                        <table class="table table-sm align-middle mb-0" id="builderTable">
+                            <thead></thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                    <div class="builder-empty d-none" id="builderEmpty">No indicators selected.</div>
+                </div>
+
+                <div class="builder-guide-nav is-guide-visible" id="builderGuideNav">
+                    <button type="button" class="btn btn-outline-secondary" id="builderStepBack">
+                        <i class="bi bi-arrow-left me-1"></i>Back
+                    </button>
+                    <button type="button" class="btn btn-primary" id="builderStepNext">
+                        Continue <i class="bi bi-arrow-right ms-1"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <div class="investor-grid">
+        <div id="builderCardMount">
+            <div class="investor-card">
+                <div class="investor-section-header">
+                    <h5><i class="bi bi-bar-chart-steps me-1"></i>Investor Analysis Builder</h5>
+                    <span class="badge text-bg-light">Guided</span>
+                </div>
+                <div class="investor-body">
+                    <div class="builder-empty">Loading guided builder...</div>
                 </div>
             </div>
         </div>
@@ -288,7 +1399,11 @@
                     {% for insight in insights %}
                     <div class="advisor-item {{ insight.level }}">
                         <strong>{{ insight.title }}</strong>
-                        <span>{{ insight.text }}</span>
+                        <div class="advisor-meta">
+                            <div><b>Evidence:</b> {{ insight.evidence }}</div>
+                            <div><b>Impact:</b> {{ insight.impact }}</div>
+                            <div><b>Recommendation:</b> {{ insight.recommendation }}</div>
+                        </div>
                     </div>
                     {% empty %}
                     <div class="advisor-item">
@@ -301,59 +1416,141 @@
         </div>
     </div>
 
-    <div class="investor-grid">
-        <div class="investor-card">
+    <div class="analytics-grid">
+        <div class="investor-card analysis-card">
             <div class="investor-section-header">
-                <h5>Text Report</h5>
+                <h5><i class="bi bi-graph-up-arrow me-1"></i>Profit Trend</h5>
+                <span class="badge text-bg-light">Revenue vs costs</span>
             </div>
             <div class="investor-body">
-                <div class="report-text">
+                <div class="analysis-chart">
+                    <canvas id="financialTrendChart"></canvas>
+                </div>
+                <div class="analysis-kpis">
                     <div class="report-fact">
-                        <span>Collection Rate</span>
-                        <strong>{{ metrics.collection_rate|floatformat:1 }}%</strong>
+                        <span>Revenue</span>
+                        <strong>UGX {{ metrics.gross_revenue|floatformat:0 }}</strong>
                     </div>
                     <div class="report-fact">
-                        <span>Mortality Rate</span>
-                        <strong>{{ metrics.mortality_rate|floatformat:2 }}%</strong>
+                        <span>Expenses</span>
+                        <strong>UGX {{ metrics.total_expenses|floatformat:0 }}</strong>
                     </div>
                     <div class="report-fact">
-                        <span>Feed Used</span>
-                        <strong>{{ metrics.feed_used_kg|floatformat:1 }} kg</strong>
-                    </div>
-                    <div class="report-fact">
-                        <span>Feed Per Egg</span>
-                        <strong>{{ metrics.feed_per_egg|floatformat:3 }} kg</strong>
-                    </div>
-                    <div class="report-fact">
-                        <span>Rejected Eggs</span>
-                        <strong>{{ metrics.rejected_eggs|floatformat:0 }}</strong>
-                    </div>
-                    <div class="report-fact">
-                        <span>Deaths</span>
-                        <strong>{{ metrics.total_deaths|floatformat:0 }}</strong>
+                        <span>Profit</span>
+                        <strong>UGX {{ metrics.net_profit|floatformat:0 }}</strong>
                     </div>
                 </div>
             </div>
         </div>
 
-        <div class="investor-card">
+        <div class="investor-card analysis-card">
             <div class="investor-section-header">
-                <h5>Breakdown</h5>
+                <h5><i class="bi bi-receipt-cutoff me-1"></i>Cost Drivers</h5>
+                <span class="badge text-bg-light">{{ metrics.expense_ratio|floatformat:1 }}% expense ratio</span>
             </div>
             <div class="investor-body">
-                <div class="table-responsive">
-                    <table class="table table-sm align-middle mb-0">
-                        <thead>
-                            <tr>
-                                <th>Category</th>
-                                <th class="text-end">Amount</th>
-                            </tr>
-                        </thead>
-                        <tbody id="breakdownTable">
-                            <tr><td colspan="2" class="text-muted">Choose a report to view breakdowns.</td></tr>
-                        </tbody>
-                    </table>
+                <div class="analysis-chart">
+                    <canvas id="costDriverChart"></canvas>
                 </div>
+                <div class="driver-list">
+                    {% for item in expense_breakdown|slice:":4" %}
+                    <div class="driver-row">
+                        <span>{{ item.label }}</span>
+                        <small>UGX {{ item.value|floatformat:0 }} · {{ item.share|floatformat:1 }}%</small>
+                    </div>
+                    {% empty %}
+                    <div class="driver-row"><span>No expense records</span><small>Selected period</small></div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <div class="investor-card analysis-card">
+            <div class="investor-section-header">
+                <h5><i class="bi bi-egg me-1"></i>Production Economics</h5>
+                <span class="badge text-bg-light">Cost per egg</span>
+            </div>
+            <div class="investor-body">
+                <div class="analysis-chart">
+                    <canvas id="unitEconomicsChart"></canvas>
+                </div>
+                <div class="analysis-kpis">
+                    <div class="report-fact">
+                        <span>Saleable eggs</span>
+                        <strong>{{ metrics.saleable_eggs|floatformat:0 }}</strong>
+                    </div>
+                    <div class="report-fact">
+                        <span>Feed used</span>
+                        <strong>{{ metrics.feed_used_kg|floatformat:1 }} kg</strong>
+                    </div>
+                    <div class="report-fact">
+                        <span>Rejected eggs</span>
+                        <strong>{{ metrics.rejected_eggs|floatformat:0 }}</strong>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="investor-card analysis-card">
+            <div class="investor-section-header">
+                <h5><i class="bi bi-cash-coin me-1"></i>Cash Risk</h5>
+                <span class="badge text-bg-light">{{ metrics.collection_rate|floatformat:1 }}% collected</span>
+            </div>
+            <div class="investor-body">
+                <div class="analysis-chart">
+                    <canvas id="cashRiskChart"></canvas>
+                </div>
+                <div class="analysis-kpis">
+                    <div class="report-fact">
+                        <span>Cash collected</span>
+                        <strong>UGX {{ metrics.cash_collected|floatformat:0 }}</strong>
+                    </div>
+                    <div class="report-fact">
+                        <span>Receivables</span>
+                        <strong>UGX {{ metrics.unpaid_receivables|floatformat:0 }}</strong>
+                    </div>
+                    <div class="report-fact">
+                        <span>Collection rate</span>
+                        <strong>{{ metrics.collection_rate|floatformat:1 }}%</strong>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="investor-card full-width-card">
+        <div class="investor-section-header">
+            <h5><i class="bi bi-house-check me-1"></i>Batch / House Profitability</h5>
+            <span class="text-muted small">Uses batch-linked sales and allocated expenses where available</span>
+        </div>
+        <div class="investor-body">
+            <div class="table-responsive">
+                <table class="table table-sm align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>Batch</th>
+                            <th class="text-end">Revenue</th>
+                            <th class="text-end">Allocated expenses</th>
+                            <th class="text-end">Profit</th>
+                            <th class="text-end">Margin</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for batch in batch_profitability %}
+                        <tr>
+                            <td>{{ batch.label }}</td>
+                            <td class="text-end">UGX {{ batch.revenue|floatformat:0 }}</td>
+                            <td class="text-end">UGX {{ batch.expenses|floatformat:0 }}</td>
+                            <td class="text-end {% if batch.profit < 0 %}text-danger{% else %}text-success{% endif %}">UGX {{ batch.profit|floatformat:0 }}</td>
+                            <td class="text-end">{{ batch.margin|floatformat:1 }}%</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="5" class="text-center text-muted py-4">No batch-linked sales or expense allocations found for this period.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
             </div>
         </div>
     </div>
@@ -417,6 +1614,8 @@
 </div>
 
 {{ chart_data|json_script:"investor-chart-data" }}
+{{ financial_chart_data|json_script:"investor-financial-data" }}
+{{ builder_data|json_script:"investor-builder-data" }}
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="{% static 'js/investor.js' %}"></script>

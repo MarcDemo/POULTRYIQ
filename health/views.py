@@ -615,6 +615,7 @@ def report_sickness(request):
         symptoms = request.POST.get("symptoms", "").strip()
         action = request.POST.get("action", "").strip()
         notes = request.POST.get("notes", "").strip()
+        bird_identifier = request.POST.get("bird_identifier", "").strip()
         report_date_raw = request.POST.get("date", "").strip()
        
 
@@ -664,6 +665,7 @@ def report_sickness(request):
                 house=selected_house.name or selected_house.house_code,
                 house_ref=selected_house,
                 batch=selected_batch,
+                bird_identifier=bird_identifier,
                 symptoms=symptoms,
                 disease="",
                 affected=affected,
