@@ -9,11 +9,30 @@
             <a href="{% url 'add_user' %}" class="btn btn-primary">
                 <i class="bi bi-person-plus me-2"></i>Add User
             </a>
-            <a href="{% url 'salaries' %}" class="btn btn-info">
-                <i class="bi bi-cash-coin me-2"></i>Salaries
-            </a>
+           
         </div>
     </div>
+
+    <form method="get" class="card mb-3">
+        <div class="card-body">
+            <div class="row g-2 align-items-end">
+                <div class="col-md-9">
+                    <label for="userSearch" class="form-label">Search Users</label>
+                    <input type="search" id="userSearch" class="form-control" name="q" value="{{ q }}" placeholder="Search by name, username, phone, email, or role">
+                </div>
+                <div class="col-md-3 d-flex gap-2">
+                    <button type="submit" class="btn btn-primary flex-fill">
+                        <i class="bi bi-search me-1"></i>Search
+                    </button>
+                    {% if q %}
+                    <a href="{% url 'manage_users' %}" class="btn btn-light">
+                        Clear
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </form>
 
     <div class="card">
         <div class="card-body">
@@ -25,7 +44,9 @@
                             <th>Enrollment Date</th>
                             <th>Enrollment #</th>
                             <th>Role</th>
+                            <th>Telephone</th>
                             <th>Status</th>
+                            <th>Action</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -35,6 +56,7 @@
                             <td>{{ user.date_joined|date:"d M Y" }}</td>
                             <td><code>{{ user.pk }}</code></td>
                             <td><span class="badge bg-info">{{ user.role.name|default:"No role" }}</span></td>
+                            <td>{{ user.phone_number|default:"-" }}</td>
                             <td>
                                 {% if user.is_active %}
                                 <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Active</span>
@@ -42,10 +64,21 @@
                                 <span class="badge bg-secondary">Inactive</span>
                                 {% endif %}
                             </td>
+                            <td>
+                                {% if user.can_manager_edit_user %}
+                                <a href="{% url 'edit_user' user.pk %}" class="btn btn-warning btn-sm text-nowrap">
+                                    <i class="bi bi-pencil-square me-1"></i>Edit
+                                </a>
+                                {% else %}
+                                <span class="text-muted small">
+                                    <i class="bi bi-shield-lock me-1"></i>Protected account
+                                </span>
+                                {% endif %}
+                            </td>
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="5" class="text-center text-muted py-3">No users found.</td>
+                            <td colspan="7" class="text-center text-muted py-3">No users found.</td>
                         </tr>
                         {% endfor %}
                     </tbody>
