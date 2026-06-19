@@ -614,7 +614,13 @@ def report_sickness(request):
         action = request.POST.get("action", "").strip()
         notes = request.POST.get("notes", "").strip()
         bird_identifier = request.POST.get("bird_identifier", "").strip()
+        report_date_raw = request.POST.get("date", "").strip()
         report_date = timezone.localdate()
+        if report_date_raw:
+            try:
+                report_date = date.fromisoformat(report_date_raw)
+            except ValueError:
+                report_date = timezone.localdate()
        
 
         errors = []
