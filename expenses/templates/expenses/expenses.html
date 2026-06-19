@@ -1,0 +1,129 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container-fluid">
+    <div class="page-header-row mb-4">
+        <div>
+            <h2 class="mb-1">
+                <i class="bi bi-list-check me-2"></i>Expense List
+            </h2>
+            <small class="text-muted">All recorded expenses</small>
+        </div>
+        <a href="{% url 'expense_form' %}" class="btn btn-primary">
+            <i class="bi bi-plus-circle me-2"></i>Record Expense
+        </a>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-body">
+            <form method="GET" class="row g-3">
+                <div class="col-md-2">
+                    <label class="form-label">From Date</label>
+                    <input type="date" name="date_from" class="form-control" value="{{ f_date_from }}">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">To Date</label>
+                    <input type="date" name="date_to" class="form-control" value="{{ f_date_to }}">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Category</label>
+                    <select name="category" class="form-select">
+                        <option value="">All</option>
+                        {% for cat in categories %}
+                            <option value="{{ cat.id }}" {% if f_category|stringformat:"i" == cat.id|stringformat:"i" %}selected{% endif %}>{{ cat.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Status</label>
+                    <select name="status" class="form-select">
+                        <option value="">All</option>
+                        {% for val, label in status_choices %}
+                            <option value="{{ val }}" {% if f_status == val %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">&nbsp;</label>
+                    <button type="submit" class="btn btn-primary w-100">Filter</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Category</th>
+                        <th>Description</th>
+                        <th>Amount</th>
+                        <th>Status</th>
+                        <th>Created By</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for expense in expenses %}
+                        <tr>
+                            <td>{{ expense.expense_date|date:"M d, Y" }}</td>
+                            <td>{{ expense.category.name }}</td>
+                            <td>{{ expense.description }}</td>
+                            <td>{{ expense.total_amount|floatformat:2 }}</td>
+                            <td>
+                                <span class="badge bg-secondary">{{ expense.get_status_display }}</span>
+                            </td>
+                            <td>{{ expense.created_by.username }}</td>
+                        </tr>
+                    {% empty %}
+                        <tr>
+                            <td colspan="6" class="text-center text-muted">No expenses found</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <td colspan="3" class="text-end"><strong>Total:</strong></td>
+                        <td><strong>{{ total_amount|floatformat:2 }}</strong></td>
+                        <td colspan="2"></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+
+    {% if page_obj.has_other_pages %}
+    <nav aria-label="Page navigation" class="mt-4">
+        <ul class="pagination justify-content-center">
+            {% if page_obj.has_previous %}
+                <li class="page-item">
+                    <a class="page-link" href="?{{ querystring }}&page=1">First</a>
+                </li>
+                <li class="page-item">
+                    <a class="page-link" href="?{{ querystring }}&page={{ page_obj.previous_page_number }}">Previous</a>
+                </li>
+            {% endif %}
+
+            {% for num in page_obj.paginator.page_range %}
+                {% if page_obj.number == num %}
+                    <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+                {% else %}
+                    <li class="page-item">
+                        <a class="page-link" href="?{{ querystring }}&page={{ num }}">{{ num }}</a>
+                    </li>
+                {% endif %}
+            {% endfor %}
+
+            {% if page_obj.has_next %}
+                <li class="page-item">
+                    <a class="page-link" href="?{{ querystring }}&page={{ page_obj.next_page_number }}">Next</a>
+                </li>
+                <li class="page-item">
+                    <a class="page-link" href="?{{ querystring }}&page={{ page_obj.paginator.num_pages }}">Last</a>
+                </li>
+            {% endif %}
+        </ul>
+    </nav>
+    {% endif %}
+</div>
+{% endblock %}
