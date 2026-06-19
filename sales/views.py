@@ -11,6 +11,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from inventory.models import InventoryTransaction
 from poultry.models import ApprovalStatus, egg_collection
 from poultryiq.pagination import paginate
+from accounting.models import AccountingCode
 from .models import Customer, CustomerPayment, ReceivableLedger, SaleInvoice, SaleItem
 
 
@@ -340,13 +341,32 @@ def sales(request):
                     created_by=request.user,
                 )
 
-                SaleItem.objects.create(
+                sale_item = SaleItem.objects.create(
                     invoice=invoice,
                     product_name=stock[product_key]["label"],
                     quantity=quantity,
                     unit=stock[product_key]["unit"],
                     unit_price=unit_price,
                     line_total=line_total,
+                )
+                
+                # Generate accounting code for this sale
+                product_name = stock[product_key]["label"]
+                account_name = f"sale_of_{product_name.lower()}"
+                
+                # Determine prefix based on product type
+                if "egg" in product_name.lower() and "layer" not in product_name.lower():
+                    prefix = "SE"  # Sales Eggs
+                elif "off layer" in product_name.lower() or "off-layer" in product_name.lower() or "offlay" in product_name.lower():
+                    prefix = "SO"  # Sales Off-Layer
+                else:
+                    prefix = "SE"  # Default to Eggs
+                
+                AccountingCode.create_or_get_accounting_code(
+                    prefix=prefix,
+                    account_type='REVENUE',
+                    account_name=account_name,
+                    content_object=sale_item,
                 )
 
                 ReceivableLedger.objects.create(

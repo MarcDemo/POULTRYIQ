@@ -7,6 +7,7 @@ from django.urls import reverse
 
 from inventory.models import InventoryTransaction, Item, ItemCategory, Store
 from poultry.models import ApprovalStatus, PoultryBatch, PoultryHouse, egg_collection
+from accounting.models import AccountingCode
 from sales.models import Customer, CustomerPayment, ReceivableLedger, SaleInvoice, SaleItem
 
 
@@ -147,6 +148,46 @@ class SalesPageTests(TestCase):
 		self.assertEqual(ledger.amount_paid, Decimal("3000.00"))
 		self.assertEqual(ledger.balance, Decimal("7000.00"))
 		self.assertEqual(payment.amount, Decimal("3000.00"))
+		self.assertTrue(
+			AccountingCode.objects.filter(
+				prefix="SE",
+				account_type="REVENUE",
+				content_type__model="saleitem",
+				object_id=item.pk,
+			).exists()
+		)
+
+	def test_post_off_layer_sale_uses_off_layer_accounting_prefix(self):
+		self.client.force_login(self.user)
+
+		response = self.client.post(
+			reverse("sales"),
+			{
+				"customer": "Bird Buyer",
+				"phone": "0700333444",
+				"product": "off_layers",
+				"quantity": "2",
+				"price": "15000",
+				"deposit": "30000",
+				"payment_method": "CASH",
+				"sale_type": "instant",
+			},
+			follow=True,
+		)
+
+		self.assertEqual(response.status_code, 200)
+		invoice = SaleInvoice.objects.order_by("-invoice_id").first()
+		item = SaleItem.objects.get(invoice=invoice)
+
+		self.assertEqual(item.product_name, "Off Layer Birds")
+		self.assertTrue(
+			AccountingCode.objects.filter(
+				prefix="SO",
+				account_type="REVENUE",
+				content_type__model="saleitem",
+				object_id=item.pk,
+			).exists()
+		)
 
 	def test_post_sale_overpayment_creates_negative_balance(self):
 		self.client.force_login(self.user)

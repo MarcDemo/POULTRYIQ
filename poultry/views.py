@@ -4,17 +4,19 @@ from django.contrib.auth.decorators import login_required
 from django.db import transaction
 from django.db.models import Avg, Count, DecimalField, Max, Q, Sum, Value
 from django.db.models.functions import Coalesce
-from django.utils.timezone import is_naive, make_aware, now
+from django.utils.timezone import is_naive, localdate, localtime, make_aware, now
 from datetime import date, timedelta
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 
 from accounts.decorators import worker_required, supervisor_required
 from accounts.models import InvestorCapitalTransaction, User
+from accounting.models import AccountingCode
 from alerts.models import Alert
-from finance.models import ExpenseAllocation, ExpenseCategory, ExpenseTransaction, SalaryPayment
+from expenses.models import ExpenseAllocation, ExpenseCategory, ExpenseTransaction
+from payroll.models import SalaryPayment
 from health.models import HealthEvent, SickbayCleaningRecord, SicknessReport, TreatmentPlanItem, VaccinationSchedule
-from hr.models import Attendance, WagePayment, Worker
+from hr.models import Attendance, WagePayment, WelfareRequest, Worker
 from sales.views import _build_product_stock
 from inventory.models import InventoryTransaction, Item, ReorderRule, Store
 from sales.models import CustomerPayment, ReceivableLedger, SaleInvoice, SaleItem
@@ -384,6 +386,14 @@ def _get_worker_active_batches(user):
         house__in=user.houses.all(),
         status=PoultryBatch.Status.ACTIVE,
     ).select_related("house").order_by("house__house_code", "batch_code")
+
+
+def _selected_or_only(queryset, pk):
+    if pk:
+        return queryset.filter(pk=pk).first()
+    if queryset.count() == 1:
+        return queryset.first()
+    return None
 
 
 def _role_code(user) -> str:
@@ -1622,15 +1632,16 @@ def record_feed(request):
 
     if request.method == "POST":
         batch_id = request.POST.get("batch", "").strip()
-        record_date_raw = request.POST.get("record_date", "").strip()
         feed_mixture_id = request.POST.get("feed_mixture", "").strip()
         quantity_raw = request.POST.get("quantity", "").strip()
-        time_given_raw = request.POST.get("time_given", "").strip()
         notes = request.POST.get("notes", "").strip()
         photos = request.FILES.getlist('photos')
 
         errors = []
-        selected_batch = batches.filter(pk=batch_id).first() if batch_id else None
+        current_time = localtime(now())
+        record_date = current_time.date()
+        parsed_time = current_time.time().replace(microsecond=0)
+        selected_batch = _selected_or_only(batches, batch_id)
         selected_mixture = None
 
         if not selected_batch:
@@ -1644,16 +1655,6 @@ def record_feed(request):
                 errors.append("Please select a mixture assigned to this house.")
         else:
             errors.append("Please select a supervisor feed mixture.")
-
-        try:
-            record_date = date.fromisoformat(record_date_raw)
-        except ValueError:
-            record_date = None
-            errors.append("Please provide a valid date.")
-
-        # enforce only today's records
-        if record_date and record_date != date.today():
-            errors.append("Feed records can only be created for today.")
 
         try:
             quantity_kg = Decimal(quantity_raw)
@@ -1677,13 +1678,6 @@ def record_feed(request):
                     f"This house has {remaining_kg} kg remaining from {selected_mixture.name}."
                 )
 
-        parsed_time = None
-        if time_given_raw:
-            try:
-                parsed_time = datetime.strptime(time_given_raw, "%H:%M").time()
-            except ValueError:
-                errors.append("Please provide a valid time.")
-
         if errors:
             for error in errors:
                 messages.error(request, error)
@@ -1704,7 +1698,7 @@ def record_feed(request):
     recent_feed_records = FeedRecord.objects.filter(
         recorded_by=request.user,
         batch__in=batches,
-        record_date=date.today(),
+        record_date=localdate(),
     ).select_related("batch__house", "feed_mixture")[:10]
 
     return render(
@@ -1712,7 +1706,7 @@ def record_feed(request):
         "record_feed.html",
         {
             "batches": batches,
-            "today": date.today(),
+            "today": localdate(),
             "recent_feed_records": recent_feed_records,
             "feed_mixtures": available_mixtures,
         },
@@ -1724,28 +1718,18 @@ def record_egg(request):
 
     if request.method == "POST":
         batch_id = request.POST.get("batch", "").strip()
-        collection_date_raw = request.POST.get("collection_date", "").strip()
+        collection_date = localdate()
         total_eggs_raw = request.POST.get("total_eggs", "").strip()
         broken_eggs_raw = request.POST.get("broken_eggs", "0").strip()
         egg_weight_values = request.POST.getlist("egg_weights")
         notes = request.POST.get("notes", "").strip()
 
         errors = []
-        selected_batch = batches.filter(pk=batch_id).first() if batch_id else None
+        selected_batch = _selected_or_only(batches, batch_id)
         average_egg_weight_g = None
 
         if not selected_batch:
             errors.append("Please select a valid batch from your assigned houses.")
-
-        try:
-            collection_date = date.fromisoformat(collection_date_raw)
-        except ValueError:
-            collection_date = None
-            errors.append("Please provide a valid collection date.")
-
-        # enforce only today's collections
-        if collection_date and collection_date != date.today():
-            errors.append("Egg collection records can only be created for today.")
 
         try:
             eggs_collected = int(total_eggs_raw)
@@ -1818,7 +1802,7 @@ def record_egg(request):
     recent_egg_records = egg_collection.objects.filter(
         collected_by=request.user,
         batch__in=batches,
-        collection_date=date.today(),
+        collection_date=localdate(),
     ).select_related("batch__house")[:10]
 
     return render(
@@ -1826,7 +1810,7 @@ def record_egg(request):
         "record_egg.html",
         {
             "batches": batches,
-            "today": date.today(),
+            "today": localdate(),
             "recent_egg_records": recent_egg_records,
         },
     )
@@ -2003,38 +1987,46 @@ def feed_mixtures(request):
 @worker_required
 def record_cleaning(request):
     batches = _get_worker_active_batches(request.user)
+    cleaning_tasks = [
+        ("cleaned", "house_cleaned", "General House cleaning", "cleaned_photos"),
+        ("raked", "house_raked", "House raked", "raked_photos"),
+        ("dusted", "house_dusted", "Dusted", "dusted_photos"),
+        ("nipples", "nipples_washed", "Washed the nipples", "nipples_photos"),
+        ("disinfected", "disinfection_done", "Disinfected", "disinfected_photos"),
+        ("water_changed", "water_changed", "Water changed", "water_changed_photos"),
+    ]
 
     if request.method == "POST":
         batch_id = request.POST.get("batch", "").strip()
-        record_date_raw = request.POST.get("record_date", "").strip()
-        house_cleaned = bool(request.POST.get("cleaned"))
-        disinfection_done = bool(request.POST.get("disinfected"))
-        water_changed = bool(request.POST.get("water_changed"))
+        record_date = localdate()
+        selected_tasks = {
+            model_field: bool(request.POST.get(post_name))
+            for post_name, model_field, _label, _photo_field in cleaning_tasks
+        }
         notes = request.POST.get("notes", "").strip()
-        photos = request.FILES.getlist('photos')
+        notes_audio = request.FILES.get("notes_audio")
 
         errors = []
-        selected_batch = batches.filter(pk=batch_id).first() if batch_id else None
+        task_photos = {}
+        selected_batch = _selected_or_only(batches, batch_id)
 
         if not selected_batch:
             errors.append("Please select a valid batch from your assigned houses.")
 
-        try:
-            record_date = date.fromisoformat(record_date_raw)
-        except ValueError:
-            record_date = None
-            errors.append("Please provide a valid date.")
-
-        # enforce only today's cleaning records
-        if record_date and record_date != date.today():
-            errors.append("Cleaning records can only be created for today.")
-
-        if not any([house_cleaned, disinfection_done, water_changed]):
+        if not any(selected_tasks.values()):
             errors.append("Please tick at least one cleaning task.")
 
-        # require at least one uploaded photo as proof
-        if not photos:
-            errors.append("Please upload at least one photo as proof of cleaning.")
+        for post_name, model_field, label, photo_field in cleaning_tasks:
+            photos = request.FILES.getlist(photo_field)
+            task_photos[post_name] = photos
+            if selected_tasks[model_field] and not photos:
+                errors.append(f"Please upload or take a photo for: {label}.")
+            for photo in photos:
+                if not getattr(photo, "content_type", "").startswith("image/"):
+                    errors.append(f"Please upload an image file for: {label}.")
+
+        if notes_audio and not getattr(notes_audio, "content_type", "").startswith("audio/"):
+            errors.append("Please upload a valid audio file for the voice note.")
 
         if errors:
             for error in errors:
@@ -2043,19 +2035,20 @@ def record_cleaning(request):
             cleaning = CleaningRecord.objects.create(
                 batch=selected_batch,
                 record_date=record_date,
-                house_cleaned=house_cleaned,
-                disinfection_done=disinfection_done,
-                water_changed=water_changed,
+                **selected_tasks,
                 notes=notes,
+                notes_audio=notes_audio,
                 recorded_by=request.user,
             )
 
-            for photo in photos:
-                CleaningPhoto.objects.create(
-                    cleaning_record=cleaning,
-                    image=photo,
-                    uploaded_by=request.user,
-                )
+            for post_name, _model_field, _label, _photo_field in cleaning_tasks:
+                for photo in task_photos[post_name]:
+                    CleaningPhoto.objects.create(
+                        cleaning_record=cleaning,
+                        task_key=post_name,
+                        image=photo,
+                        uploaded_by=request.user,
+                    )
 
             
             messages.success(request, "Cleaning routine record saved successfully.")
@@ -2064,7 +2057,7 @@ def record_cleaning(request):
     recent_cleaning_records = CleaningRecord.objects.filter(
         recorded_by=request.user,
         batch__in=batches,
-        record_date=date.today(),
+        record_date=localdate(),
     ).select_related("batch__house")[:10]
     # show only the most recent 7 cleaning records
     recent_cleaning_records = recent_cleaning_records[:7]
@@ -2074,8 +2067,9 @@ def record_cleaning(request):
         "record_cleaning.html",
         {
             "batches": batches,
-            "today": date.today(),
+            "today": localdate(),
             "recent_cleaning_records": recent_cleaning_records,
+            "cleaning_tasks": cleaning_tasks,
         },
     )
 
@@ -2125,6 +2119,14 @@ def workersdash(request):
         collection_date=today,
         batch__house__in=assigned_houses,
     ).select_related("batch__house").order_by("-collected_at")[:5]
+    welfare_requests = WelfareRequest.objects.filter(worker=user)
+    welfare_pending_count = welfare_requests.filter(
+        status__in=[
+            WelfareRequest.Status.SUBMITTED,
+            WelfareRequest.Status.SUPERVISOR_APPROVED,
+        ]
+    ).count()
+    recent_salary_records = SalaryPayment.objects.filter(employee=user).order_by("-period_month", "-recorded_at")[:3]
 
     context = {
         "house": house,
@@ -2134,6 +2136,9 @@ def workersdash(request):
         "today_eggs": today_eggs,
         "house_stats": house_stats,
         "recent_activity": recent_activity,
+        "welfare_pending_count": welfare_pending_count,
+        "recent_welfare_requests": welfare_requests[:3],
+        "recent_salary_records": recent_salary_records,
         "today": today,
     }
     return render(request, "workersdash.html", context)
@@ -2360,7 +2365,7 @@ def supapproval(request):
         ),
         request.user,
         "batch__house",
-    ).select_related("batch__house", "recorded_by", "sickness_report").order_by("-created_at")
+    ).select_related("batch__house", "recorded_by", "sickness_report").prefetch_related("photos").order_by("-created_at")
 
     pending_mortality = _scope_to_supervisor_houses(
         MortalityRecord.objects.filter(
@@ -2552,9 +2557,18 @@ def add_batch(request):
             if batch.amount_paid and batch.amount_paid > 0:
                 batch_expense_category, _ = ExpenseCategory.objects.get_or_create(
                     code="BATCH_PURCHASE",
-                    defaults={"name": "Bird Batch Purchase", "is_active": True},
+                    defaults={
+                        "name": "Bird Batch Purchase",
+                        "expense_type": ExpenseCategory.ExpenseType.COST_OF_REVENUE,
+                        "is_active": True,
+                    },
                 )
-                ExpenseTransaction.objects.create(
+                if batch_expense_category.expense_type != ExpenseCategory.ExpenseType.COST_OF_REVENUE:
+                    batch_expense_category.expense_type = ExpenseCategory.ExpenseType.COST_OF_REVENUE
+                    batch_expense_category.is_active = True
+                    batch_expense_category.save(update_fields=["expense_type", "is_active"])
+
+                expense = ExpenseTransaction.objects.create(
                     expense_date=batch.date_stocked,
                     category=batch_expense_category,
                     description=(
@@ -2568,6 +2582,12 @@ def add_batch(request):
                     period_month=batch.date_stocked.month,
                     status=ExpenseTransaction.Status.DRAFT,
                     created_by=request.user,
+                )
+                AccountingCode.create_or_get_accounting_code(
+                    prefix="CRO",
+                    account_type="COST_OF_REVENUE",
+                    account_name="expense_of_bird_batch_purchase",
+                    content_object=expense,
                 )
 
             messages.success(request, f"Batch {batch.batch_code} created successfully!")

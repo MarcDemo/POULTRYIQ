@@ -25,6 +25,15 @@ from .models import SickbayCleaningRecord, SicknessReport, TreatmentPlanItem
 
 User = get_user_model()
 
+
+def _selected_or_only(queryset, pk):
+    if pk:
+        return queryset.filter(pk=pk).first()
+    if queryset.count() == 1:
+        return queryset.first()
+    return None
+
+
 # Create your views here.
 @worker_required
 def mortality(request):
@@ -36,32 +45,21 @@ def mortality(request):
 
     if request.method == "POST":
         batch_id = request.POST.get("batch", "").strip()
-        record_date_raw = request.POST.get("record_date", "").strip()
+        record_date = timezone.localdate()
         count_raw = request.POST.get("count", "").strip()
         cause_id = request.POST.get("cause", "").strip()
         notes = request.POST.get("notes", "").strip()
         photos = request.FILES.getlist("photos")
 
         errors = []
-        selected_batch = worker_batches.filter(pk=batch_id).first() if batch_id else None
+        selected_batch = _selected_or_only(worker_batches, batch_id)
 
         if not selected_batch:
             errors.append("Please select a valid batch from your assigned houses.")
 
-        try:
-            record_date = date.fromisoformat(record_date_raw)
-        except ValueError:
-            record_date = None
-            errors.append("Please provide a valid date.")
-
         #proof of death photos should be mandatory all the time
         if not photos:
             errors.append("Please upload at least one photo as proof of death.")
-
-
-        # enforce only today's mortality records
-        if record_date and record_date != date.today():
-            errors.append("Mortality records can only be created for today.")
 
         try:
             number_dead = int(count_raw)
@@ -95,7 +93,7 @@ def mortality(request):
     recent_records = MortalityRecord.objects.filter(
         reported_by=request.user,
         batch__in=worker_batches,
-        record_date=date.today(),
+        record_date=timezone.localdate(),
     ).select_related("batch__house", "cause")[:10]
 
     return render(
@@ -104,7 +102,7 @@ def mortality(request):
         {
             "batches": worker_batches,
             "causes": causes,
-            "today": date.today(),
+            "today": timezone.localdate(),
             "recent_records": recent_records,
         },
     )
@@ -378,7 +376,7 @@ def treatment(request):
         "treatment.html",
         {
             "base_template": "supbase.html" if role_code == "SUPERVISOR" else "base.html",
-            "today": date.today(),
+            "today": timezone.localdate(),
             "open_cases": open_cases.order_by("-date", "-created_at")[:20],
             "transferable_cases": transferable_cases[:20],
             "transferable_cases_count": transferable_cases.count(),
@@ -617,10 +615,16 @@ def report_sickness(request):
         notes = request.POST.get("notes", "").strip()
         bird_identifier = request.POST.get("bird_identifier", "").strip()
         report_date_raw = request.POST.get("date", "").strip()
+        report_date = timezone.localdate()
+        if report_date_raw:
+            try:
+                report_date = date.fromisoformat(report_date_raw)
+            except ValueError:
+                report_date = timezone.localdate()
        
 
         errors = []
-        selected_house = houses.filter(pk=house_id).first() if house_id else None
+        selected_house = _selected_or_only(houses, house_id)
         selected_batch = None
 
         if not selected_house:
@@ -635,12 +639,6 @@ def report_sickness(request):
                 .order_by("-created_at")
                 .first()
             )
-
-        try:
-            report_date = date.fromisoformat(report_date_raw)
-        except ValueError:
-            report_date = None
-            errors.append("Please provide a valid sickness report date.")
 
         try:
             affected = int(affected_raw)
@@ -705,7 +703,7 @@ def record_sickbay_cleaning(request):
 
     if request.method == "POST":
         report_id = request.POST.get("sickness_report", "").strip()
-        record_date_raw = request.POST.get("record_date", "").strip()
+        record_date = timezone.localdate()
         sickbay_cleaned = bool(request.POST.get("sickbay_cleaned"))
         disinfection_done = bool(request.POST.get("disinfected"))
         equipment_cleaned = bool(request.POST.get("equipment_cleaned"))
@@ -713,20 +711,10 @@ def record_sickbay_cleaning(request):
         notes = request.POST.get("notes", "").strip()
 
         errors = []
-        selected_report = sickbay_reports.filter(pk=report_id).first() if report_id else None
+        selected_report = _selected_or_only(sickbay_reports, report_id)
 
         if not selected_report:
             errors.append("Please select a valid sickbay case.")
-
-        try:
-            record_date = date.fromisoformat(record_date_raw)
-        except ValueError:
-            record_date = None
-            errors.append("Please provide a valid sickbay cleaning date.")
-
-        # enforce only today's sickbay cleaning records
-        if record_date and record_date != date.today():
-            errors.append("Sickbay cleaning records can only be created for today.")
 
         if not any([sickbay_cleaned, disinfection_done, equipment_cleaned, water_changed]):
             errors.append("Please tick at least one sickbay cleaning task.")
@@ -752,7 +740,7 @@ def record_sickbay_cleaning(request):
         SickbayCleaningRecord.objects.filter(
             recorded_by=request.user,
             sickness_report__house_ref__in=assigned_houses,
-            record_date=date.today(),
+            record_date=timezone.localdate(),
         )
         .select_related("sickness_report__house_ref")
         .order_by("-record_date", "-created_at")[:7]
@@ -764,7 +752,7 @@ def record_sickbay_cleaning(request):
         {
             "sickbay_reports": sickbay_reports,
             "recent_cleaning_records": recent_cleaning_records,
-            "today": date.today(),
+            "today": timezone.localdate(),
         },
     )
 
@@ -881,7 +869,7 @@ def sick_record_egg(request):
     if request.method == "POST":
         batch_id = request.POST.get("batch", "").strip()
         sickness_report_id = request.POST.get("sickness_report", "").strip()
-        collection_date_raw = request.POST.get("collection_date", "").strip()
+        collection_date = timezone.localdate()
         total_eggs_raw = request.POST.get("total_eggs", "").strip()
         broken_eggs_raw = request.POST.get("broken_eggs", "0").strip()
         egg_weight_values = request.POST.getlist("egg_weights")
@@ -889,23 +877,13 @@ def sick_record_egg(request):
 
         errors = []
         average_egg_weight_g = None
-        selected_batch = batches.filter(pk=batch_id).first() if batch_id else None
-        selected_report = assigned_sick_reports.filter(pk=sickness_report_id).first() if sickness_report_id else None
+        selected_batch = _selected_or_only(batches, batch_id)
+        selected_report = _selected_or_only(assigned_sick_reports, sickness_report_id)
         if selected_report and selected_report.batch:
             selected_batch = selected_report.batch
 
         if not selected_batch:
             errors.append("Please select a valid batch from your assigned houses.")
-
-        try:
-            collection_date = date.fromisoformat(collection_date_raw)
-        except ValueError:
-            collection_date = None
-            errors.append("Please provide a valid collection date.")
-
-        # only allow today's entries
-        if collection_date and collection_date != date.today():
-            errors.append("Egg collection records for sickbay must be for today.")
 
         try:
             eggs_collected = int(total_eggs_raw)
@@ -982,10 +960,10 @@ def sick_record_egg(request):
     from django.db.models import Q
     recent_egg_records = egg_collection.objects.filter(
         collected_by=request.user,
-        collection_date=date.today(),
+        collection_date=timezone.localdate(),
     ).filter(Q(batch__in=batches) | Q(sickness_report__in=assigned_sick_reports)).select_related("batch__house", "sickness_report")[:10]
 
-    return render(request, "record_egg_sickbay.html", {"batches": batches, "today": date.today(), "recent_egg_records": recent_egg_records, "sick_reports": assigned_sick_reports})
+    return render(request, "record_egg_sickbay.html", {"batches": batches, "today": timezone.localdate(), "recent_egg_records": recent_egg_records, "sick_reports": assigned_sick_reports})
 
 
 @worker_required
@@ -1003,29 +981,21 @@ def sick_record_feed(request):
     if request.method == "POST":
         batch_id = request.POST.get("batch", "").strip()
         sickness_report_id = request.POST.get("sickness_report", "").strip()
-        record_date_raw = request.POST.get("record_date", "").strip()
+        current_time = timezone.localtime()
+        record_date = current_time.date()
         feed_type = request.POST.get("feed_type", FeedRecord.FeedType.OTHER).strip()
         quantity_raw = request.POST.get("quantity", "").strip()
-        time_given_raw = request.POST.get("time_given", "").strip()
         notes = request.POST.get("notes", "").strip()
 
         errors = []
-        selected_batch = batches.filter(pk=batch_id).first() if batch_id else None
-        selected_report = assigned_sick_reports.filter(pk=sickness_report_id).first() if sickness_report_id else None
+        parsed_time = current_time.time().replace(microsecond=0)
+        selected_batch = _selected_or_only(batches, batch_id)
+        selected_report = _selected_or_only(assigned_sick_reports, sickness_report_id)
         if selected_report and selected_report.batch:
             selected_batch = selected_report.batch
 
         if not selected_batch:
             errors.append("Please select a valid batch from your assigned houses.")
-
-        try:
-            record_date = date.fromisoformat(record_date_raw)
-        except ValueError:
-            record_date = None
-            errors.append("Please provide a valid date.")
-
-        if record_date and record_date != date.today():
-            errors.append("Feed records for sickbay must be for today.")
 
         try:
             quantity_kg = Decimal(quantity_raw)
@@ -1037,13 +1007,6 @@ def sick_record_feed(request):
 
         if feed_type not in dict(FeedRecord.FeedType.choices):
             errors.append("Please select a valid feed type.")
-
-        parsed_time = None
-        if time_given_raw:
-            try:
-                parsed_time = datetime.strptime(time_given_raw, "%H:%M").time()
-            except ValueError:
-                errors.append("Please provide a valid time.")
 
         if not selected_batch and not selected_report:
             errors.append("Please select a valid batch or sickbay case from your assignment.")
@@ -1068,10 +1031,10 @@ def sick_record_feed(request):
     from django.db.models import Q
     recent_feed_records = FeedRecord.objects.filter(
         recorded_by=request.user,
-        record_date=date.today(),
+        record_date=timezone.localdate(),
     ).filter(Q(batch__in=batches) | Q(sickness_report__in=assigned_sick_reports)).select_related("batch__house")[:10]
 
-    return render(request, "record_feed_sickbay.html", {"batches": batches, "today": date.today(), "recent_feed_records": recent_feed_records, "feed_types": FeedRecord.FeedType.choices, "sick_reports": assigned_sick_reports})
+    return render(request, "record_feed_sickbay.html", {"batches": batches, "today": timezone.localdate(), "recent_feed_records": recent_feed_records, "feed_types": FeedRecord.FeedType.choices, "sick_reports": assigned_sick_reports})
 
 
 @worker_required
@@ -1089,29 +1052,20 @@ def sick_record_cleaning(request):
     if request.method == "POST":
         batch_id = request.POST.get("batch", "").strip()
         sickness_report_id = request.POST.get("sickness_report", "").strip()
-        record_date_raw = request.POST.get("record_date", "").strip()
+        record_date = timezone.localdate()
         house_cleaned = bool(request.POST.get("cleaned"))
         disinfection_done = bool(request.POST.get("disinfected"))
         water_changed = bool(request.POST.get("water_changed"))
         notes = request.POST.get("notes", "").strip()
 
         errors = []
-        selected_batch = batches.filter(pk=batch_id).first() if batch_id else None
-        selected_report = assigned_sick_reports.filter(pk=sickness_report_id).first() if sickness_report_id else None
+        selected_batch = _selected_or_only(batches, batch_id)
+        selected_report = _selected_or_only(assigned_sick_reports, sickness_report_id)
         if selected_report and selected_report.batch:
             selected_batch = selected_report.batch
 
         if not selected_batch:
             errors.append("Please select a valid batch from your assigned houses.")
-
-        try:
-            record_date = date.fromisoformat(record_date_raw)
-        except ValueError:
-            record_date = None
-            errors.append("Please provide a valid date.")
-
-        if record_date and record_date != date.today():
-            errors.append("Cleaning records for sickbay must be for today.")
 
         if not any([house_cleaned, disinfection_done, water_changed]):
             errors.append("Please tick at least one cleaning task.")
@@ -1139,10 +1093,10 @@ def sick_record_cleaning(request):
     from django.db.models import Q
     recent_cleaning_records = CleaningRecord.objects.filter(
         recorded_by=request.user,
-        record_date=date.today(),
+        record_date=timezone.localdate(),
     ).filter(Q(batch__in=batches) | Q(sickness_report__in=assigned_sick_reports)).select_related("batch__house")[:7]
 
-    return render(request, "record_cleaning_sickbay.html", {"batches": batches, "today": date.today(), "recent_cleaning_records": recent_cleaning_records, "sick_reports": assigned_sick_reports})
+    return render(request, "record_cleaning_sickbay.html", {"batches": batches, "today": timezone.localdate(), "recent_cleaning_records": recent_cleaning_records, "sick_reports": assigned_sick_reports})
 
 
 @worker_required
@@ -1155,25 +1109,16 @@ def sick_mortality(request):
 
     if request.method == "POST":
         batch_id = request.POST.get("batch", "").strip()
-        record_date_raw = request.POST.get("record_date", "").strip()
+        record_date = timezone.localdate()
         count_raw = request.POST.get("count", "").strip()
         cause_id = request.POST.get("cause", "").strip()
         notes = request.POST.get("notes", "").strip()
 
         errors = []
-        selected_batch = batches.filter(pk=batch_id).first() if batch_id else None
+        selected_batch = _selected_or_only(batches, batch_id)
 
         if not selected_batch:
             errors.append("Please select a valid batch from your assigned houses.")
-
-        try:
-            record_date = date.fromisoformat(record_date_raw)
-        except ValueError:
-            record_date = None
-            errors.append("Please provide a valid date.")
-
-        if record_date and record_date != date.today():
-            errors.append("Mortality records for sickbay must be for today.")
 
         try:
             number_dead = int(count_raw)
@@ -1207,7 +1152,7 @@ def sick_mortality(request):
     recent_records = MortalityRecord.objects.filter(
         reported_by=request.user,
         batch__in=batches,
-        record_date=date.today(),
+        record_date=timezone.localdate(),
     ).select_related("batch__house", "cause")[:10]
 
-    return render(request, "mortality_sickbay.html", {"batches": batches, "causes": causes, "today": date.today(), "recent_records": recent_records})
+    return render(request, "mortality_sickbay.html", {"batches": batches, "causes": causes, "today": timezone.localdate(), "recent_records": recent_records})

@@ -4,6 +4,7 @@
 {% block title %}Reports Center - PoultryIQ{% endblock %}
 
 {% block content %}
+{% comment %}
 <style>
     .reports-header {
         display: flex;
@@ -521,6 +522,8 @@
     pie("staffChart", data.staff);
 })();
 </script>
+{% endcomment %}
+<style>
     .reports-center {
         color: #1f2933;
     }

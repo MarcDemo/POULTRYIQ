@@ -1,0 +1,358 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container-fluid">
+    <div class="page-header-row mb-4">
+        <h2 class="mb-1">
+            <i class="bi bi-receipt me-2"></i>Financial Transactions
+        </h2>
+        <small class="text-muted">Record purchases, expenses, or manage salaries</small>
+    </div>
+
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        {% endfor %}
+    {% endif %}
+
+    <!-- Tab Navigation -->
+    <div class="mb-4">
+        <div class="btn-group w-100" role="tablist">
+            <button class="btn btn-outline-primary {% if active_tab != 'purchases' and active_tab != 'salaries' %}active{% endif %}" id="expenses-tab" data-bs-toggle="tab" data-bs-target="#expenses-panel" type="button">
+                <i class="bi bi-bag me-2"></i>Expenses
+            </button>
+            <button class="btn btn-outline-primary {% if active_tab == 'purchases' %}active{% endif %}" id="purchases-tab" data-bs-toggle="tab" data-bs-target="#purchases-panel" type="button">
+                <i class="bi bi-cart me-2"></i>Purchases
+            </button>
+            <button class="btn btn-outline-primary {% if active_tab == 'salaries' %}active{% endif %}" id="salaries-tab" data-bs-toggle="tab" data-bs-target="#salaries-panel" type="button">
+                <i class="bi bi-person-fill me-2"></i>Salaries
+            </button>
+        </div>
+    </div>
+
+    <div class="tab-content">
+        <!-- EXPENSES TAB -->
+        <div class="tab-pane fade {% if active_tab != 'purchases' and active_tab != 'salaries' %}show active{% endif %}" id="expenses-panel">
+            <div class="row">
+                <div class="col-lg-8">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0">Record Expense</h5>
+                        </div>
+                        <div class="card-body">
+                            <form method="POST">
+                                {% csrf_token %}
+                                <input type="hidden" name="type" value="expense">
+                                
+                                <div class="row mb-3">
+                                    <div class="col-md-6">
+                                        <label class="form-label">Date <span class="text-danger">*</span></label>
+                                        <input type="date" name="date" class="form-control" required>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">Category <span class="text-danger">*</span></label>
+                                        <select name="category" class="form-select" id="expense-category" required>
+                                            <option value="">-- Select Category --</option>
+                                            {% for cat in expense_categories %}
+                                                <option value="{{ cat.id }}">{{ cat.name }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label class="form-label">Description <span class="text-danger">*</span></label>
+                                    <textarea name="description" class="form-control" rows="3" required></textarea>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label class="form-label">Amount <span class="text-danger">*</span></label>
+                                    <input type="number" name="amount" step="0.01" class="form-control" required>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label class="form-label">Payment Method</label>
+                                    <select name="payment_method" class="form-select">
+                                        <option value="Cash">Cash</option>
+                                        <option value="Mobile Money">Mobile Money</option>
+                                        <option value="Bank">Bank</option>
+                                        <option value="Check">Check</option>
+                                    </select>
+                                </div>
+                                
+                                <button type="submit" class="btn btn-primary">Record Expense</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-lg-4">
+                    <div class="card mb-3">
+                        <div class="card-body">
+                            <h6 class="card-title">Today's Expenses</h6>
+                            <h3 class="text-danger">{{ today_total|floatformat:2 }}</h3>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="card-body">
+                            <h6 class="card-title">This Month Total</h6>
+                            <h3>{{ this_month_total|floatformat:2 }}</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- PURCHASES TAB -->
+        <div class="tab-pane fade {% if active_tab == 'purchases' %}show active{% endif %}" id="purchases-panel">
+            <div class="row">
+                <div class="col-lg-8">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0">Record Purchase</h5>
+                        </div>
+                        <div class="card-body">
+                            <form method="POST">
+                                {% csrf_token %}
+                                <input type="hidden" name="type" value="purchase">
+                                
+                                <div class="row mb-3">
+                                    <div class="col-md-6">
+                                        <label class="form-label">Date <span class="text-danger">*</span></label>
+                                        <input type="date" name="date" class="form-control" required>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">Supplier <span class="text-danger">*</span></label>
+                                        <select name="supplier" class="form-select" id="supplier-select" required>
+                                            <option value="">-- Select Supplier --</option>
+                                            {% for supplier in suppliers %}
+                                                <option value="{{ supplier.id }}">{{ supplier.name }}</option>
+                                            {% endfor %}
+                                        </select>
+                                        {% if not suppliers %}
+                                            <small class="text-danger">Add an active supplier before recording purchases.</small>
+                                        {% endif %}
+                                    </div>
+                                </div>
+
+                                <div class="row mb-3">
+                                    <div class="col-md-12">
+                                        <label class="form-label">Category <span class="text-danger">*</span></label>
+                                        <select name="inventory_category" class="form-select" id="purchase-category" required disabled>
+                                            <option value="">-- Select Category --</option>
+                                            {% for cat in inventory_categories %}
+                                                <option value="{{ cat.code }}">{{ cat.name }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label class="form-label">Item <span class="text-danger">*</span></label>
+                                    <select name="item" class="form-select" id="purchase-item" required disabled>
+                                        <option value="">-- Select Item --</option>
+                                    </select>
+                                </div>
+
+                                <div class="row mb-3">
+                                    <div class="col-md-4">
+                                        <label class="form-label">Quantity <span class="text-danger">*</span></label>
+                                        <input type="number" name="quantity" id="purchase-quantity" step="0.001" min="0.001" class="form-control" required>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label">Unit Price <span class="text-danger">*</span></label>
+                                        <input type="number" name="unit_price" id="purchase-unit-price" step="0.01" min="0" class="form-control" required>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label">Total Amount</label>
+                                        <input type="number" name="amount" id="purchase-total" step="0.01" class="form-control" readonly value="0.00">
+                                    </div>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label class="form-label">Description <span class="text-danger">*</span></label>
+                                    <textarea name="description" class="form-control" rows="3" placeholder="Purchase details, invoice number, etc." required></textarea>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label class="form-label">Payment Method</label>
+                                    <select name="payment_method" class="form-select">
+                                        <option value="Cash">Cash</option>
+                                        <option value="Mobile Money">Mobile Money</option>
+                                        <option value="Bank">Bank</option>
+                                        <option value="Check">Check</option>
+                                    </select>
+                                </div>
+                                
+                                <button type="submit" class="btn btn-primary" {% if not suppliers %}disabled{% endif %}>Record Purchase</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-lg-4">
+                    <div class="alert alert-info">
+                        <h6>
+                            <i class="bi bi-info-circle me-2"></i>About Purchases
+                        </h6>
+                        <p class="mb-0">
+                            Record all supplier purchases here. Purchases are categorized as Cost of Revenue and tracked with supplier information for procurement analysis.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SALARIES TAB -->
+        <div class="tab-pane fade {% if active_tab == 'salaries' %}show active{% endif %}" id="salaries-panel">
+            <div class="row">
+                <div class="col-lg-8">
+                    <div class="card">
+                        <div class="card-body text-center py-5">
+                            <i class="bi bi-info-circle" style="font-size: 3rem; color: #0dcaf0;"></i>
+                            <h5 class="mt-3">Manage Salaries Separately</h5>
+                            <p class="text-muted">Salaries are managed in the Payroll module to ensure proper tracking and compliance.</p>
+                            <a href="{% url 'salaries' %}" class="btn btn-info btn-lg">
+                                <i class="bi bi-arrow-right me-2"></i>Go to Payroll
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-lg-4">
+                    <div class="card">
+                        <div class="card-header bg-info">
+                            <h5 class="mb-0 text-white">Why Separate?</h5>
+                        </div>
+                        <div class="card-body">
+                            <ul class="list-unstyled">
+                                <li class="mb-2">
+                                    <i class="bi bi-check-circle text-success me-2"></i>
+                                    <strong>Compliance:</strong> Proper wage and tax tracking
+                                </li>
+                                <li class="mb-2">
+                                    <i class="bi bi-check-circle text-success me-2"></i>
+                                    <strong>Accuracy:</strong> Employee-specific records
+                                </li>
+                                <li class="mb-2">
+                                    <i class="bi bi-check-circle text-success me-2"></i>
+                                    <strong>Control:</strong> Deductions and bonuses management
+                                </li>
+                                <li>
+                                    <i class="bi bi-check-circle text-success me-2"></i>
+                                    <strong>Reporting:</strong> Dedicated payroll reports
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .btn-group .btn {
+        border-radius: 0.375rem 0 0 0.375rem;
+        border-right: 1px solid #dee2e6;
+    }
+    
+    .btn-group .btn:not(:first-child) {
+        border-radius: 0;
+    }
+    
+    .btn-group .btn:last-child {
+        border-radius: 0 0.375rem 0.375rem 0;
+    }
+    
+    .btn-group .btn.active {
+        background-color: #0d6efd;
+        color: white;
+        border-color: #0d6efd;
+    }
+</style>
+
+{{ supplier_category_map|json_script:"supplier-category-map-data" }}
+{{ items_by_category|json_script:"items-by-category-data" }}
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const expenseTab = document.getElementById('expenses-tab');
+        const purchasesTab = document.getElementById('purchases-tab');
+        const salariesTab = document.getElementById('salaries-tab');
+        const supplierSelect = document.getElementById('supplier-select');
+        const categorySelect = document.getElementById('purchase-category');
+        const itemSelect = document.getElementById('purchase-item');
+        const quantityInput = document.getElementById('purchase-quantity');
+        const unitPriceInput = document.getElementById('purchase-unit-price');
+        const totalInput = document.getElementById('purchase-total');
+        const supplierCategoryMap = JSON.parse(document.getElementById('supplier-category-map-data').textContent);
+        const itemsByCategory = JSON.parse(document.getElementById('items-by-category-data').textContent);
+        const allCategoryOptions = Array.from(categorySelect.options).map(option => ({
+            value: option.value,
+            text: option.textContent
+        }));
+        
+        [expenseTab, purchasesTab, salariesTab].forEach(tab => {
+            tab.addEventListener('shown.bs.tab', function(e) {
+                this.classList.add('active');
+            });
+        });
+
+        function resetSelect(select, placeholder, disabled = true) {
+            select.innerHTML = '';
+            const option = document.createElement('option');
+            option.value = '';
+            option.textContent = placeholder;
+            select.appendChild(option);
+            select.disabled = disabled;
+        }
+
+        function updatePurchaseCategories() {
+            const supplierId = supplierSelect.value;
+            const allowedCategoryIds = supplierCategoryMap[supplierId] || [];
+            resetSelect(categorySelect, '-- Select Category --', !supplierId || allowedCategoryIds.length === 0);
+            resetSelect(itemSelect, '-- Select Item --');
+
+            if (!supplierId) return;
+
+            allCategoryOptions
+                .filter(option => option.value && allowedCategoryIds.includes(option.value))
+                .forEach(optionData => {
+                    const option = document.createElement('option');
+                    option.value = optionData.value;
+                    option.textContent = optionData.text;
+                    categorySelect.appendChild(option);
+                });
+        }
+
+        function updatePurchaseItems() {
+            const categoryId = categorySelect.value;
+            const items = itemsByCategory[categoryId] || [];
+            resetSelect(itemSelect, '-- Select Item --', !categoryId || items.length === 0);
+
+            items.forEach(item => {
+                const option = document.createElement('option');
+                option.value = item.id;
+                option.textContent = `${item.name} (${item.unit})`;
+                itemSelect.appendChild(option);
+            });
+        }
+
+        function updatePurchaseTotal() {
+            const quantity = parseFloat(quantityInput.value || '0') || 0;
+            const unitPrice = parseFloat(unitPriceInput.value || '0') || 0;
+            totalInput.value = (quantity * unitPrice).toFixed(2);
+        }
+
+        supplierSelect.addEventListener('change', updatePurchaseCategories);
+        categorySelect.addEventListener('change', updatePurchaseItems);
+        quantityInput.addEventListener('input', updatePurchaseTotal);
+        unitPriceInput.addEventListener('input', updatePurchaseTotal);
+        updatePurchaseCategories();
+        updatePurchaseTotal();
+    });
+</script>
+{% endblock %}

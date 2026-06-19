@@ -13,8 +13,20 @@ class ExpenseCategory(models.Model):
     Shan these are Configurable categories for the unified expense ledger.
     Like: FEED, VET, LABOUR, UTILITIES, MAINTENANCE, BEDDING, TRANSPORT, OTHER
     """
+    class ExpenseType(models.TextChoices):
+        COST_OF_REVENUE = "COST_OF_REVENUE", "Cost of Revenue"
+        DEPRECIATION = "DEPRECIATION", "Depreciation"
+        MONTHLY_EXPENSES = "MONTHLY_EXPENSES", "Monthly Expenses"
+
     code = models.CharField(max_length=30, unique=True)  # e.g. FEED
     name = models.CharField(max_length=100)             # e.g. Feed & Nutrition
+    expense_type = models.CharField(
+        max_length=20,
+        choices=ExpenseType.choices,
+        default=ExpenseType.MONTHLY_EXPENSES,
+        db_index=True,
+        help_text="Categorize expense: Cost of Revenue, Depreciation, or Monthly Expenses"
+    )
     is_active = models.BooleanField(default=True)
 
     class Meta:

@@ -4,9 +4,13 @@ from datetime import date
 from decimal import Decimal
 
 from accounts.models import Role, User
-from finance.models import ExpenseAllocation, ExpenseCategory, ExpenseTransaction
+from accounting.models import AccountingCode
+from accounting.services import get_pl_data
+from expenses.models import ExpenseAllocation, ExpenseCategory, ExpenseTransaction
+from inventory.models import Supplier
 from sales.models import Customer, CustomerPayment, ReceivableLedger, SaleInvoice, SaleItem
 
+from .forms import PoultryBatchForm
 from .models import ApprovalStatus, FeedRecord, PoultryBatch, PoultryHouse, egg_collection
 from .views import _build_investor_builder_data
 
@@ -66,6 +70,68 @@ class PoultryAdminTests(TestCase):
         batch = PoultryBatch.objects.get(batch_code="BATCH-001")
         self.assertEqual(batch.house, house)
         self.assertEqual(batch.created_by, self.admin_user)
+
+
+class PoultryBatchFormTests(TestCase):
+    def test_supplier_choices_only_include_poultry_suppliers(self):
+        Supplier.objects.create(name="Kafika Feeds", product="Maize bran, Concentrate", is_active=True)
+        Supplier.objects.create(name="Chick Supplier", product="Day-old chicks, Point-of-lay birds", is_active=True)
+
+        form = PoultryBatchForm()
+        supplier_values = {value for value, label in form.fields["supplier_name"].choices}
+
+        self.assertIn("Chick Supplier", supplier_values)
+        self.assertNotIn("Kafika Feeds", supplier_values)
+
+
+class AddBatchAccountingTests(TestCase):
+    def setUp(self):
+        role = Role.objects.create(code=Role.RoleCode.MANAGER, name="Manager")
+        self.user = User.objects.create_user(
+            username="batch-manager",
+            password="pass1234",
+            role=role,
+        )
+        self.client.force_login(self.user)
+        self.house = PoultryHouse.objects.create(
+            house_code="BATCH-HSE-01",
+            name="Batch House",
+            capacity=1000,
+        )
+        Supplier.objects.create(
+            name="Chick Supplier",
+            product="Day-old chicks",
+            is_active=True,
+        )
+
+    def test_paid_batch_posts_cost_of_revenue_accounting_code(self):
+        response = self.client.post(
+            reverse("add_batch"),
+            {
+                "house": str(self.house.pk),
+                "breed": "Layers",
+                "supplier_name": "Chick Supplier",
+                "initial_quantity": "500",
+                "amount_paid": "1250000",
+                "date_stocked": "2026-06-19",
+                "initial_age_days": "1",
+                "notes": "New flock",
+            },
+        )
+
+        self.assertRedirects(response, reverse("birds"))
+        expense = ExpenseTransaction.objects.get(description__icontains="Bird batch purchase")
+        self.assertEqual(expense.total_amount, Decimal("1250000.00"))
+        self.assertEqual(expense.category.expense_type, ExpenseCategory.ExpenseType.COST_OF_REVENUE)
+        self.assertTrue(
+            AccountingCode.objects.filter(
+                account_type="COST_OF_REVENUE",
+                prefix="CRO",
+                content_type__model="expensetransaction",
+                object_id=expense.pk,
+            ).exists()
+        )
+        self.assertEqual(get_pl_data()["totals"]["cost_of_revenue"], Decimal("1250000.00"))
 
 
 class SupervisorHouseScopeTests(TestCase):
