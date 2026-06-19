@@ -29,44 +29,82 @@
                             <select id="batch" name="batch" class="form-select" required>
                                 <option value="">-- Choose house --</option>
                                 {% for batch in batches %}
-                                <option value="{{ batch.pk }}">{{ batch.house.name|default:batch.house.house_code }} - {{ batch.batch_code }}</option>
+                                <option value="{{ batch.pk }}" {% if batches|length == 1 %}selected{% endif %}>{{ batch.house.name|default:batch.house.house_code }} - {{ batch.batch_code }}</option>
                                 {% endfor %}
                             </select>
-                        </div>
-
-                        <div class="mb-3">
-                            <label for="record_date" class="form-label">
-                                <i class="bi bi-calendar me-1"></i>Today
-                                <span class="luganda">Leero</span>
-                            </label>
-                            <input type="date" id="record_date" name="record_date" class="form-control" value="{{ today|date:'Y-m-d' }}" required>
                         </div>
 
                         <div class="mb-4">
                             <h6 class="mb-3">Tick what is done <span class="luganda">Teekako akabonero ku bikolebwa</span></h6>
 
-                            <div class="form-check mb-3">
+                            <div class="cleaning-task mb-3">
+                                <div class="form-check">
                                 <input class="form-check-input" type="checkbox" id="cleaned" name="cleaned">
                                 <label class="form-check-label" for="cleaned">
-                                    <i class="bi bi-check-circle me-2"></i>House cleaned
-                                    <span class="luganda">Ennyumba eyonjedwa</span>
+                                    <i class="bi bi-check-circle me-2"></i> General House cleaning
+                                    <span class="luganda">Ennyumba eyonjedwa yonna/bulikimu</span>
                                 </label>
+                                </div>
+                                <input name="cleaned_photos" class="form-control mt-2 task-photo" type="file" accept="image/*" capture="environment" multiple data-task-checkbox="cleaned" disabled>
+                                <div class="form-text">Required when this task is ticked.</div>
                             </div>
+                            <div class="cleaning-task mb-3">
+                                <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="raked" name="raked">
+                                <label class="form-check-label" for="raked">
+                                    <i class="bi bi-check-circle me-2"></i>House Raked
+                                    <span class="luganda">okujjamu kalimbwe</span>
+                                </label>
+                                </div>
+                                <input name="raked_photos" class="form-control mt-2 task-photo" type="file" accept="image/*" capture="environment" multiple data-task-checkbox="raked" disabled>
+                                <div class="form-text">Required when this task is ticked.</div>
+                            </div>
+                            <div class="cleaning-task mb-3">
+                                <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="dusted" name="dusted">
+                                <label class="form-check-label" for="dusted">
+                                    <i class="bi bi-check-circle me-2"></i>Dusted
+                                    <span class="luganda">okukubako enfuufu</span>
+                                </label>
+                                </div>
+                                <input name="dusted_photos" class="form-control mt-2 task-photo" type="file" accept="image/*" capture="environment" multiple data-task-checkbox="dusted" disabled>
+                                <div class="form-text">Required when this task is ticked.</div>
+                            </div>
+                            <div class="cleaning-task mb-3">
+                                <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="nipples" name="nipples">
+                                <label class="form-check-label" for="nipples">
+                                    <i class="bi bi-check-circle me-2"></i>Washed the nipples
+                                    <span class="luganda">Enywanto ziyonjedwa</span>
+                                </label>
+                                </div>
+                                <input name="nipples_photos" class="form-control mt-2 task-photo" type="file" accept="image/*" capture="environment" multiple data-task-checkbox="nipples" disabled>
+                                <div class="form-text">Required when this task is ticked.</div>
+                            </div>
+                            
 
-                            <div class="form-check mb-3">
+                            <div class="cleaning-task mb-3">
+                                <div class="form-check">
                                 <input class="form-check-input" type="checkbox" id="disinfected" name="disinfected">
                                 <label class="form-check-label" for="disinfected">
                                     <i class="bi bi-shield-check me-2"></i>Disinfected
                                     <span class="luganda">Efuuyiddwa eddagala</span>
                                 </label>
+                                </div>
+                                <input name="disinfected_photos" class="form-control mt-2 task-photo" type="file" accept="image/*" capture="environment" multiple data-task-checkbox="disinfected" disabled>
+                                <div class="form-text">Required when this task is ticked.</div>
                             </div>
 
-                            <div class="form-check mb-3">
+                            <div class="cleaning-task mb-3">
+                                <div class="form-check">
                                 <input class="form-check-input" type="checkbox" id="water_changed" name="water_changed">
                                 <label class="form-check-label" for="water_changed">
                                     <i class="bi bi-droplet me-2"></i>Water changed
                                     <span class="luganda">Amazzi gakyusiddwa</span>
                                 </label>
+                                </div>
+                                <input name="water_changed_photos" class="form-control mt-2 task-photo" type="file" accept="image/*" capture="environment" multiple data-task-checkbox="water_changed" disabled>
+                                <div class="form-text">Required when this task is ticked.</div>
                             </div>
                         </div>
 
@@ -79,12 +117,22 @@
                         </div>
 
                         <div class="mb-3">
-                            <label for="photos" class="form-label">
-                                <i class="bi bi-camera me-1"></i>Take or upload photos
-                                <span class="luganda">Kwata oba teekako ebifaananyi</span>
+                            <label for="notes_audio" class="form-label">
+                                <i class="bi bi-mic me-1"></i>Voice note
+                                <span class="luganda">Eddoboozi</span>
                             </label>
-                            <input id="photos" name="photos" class="form-control" type="file" accept="image/*" capture="environment" multiple required>
-                            <div class="form-text">Photo proof is required. / Ekifaananyi kyetaagisa.</div>
+                            <div class="d-flex flex-wrap gap-2 mb-2">
+                                <button type="button" class="btn btn-outline-success btn-sm" id="startRecording">
+                                    <i class="bi bi-record-circle me-1"></i>Record
+                                </button>
+                                <button type="button" class="btn btn-outline-secondary btn-sm" id="stopRecording" disabled>
+                                    <i class="bi bi-stop-circle me-1"></i>Stop
+                                </button>
+                                <span class="small text-muted align-self-center" id="recordingStatus">Optional</span>
+                            </div>
+                            <audio id="audioPreview" controls class="w-100 mb-2 d-none"></audio>
+                            <input id="notes_audio" name="notes_audio" class="form-control" type="file" accept="audio/*" capture>
+                            <div class="form-text">Record a voice note or upload an audio file.</div>
                         </div>
 
                         <div class="d-grid gap-2 mt-4">
@@ -123,6 +171,9 @@
                                     <td>{{ rec.batch.house.name|default:rec.batch.house.house_code }}</td>
                                     <td>
                                         {% if rec.house_cleaned %}<span class="badge bg-success me-1">Cleaned</span>{% endif %}
+                                        {% if rec.house_raked %}<span class="badge bg-success me-1">Raked</span>{% endif %}
+                                        {% if rec.house_dusted %}<span class="badge bg-success me-1">Dusted</span>{% endif %}
+                                        {% if rec.nipples_washed %}<span class="badge bg-success me-1">Nipples</span>{% endif %}
                                         {% if rec.disinfection_done %}<span class="badge bg-info me-1">Disinfected</span>{% endif %}
                                         {% if rec.water_changed %}<span class="badge bg-primary">Water Changed</span>{% endif %}
                                     </td>
@@ -153,6 +204,20 @@
 
 {% block extra_js %}
 <script>
+document.querySelectorAll('.task-photo').forEach((input) => {
+    const checkbox = document.getElementById(input.dataset.taskCheckbox);
+    if (!checkbox) return;
+
+    function syncPhotoField() {
+        input.disabled = !checkbox.checked;
+        input.required = checkbox.checked;
+        if (!checkbox.checked) input.value = '';
+    }
+
+    checkbox.addEventListener('change', syncPhotoField);
+    syncPhotoField();
+});
+
 document.querySelectorAll('.js-confirm-submit').forEach((form) => {
     form.addEventListener('submit', (event) => {
         if (!confirm(form.dataset.confirmMessage || 'Send this record?')) {
@@ -160,5 +225,58 @@ document.querySelectorAll('.js-confirm-submit').forEach((form) => {
         }
     });
 });
+
+(function () {
+    const startButton = document.getElementById('startRecording');
+    const stopButton = document.getElementById('stopRecording');
+    const status = document.getElementById('recordingStatus');
+    const audioInput = document.getElementById('notes_audio');
+    const preview = document.getElementById('audioPreview');
+
+    if (!startButton || !stopButton || !audioInput || !navigator.mediaDevices || !window.MediaRecorder) {
+        if (status) status.textContent = 'Upload audio if recording is not available.';
+        return;
+    }
+
+    let recorder;
+    let chunks = [];
+    let stream;
+
+    startButton.addEventListener('click', async () => {
+        try {
+            stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            chunks = [];
+            recorder = new MediaRecorder(stream);
+            recorder.addEventListener('dataavailable', (event) => {
+                if (event.data.size) chunks.push(event.data);
+            });
+            recorder.addEventListener('stop', () => {
+                const blob = new Blob(chunks, { type: recorder.mimeType || 'audio/webm' });
+                const file = new File([blob], 'cleaning-voice-note.webm', { type: blob.type });
+                const transfer = new DataTransfer();
+                transfer.items.add(file);
+                audioInput.files = transfer.files;
+                preview.src = URL.createObjectURL(blob);
+                preview.classList.remove('d-none');
+                status.textContent = 'Voice note ready.';
+                stream.getTracks().forEach((track) => track.stop());
+            });
+            recorder.start();
+            startButton.disabled = true;
+            stopButton.disabled = false;
+            status.textContent = 'Recording...';
+        } catch (error) {
+            status.textContent = 'Microphone permission was not granted.';
+        }
+    });
+
+    stopButton.addEventListener('click', () => {
+        if (recorder && recorder.state === 'recording') {
+            recorder.stop();
+            startButton.disabled = false;
+            stopButton.disabled = true;
+        }
+    });
+})();
 </script>
 {% endblock %}

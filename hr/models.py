@@ -123,3 +123,82 @@ class WagePayment(models.Model):
 
     def __str__(self) -> str:
         return f"{self.worker.full_name} {self.amount} {self.currency} on {self.payment_date}"
+
+
+class WelfareRequest(models.Model):
+    """
+    Worker welfare request with supervisor screening before manager decision.
+    """
+    class RequestType(models.TextChoices):
+        LEAVE = "LEAVE", "Leave"
+        SALARY_ADVANCE = "SALARY_ADVANCE", "Salary Advance"
+        GENERAL = "GENERAL", "General Welfare"
+
+    class Status(models.TextChoices):
+        SUBMITTED = "SUBMITTED", "Submitted to Supervisor"
+        SUPERVISOR_SUBMITTED = "SUPERVISOR_SUBMITTED", "Submitted to Manager"
+        SUPERVISOR_APPROVED = "SUPERVISOR_APPROVED", "Sent to Manager"
+        SUPERVISOR_REJECTED = "SUPERVISOR_REJECTED", "Rejected by Supervisor"
+        MANAGER_APPROVED = "MANAGER_APPROVED", "Approved by Manager"
+        MANAGER_REJECTED = "MANAGER_REJECTED", "Rejected by Manager"
+
+    request_id = models.BigAutoField(primary_key=True)
+    worker = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="welfare_requests",
+    )
+    request_type = models.CharField(max_length=20, choices=RequestType.choices, db_index=True)
+    title = models.CharField(max_length=120)
+    details = models.TextField()
+
+    leave_start = models.DateField(null=True, blank=True)
+    leave_end = models.DateField(null=True, blank=True)
+    advance_amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal("0.00"))],
+    )
+    currency = models.CharField(max_length=10, default="UGX")
+
+    status = models.CharField(
+        max_length=24,
+        choices=Status.choices,
+        default=Status.SUBMITTED,
+        db_index=True,
+    )
+    supervisor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="welfare_requests_supervised",
+    )
+    supervisor_notes = models.TextField(blank=True)
+    supervisor_reviewed_at = models.DateTimeField(null=True, blank=True)
+
+    manager = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="welfare_requests_managed",
+    )
+    manager_notes = models.TextField(blank=True)
+    manager_reviewed_at = models.DateTimeField(null=True, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at", "-request_id"]
+        indexes = [
+            models.Index(fields=["worker", "status"]),
+            models.Index(fields=["request_type", "status"]),
+            models.Index(fields=["created_at"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.worker} - {self.get_request_type_display()} ({self.get_status_display()})"

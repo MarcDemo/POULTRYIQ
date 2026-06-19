@@ -123,3 +123,52 @@ class ReorderRule(models.Model):
 
     def __str__(self) -> str:
         return f"{self.store} - {self.item} (min {self.minimum_level}{self.item.unit})"
+
+
+class InventoryRequisition(models.Model):
+    class Status(models.TextChoices):
+        SUBMITTED = "SUBMITTED", "Submitted to Manager"
+        APPROVED = "APPROVED", "Approved"
+        REJECTED = "REJECTED", "Rejected"
+
+    requisition_id = models.BigAutoField(primary_key=True)
+    requested_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="inventory_requisitions",
+    )
+    item = models.ForeignKey(Item, on_delete=models.PROTECT, null=True, blank=True, related_name="requisitions")
+    item_name = models.CharField(max_length=120, blank=True)
+    quantity = models.DecimalField(
+        max_digits=12,
+        decimal_places=3,
+        validators=[MinValueValidator(Decimal("0.000"))],
+    )
+    unit = models.CharField(max_length=20, default="kg")
+    needed_by = models.DateField(null=True, blank=True)
+    reason = models.TextField()
+
+    status = models.CharField(max_length=12, choices=Status.choices, default=Status.SUBMITTED, db_index=True)
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="inventory_requisitions_reviewed",
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    review_notes = models.TextField(blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at", "-requisition_id"]
+        indexes = [
+            models.Index(fields=["requested_by", "status"]),
+            models.Index(fields=["status", "created_at"]),
+        ]
+
+    def __str__(self) -> str:
+        item_label = self.item.name if self.item_id else self.item_name
+        return f"{item_label} - {self.quantity} {self.unit} ({self.get_status_display()})"

@@ -12,7 +12,7 @@
 <div class="row g-4">
 
 <!-- FORM -->
-<div class="col-lg-4">
+<div class="col-12">
 <div class="card">
 <div class="card-header">
     <i class="bi bi-plus-circle me-2"></i>Add Supplier
@@ -52,10 +52,31 @@
 </div>
 
 <div class="mb-3">
-    <label for="product" class="form-label">
-        <i class="bi bi-box me-1"></i>Product Supplied
+    <label class="form-label">
+        <i class="bi bi-box me-1"></i>Products Supplied
     </label>
-    <input class="form-control" id="product" name="product" placeholder="e.g., Feed, Medication">
+    <div class="input-group mb-2">
+        <span class="input-group-text"><i class="bi bi-search"></i></span>
+        <input class="form-control" id="product_search" type="search" placeholder="Search products, e.g. maize bran, vaccine, drinkers">
+    </div>
+    <div class="border rounded-3 p-2" style="max-height: 260px; overflow-y: auto;">
+        {% for group in purchase_catalog %}
+            <div class="supplier-product-group fw-semibold small text-muted mt-2{% if forloop.first %} mt-0{% endif %}" data-category="{{ group.name|lower }}">
+                {{ group.name }}
+            </div>
+            {% for item in group.items %}
+                <div class="form-check supplier-product-option" data-product="{{ item.name|lower }}" data-category="{{ group.name|lower }}">
+                    <input class="form-check-input" type="checkbox" name="products" value="{{ item.name }}" id="product_{{ group.code }}_{{ forloop.counter }}">
+                    <label class="form-check-label" for="product_{{ group.code }}_{{ forloop.counter }}">
+                        {{ item.name }} <span class="text-muted">({{ item.unit }})</span>
+                    </label>
+                </div>
+            {% endfor %}
+        {% empty %}
+            <div class="text-muted small">No inventory items available yet. Add items in Inventory first.</div>
+        {% endfor %}
+    </div>
+    <div class="form-text">Selected products control purchase options. Inventory items are created when products are bought.</div>
 </div>
 
 <div class="d-grid">
@@ -70,7 +91,7 @@
 </div>
 
 <!-- LIST -->
-<div class="col-lg-8">
+<div class="col-12">
 <div class="card">
 <div class="card-header">
     <i class="bi bi-table me-2"></i>Supplier List
@@ -128,6 +149,29 @@
     const tinInput = document.getElementById('tin_number');
     const nameInput = document.getElementById('name');
     const statusEl = document.getElementById('tin_lookup_status');
+    const productSearch = document.getElementById('product_search');
+    const productOptions = Array.from(document.querySelectorAll('.supplier-product-option'));
+    const productGroups = Array.from(document.querySelectorAll('.supplier-product-group'));
+
+    if (productSearch) {
+        productSearch.addEventListener('input', function () {
+            const query = productSearch.value.trim().toLowerCase();
+
+            productOptions.forEach(function (option) {
+                const haystack = `${option.dataset.product || ''} ${option.dataset.category || ''}`;
+                option.style.display = !query || haystack.includes(query) ? '' : 'none';
+            });
+
+            productGroups.forEach(function (group) {
+                const category = group.dataset.category || '';
+                const hasVisibleItem = productOptions.some(function (option) {
+                    return option.dataset.category === category && option.style.display !== 'none';
+                });
+                group.style.display = hasVisibleItem ? '' : 'none';
+            });
+        });
+    }
+
     if (!tinInput || !nameInput || !statusEl) return;
 
     let timer;

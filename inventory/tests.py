@@ -5,7 +5,7 @@ from django.test import TestCase
 from django.urls import reverse
 
 from accounts.models import Role, User
-from .models import InventoryTransaction, Item, ItemCategory, Store
+from .models import InventoryTransaction, Item, ItemCategory, Store, Supplier
 
 
 class StoreOutTests(TestCase):
@@ -86,3 +86,36 @@ class StoreOutTests(TestCase):
         self.assertContains(response, "Moderate")
         self.assertContains(response, "60.000")
         self.assertContains(response, "60% left")
+
+
+class SupplierPageTests(TestCase):
+    def setUp(self):
+        role = Role.objects.create(code=Role.RoleCode.MANAGER, name="Farm Manager")
+        self.user = User.objects.create_user(
+            username="supplier-manager",
+            password="Pass1234!",
+            role=role,
+        )
+        self.client.force_login(self.user)
+
+    def test_supplier_form_saves_selected_supplied_items(self):
+        response = self.client.post(
+            reverse("suppliers"),
+            {
+                "name": "Kafika",
+                "phone": "0700000000",
+                "products": ["Maize bran", "Concentrate"],
+            },
+        )
+
+        self.assertRedirects(response, reverse("suppliers"))
+        supplier = Supplier.objects.get(name="Kafika")
+        self.assertEqual(supplier.product, "Concentrate, Maize bran")
+
+    def test_supplier_page_shows_item_checkboxes(self):
+        response = self.client.get(reverse("suppliers"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'name="products"', html=False)
+        self.assertContains(response, "Maize bran")
+        self.assertContains(response, "Concentrate")

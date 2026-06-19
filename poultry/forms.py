@@ -1,6 +1,25 @@
 from django import forms
 from inventory.models import Supplier
+from inventory.purchase_catalog import purchase_catalog_category
 from .models import PoultryBatch
+
+
+def _poultry_product_names():
+    category = purchase_catalog_category("BIRDS") or {"items": []}
+    return {
+        item["name"].strip().lower()
+        for item in category["items"]
+    }
+
+
+def _supplier_supplies_poultry(supplier):
+    poultry_products = _poultry_product_names()
+    supplied_products = {
+        product.strip().lower()
+        for product in (supplier.product or "").split(",")
+        if product.strip()
+    }
+    return bool(poultry_products & supplied_products)
 
 class PoultryBatchForm(forms.ModelForm):
     supplier_name = forms.ChoiceField(
@@ -36,6 +55,7 @@ class PoultryBatchForm(forms.ModelForm):
         supplier_choices.extend(
             (supplier.name, supplier.name)
             for supplier in Supplier.objects.filter(is_active=True).order_by("name")
+            if _supplier_supplies_poultry(supplier)
         )
         self.fields["supplier_name"].choices = supplier_choices
         for field in self.fields.values():

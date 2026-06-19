@@ -17,7 +17,7 @@ from django.utils.text import slugify
 from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
 
-from finance.models import ExpenseTransaction
+from expenses.models import ExpenseTransaction
 from inventory.models import InventoryTransaction, ReorderRule
 from poultry.models import ApprovalStatus, FeedRecord, MortalityRecord, PoultryBatch, PoultryHouse, egg_collection
 from inventory.models import InventoryTransaction

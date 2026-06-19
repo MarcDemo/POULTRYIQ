@@ -179,6 +179,13 @@
                         <span class="action-subtitle">Awali endwadde</span>
                     </a>
                 </div>
+                <div class="col-6 col-md-3">
+                    <a href="{% url 'worker_welfare' %}" class="btn btn-info text-white w-100 action-btn worker-action-btn d-flex flex-column align-items-center justify-content-center gap-2">
+                        <i class="bi bi-heart fs-2"></i>
+                        <span class="action-title">Welfare</span>
+                        <span class="action-subtitle">Leave & salary</span>
+                    </a>
+                </div>
             </div>
         </div>
     </div>
@@ -187,6 +194,60 @@
 
 
     <!-- ── Recent Egg Collections ── -->
+    <div class="row g-4 mb-4">
+        <div class="col-lg-6">
+            <div class="card shadow-sm h-100">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-heart me-2"></i>Welfare</span>
+                    <a href="{% url 'worker_welfare' %}" class="btn btn-sm btn-light">Open</a>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex align-items-center justify-content-between mb-3">
+                        <span class="text-muted">Requests in progress</span>
+                        <span class="badge bg-warning text-dark">{{ welfare_pending_count }}</span>
+                    </div>
+                    {% for req in recent_welfare_requests %}
+                    <div class="border-top py-2">
+                        <div class="fw-semibold">{{ req.title }}</div>
+                        <small class="text-muted">{{ req.get_request_type_display }} &bull; {{ req.get_status_display }}</small>
+                    </div>
+                    {% empty %}
+                    <div class="text-muted">No welfare requests yet.</div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="card shadow-sm h-100">
+                <div class="card-header"><i class="bi bi-wallet2 me-2"></i>Recent Salary Records</div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead><tr><th>Month</th><th>Amount</th><th>Status</th></tr></thead>
+                            <tbody>
+                                {% for salary in recent_salary_records %}
+                                <tr>
+                                    <td>{{ salary.period_month }}</td>
+                                    <td>UGX {{ salary.amount|floatformat:0 }}</td>
+                                    <td>
+                                        {% if salary.status == "PAID" %}
+                                        <span class="badge bg-success">Paid</span>
+                                        {% else %}
+                                        <span class="badge bg-warning text-dark">Pending</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr><td colspan="3" class="text-center text-muted py-3">No salary records yet.</td></tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div class="card shadow-sm">
         <div class="card-header">
             <i class="bi bi-clock-history me-2"></i>My egg records today

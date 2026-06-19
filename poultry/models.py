@@ -432,10 +432,14 @@ class CleaningRecord(models.Model):
     record_date = models.DateField(db_index=True)
 
     house_cleaned = models.BooleanField(default=False)
+    house_raked = models.BooleanField(default=False)
+    house_dusted = models.BooleanField(default=False)
+    nipples_washed = models.BooleanField(default=False)
     disinfection_done = models.BooleanField(default=False)
     water_changed = models.BooleanField(default=False)
 
     notes = models.TextField(blank=True)
+    notes_audio = models.FileField(upload_to="cleaning_audio/%Y/%m/%d/", blank=True, null=True)
 
     status = models.CharField(
         max_length=10,
@@ -477,6 +481,7 @@ class CleaningPhoto(models.Model):
     cleaning_record = models.ForeignKey(
         CleaningRecord, on_delete=models.CASCADE, related_name="photos"
     )
+    task_key = models.CharField(max_length=32, blank=True)
     image = models.ImageField(upload_to="cleaning_photos/%Y/%m/%d/")
     uploaded_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="cleaning_photos_uploaded"

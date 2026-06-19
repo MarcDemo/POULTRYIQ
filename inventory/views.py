@@ -11,13 +11,16 @@ from django.conf import settings
 from django.db import transaction
 from django.http import JsonResponse
 from django.contrib.auth.decorators import login_required
-from django.shortcuts import redirect, render
+from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
 from django.utils.text import slugify
 
-from finance.models import ExpenseCategory, ExpenseTransaction
+from accounts.views import get_post_login_redirect
+from expenses.models import ExpenseCategory, ExpenseTransaction
 from poultry.models import PoultryBatch
 from poultryiq.pagination import paginate
-from .models import InventoryTransaction, Item, ItemCategory, Store, Supplier
+from .models import InventoryRequisition, InventoryTransaction, Item, ItemCategory, Store, Supplier
+from .purchase_catalog import PURCHASE_CATALOG, purchase_catalog_item_names
 
 
 DEFAULT_ITEM_CATEGORIES = [
@@ -28,6 +31,28 @@ DEFAULT_ITEM_CATEGORIES = [
     ("EQUIPMENT", "Equipment"),
     ("OTHER", "Other"),
 ]
+
+
+def _role_code(user) -> str:
+    return (getattr(user.role, "code", "") or "").upper()
+
+
+def _supervisor_only(request):
+    if not request.user.is_authenticated:
+        return redirect("login")
+    if _role_code(request.user) != "SUPERVISOR":
+        messages.error(request, "Access denied: Supervisors only.")
+        return redirect(get_post_login_redirect(request.user))
+    return None
+
+
+def _manager_only(request):
+    if not request.user.is_authenticated:
+        return redirect("login")
+    if _role_code(request.user) not in ("MANAGER", "OWNER"):
+        messages.error(request, "Access denied: Managers only.")
+        return redirect(get_post_login_redirect(request.user))
+    return None
 
 
 def _normalise_tin(tin):
@@ -270,12 +295,17 @@ def suppliers(request):
         tin_number = request.POST.get("tin_number", "").strip()
         phone = request.POST.get("phone", "").strip()
         location = request.POST.get("location", "").strip()
-        product = request.POST.get("product", "").strip()
+        selected_products = request.POST.getlist("products")
+        valid_product_names = set(purchase_catalog_item_names())
+        supplied_items = [name for name in selected_products if name in valid_product_names]
+        product = ", ".join(sorted(supplied_items))
 
         if not name:
             messages.error(request, "Supplier name is required.")
         elif tin_number and not re.fullmatch(r"\d{10}", _normalise_tin(tin_number)):
             messages.error(request, "Invalid TIN number. A Uganda TIN should be 10 digits.")
+        elif not supplied_items:
+            messages.error(request, "Select at least one supplied item.")
         else:
             tin_number = _normalise_tin(tin_number)
             supplier, created = Supplier.objects.update_or_create(
@@ -297,7 +327,16 @@ def suppliers(request):
 
     suppliers_qs = Supplier.objects.filter(is_active=True).order_by("name")
     page_obj, querystring = paginate(request, suppliers_qs, per_page=20)
-    return render(request, 'suppliers.html', {"suppliers": page_obj, "page_obj": page_obj, "querystring": querystring})
+    return render(
+        request,
+        'suppliers.html',
+        {
+            "suppliers": page_obj,
+            "page_obj": page_obj,
+            "querystring": querystring,
+            "purchase_catalog": PURCHASE_CATALOG,
+        },
+    )
 
 
 def inventory_management(request):
@@ -432,6 +471,129 @@ def inventory_management(request):
             'suppliers': supplier_list,
         },
     )
+
+
+@login_required(login_url="login")
+def supervisor_requisitions(request):
+    denied = _supervisor_only(request)
+    if denied:
+        return denied
+
+    items = Item.objects.filter(is_active=True).select_related("category").order_by("name")
+
+    if request.method == "POST":
+        item_id = request.POST.get("item", "").strip()
+        item_name = request.POST.get("item_name", "").strip()
+        quantity_raw = request.POST.get("quantity", "").strip()
+        unit = request.POST.get("unit", "").strip() or "kg"
+        needed_by_raw = request.POST.get("needed_by", "").strip()
+        reason = request.POST.get("reason", "").strip()
+
+        errors = []
+        item = items.filter(pk=item_id).first() if item_id else None
+        quantity = None
+        needed_by = None
+
+        if not item and not item_name:
+            errors.append("Please select an item or type the item needed.")
+
+        try:
+            quantity = Decimal(quantity_raw)
+            if quantity <= 0:
+                errors.append("Quantity must be greater than zero.")
+        except (InvalidOperation, ValueError):
+            errors.append("Please enter a valid quantity.")
+
+        if needed_by_raw:
+            try:
+                needed_by = date.fromisoformat(needed_by_raw)
+            except ValueError:
+                errors.append("Please enter a valid needed-by date.")
+
+        if not reason:
+            errors.append("Please explain why this item is needed.")
+
+        if errors:
+            for error in errors:
+                messages.error(request, error)
+        else:
+            InventoryRequisition.objects.create(
+                requested_by=request.user,
+                item=item,
+                item_name="" if item else item_name,
+                quantity=quantity,
+                unit=item.unit if item else unit,
+                needed_by=needed_by,
+                reason=reason,
+            )
+            messages.success(request, "Inventory requisition sent to the manager.")
+            return redirect("supervisor_requisitions")
+
+    requisitions = InventoryRequisition.objects.filter(requested_by=request.user).select_related(
+        "item", "reviewed_by"
+    )[:20]
+    return render(
+        request,
+        "supervisor_requisitions.html",
+        {
+            "items": items,
+            "requisitions": requisitions,
+            "today": timezone.localdate(),
+        },
+    )
+
+
+@login_required(login_url="login")
+def manager_requisitions(request):
+    denied = _manager_only(request)
+    if denied:
+        return denied
+
+    queryset = InventoryRequisition.objects.select_related("requested_by", "item", "reviewed_by").filter(
+        status=InventoryRequisition.Status.SUBMITTED
+    )
+    page_obj, querystring = paginate(request, queryset, per_page=20)
+    return render(
+        request,
+        "manager_requisitions.html",
+        {
+            "requests": page_obj,
+            "page_obj": page_obj,
+            "querystring": querystring,
+        },
+    )
+
+
+@login_required(login_url="login")
+def manager_review_requisition(request, pk):
+    denied = _manager_only(request)
+    if denied:
+        return denied
+    if request.method != "POST":
+        return redirect("manager_requisitions")
+
+    requisition = get_object_or_404(
+        InventoryRequisition.objects.filter(status=InventoryRequisition.Status.SUBMITTED),
+        pk=pk,
+    )
+    action = request.POST.get("action", "").strip()
+    notes = request.POST.get("notes", "").strip()
+    if action == "approve":
+        requisition.status = InventoryRequisition.Status.APPROVED
+        message = "Inventory requisition approved."
+    elif action == "reject":
+        requisition.status = InventoryRequisition.Status.REJECTED
+        message = "Inventory requisition rejected."
+    else:
+        messages.error(request, "Unknown requisition action.")
+        return redirect("manager_requisitions")
+
+    requisition.reviewed_by = request.user
+    requisition.reviewed_at = timezone.now()
+    requisition.review_notes = notes
+    requisition.save(update_fields=["status", "reviewed_by", "reviewed_at", "review_notes", "updated_at"])
+    messages.success(request, message)
+    return redirect("manager_requisitions")
 
 
 @login_required(login_url="login")
