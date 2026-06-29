@@ -5,6 +5,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
 
+from accounting.services import get_bs_data
 from expenses.models import ExpenseCategory, ExpenseTransaction
 from inventory.models import InventoryTransaction, Item, Supplier
 
@@ -24,7 +25,7 @@ class ExpenseFormFlowTests(TestCase):
         self.assertTemplateUsed(response, "expenses/expense_form.html")
         self.assertTrue(
             all(
-                category.expense_type != ExpenseCategory.ExpenseType.COST_OF_REVENUE
+                category.expense_type == ExpenseCategory.ExpenseType.MONTHLY_EXPENSES
                 for category in response.context["expense_categories"]
             )
         )
@@ -79,6 +80,18 @@ class ExpenseFormFlowTests(TestCase):
         self.assertEqual(stock_in.unit_price, Decimal("2500.00"))
         self.assertEqual(stock_in.supplier_name, "Kafika")
 
+        bs_data = get_bs_data()
+        assets_group = next(row for row in bs_data["grouped_accounts"] if row["group_value"] == "ASSETS")
+        current_assets = next(row for row in assets_group["type_groups"] if row["type_value"] == "CURRENT_ASSET")
+        inventory_account = next(row for row in current_assets["accounts"] if row["code"] == f"CA-INV-{stock_in.tx_id}")
+        self.assertEqual(
+            inventory_account["account_name"],
+            "Inventory Purchase / Maize bran (100.000 kg) - Kafika",
+        )
+        self.assertEqual(inventory_account["amount"], Decimal("250000.00000"))
+        self.assertEqual(current_assets["type_total"], Decimal("250000.00000"))
+        self.assertFalse(any(row["code"] == "321001" for row in current_assets["accounts"]))
+
     def test_supplier_product_limits_purchase_categories(self):
         Supplier.objects.create(name="Kafika", product="Maize bran", is_active=True)
 
@@ -87,3 +100,38 @@ class ExpenseFormFlowTests(TestCase):
 
         self.assertIn("FEED", response.context["supplier_category_map"][str(supplier.pk)])
         self.assertNotIn("EQUIPMENT", response.context["supplier_category_map"][str(supplier.pk)])
+
+    def test_purchase_catalog_excludes_fixed_asset_equipment(self):
+        response = self.client.get(reverse("expense_form"))
+
+        self.assertNotIn("EQUIPMENT", [category["code"] for category in response.context["inventory_categories"]])
+        self.assertNotIn("EQUIPMENT", response.context["items_by_category"])
+
+    def test_purchase_form_rejects_fixed_asset_equipment_items(self):
+        supplier = Supplier.objects.create(
+            name="Equipment Supplier",
+            phone="0700000000",
+            product="Feeders",
+            is_active=True,
+        )
+
+        response = self.client.post(
+            reverse("expense_form"),
+            {
+                "type": "purchase",
+                "date": date(2026, 6, 19).isoformat(),
+                "supplier": str(supplier.pk),
+                "inventory_category": "EQUIPMENT",
+                "item": "Feeders",
+                "quantity": "2",
+                "unit_price": "50000",
+                "description": "Should be fixed asset",
+                "payment_method": ExpenseTransaction.PAYMENT_CASH,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Invalid purchase category selected.")
+        self.assertContains(response, "Invalid item selected.")
+        self.assertFalse(ExpenseTransaction.objects.filter(item_name="Feeders").exists())
+        self.assertFalse(InventoryTransaction.objects.filter(item__name="Feeders").exists())

@@ -6,8 +6,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block title %}PoultryIQ - Poultry Farm Management System{% endblock %}</title>
 
+    <script src="{% static 'js/theme-init.js' %}"></script>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="{% static 'css/theme.css' %}">
     <link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
     <link rel="stylesheet" href="{% static 'css/responsive-ui.css' %}">
     <link rel="stylesheet" href="{% static 'css/alerts-bell.css' %}">
@@ -52,6 +54,11 @@
                 <a class="nav-link d-flex align-items-center {% if request.resolver_match.url_name == 'investor_reports' %}active{% endif %}" href="{% url 'investor_reports' %}">
                     <i class="bi bi-file-earmark-bar-graph me-1"></i>Reports
                 </a>
+            </li>
+            <li class="nav-item">
+                <button type="button" class="nav-link d-flex align-items-center border-0 bg-transparent" data-theme-toggle aria-label="Theme" title="Theme">
+                    <i class="bi bi-circle-half me-1 theme-toggle-icon" data-theme-icon></i><span data-theme-label>System</span>
+                </button>
             </li>
             <li class="nav-item">
                 <a class="nav-link d-flex align-items-center text-warning" href="{% url 'logout' %}" onclick="return confirm('Are you sure you want to logout?')">
@@ -104,6 +111,10 @@
     {% endif %}
 
     {% if request.user.is_authenticated %}
+    <button type="button" class="btn btn-outline-secondary btn-sm theme-toggle-btn" data-theme-toggle aria-label="Theme" title="Theme">
+        <i class="bi bi-circle-half theme-toggle-icon" data-theme-icon></i>
+        <span class="d-none d-sm-inline ms-1" data-theme-label>System</span>
+    </button>
     <a href="{% url 'alerts:inbox' %}" class="alerts-bell-link" data-alert-bell aria-label="No unread alerts">
         <span class="alerts-bell-icon"><i class="bi bi-bell-fill"></i></span>
         <span class="alerts-bell-badge">0</span>
@@ -294,14 +305,16 @@
                 </div>
             </li>
             <li class="nav-item manager-nav-group">
-                <button class="nav-link manager-nav-trigger {% if request.resolver_match.url_name == 'expenses' or request.resolver_match.url_name == 'expense_form' or request.resolver_match.url_name == 'sales' or request.resolver_match.url_name == 'orders' or request.resolver_match.url_name == 'orderview' or request.resolver_match.url_name == 'reports' %}active{% endif %}" type="button">
+                <button class="nav-link manager-nav-trigger {% if request.resolver_match.url_name == 'expenses' or request.resolver_match.url_name == 'expense_form' or request.resolver_match.url_name == 'sales' or request.resolver_match.url_name == 'customers' or request.resolver_match.url_name == 'customer_profile' or request.resolver_match.url_name == 'orders' or request.resolver_match.url_name == 'orderview' or request.resolver_match.url_name == 'reports' or request.resolver_match.url_name == 'chart_of_accounts' or request.resolver_match.url_name == 'balance_sheet' %}active{% endif %}" type="button">
                     <i class="bi bi-cash-coin"></i><span>Accounting</span><i class="bi bi-chevron-right manager-nav-chevron"></i>
                 </button> 
                 <div class="manager-nav-submenu">
                     <a class="manager-nav-subitem {% if request.resolver_match.url_name == 'expenses' or request.resolver_match.url_name == 'expense_form' %}active{% endif %}" href="{% url 'expense_form' %}"><i class="bi bi-dot"></i>Expenses</a>
-                    <a class="manager-nav-subitem {% if request.resolver_match.url_name == 'sales' %}active{% endif %}" href="#"><i class="bi bi-dot"></i>Sales</a>
+                    <a class="manager-nav-subitem {% if request.resolver_match.url_name == 'sales' %}active{% endif %}" href="{% url 'sales' %}"><i class="bi bi-dot"></i>Sales</a>
+                    <a class="manager-nav-subitem {% if request.resolver_match.url_name == 'customers' or request.resolver_match.url_name == 'customer_profile' %}active{% endif %}" href="{% url 'customers' %}"><i class="bi bi-dot"></i>Customers</a>
                     <a class="manager-nav-subitem {% if request.resolver_match.url_name == 'orders' or request.resolver_match.url_name == 'orderview' %}active{% endif %}" href="{% url 'orders' %}"><i class="bi bi-dot"></i>Orders</a>
                     <a class="manager-nav-subitem {% if request.resolver_match.url_name == 'reports' %}active{% endif %}" href="{% url 'reports' %}"><i class="bi bi-dot"></i>Reports</a>
+                    <a class="manager-nav-subitem {% if request.resolver_match.url_name == 'balance_sheet' %}active{% endif %}" href="{% url 'balance_sheet' %}"><i class="bi bi-dot"></i>Balance Sheet</a>
                 </div>
             </li>
             <li class="nav-item manager-nav-group">
@@ -318,8 +331,9 @@
                     <i class="bi bi-people-fill"></i><span>People</span><i class="bi bi-chevron-right manager-nav-chevron"></i>
                 </button>
                 <div class="manager-nav-submenu">
-                    <a class="manager-nav-subitem {% if request.resolver_match.url_name == 'manage_users' %}active{% endif %}" href="{% url 'manage_users' %}"><i class="bi bi-dot"></i>Manage Users</a>
+                    <a class="manager-nav-subitem {% if request.resolver_match.url_name == 'manage_users' %}active{% endif %}" href="{% url 'staff_profiles' %}"><i class="bi bi-dot"></i>Staff Profiles</a>
                     <a class="manager-nav-subitem {% if request.resolver_match.url_name == 'add_user' %}active{% endif %}" href="{% url 'add_user' %}"><i class="bi bi-dot"></i>Add User</a>
+
                 </div>
             </li>
             <li class="nav-item manager-nav-group">
@@ -348,6 +362,10 @@
 
     {% if request.user.is_authenticated %}
     <div class="desktop-notif-bar">
+        <button type="button" class="alerts-sound-toggle" data-theme-toggle aria-label="Theme" title="Theme">
+            <i class="bi bi-circle-half theme-toggle-icon" data-theme-icon></i>
+            <span class="d-none" data-theme-label>System</span>
+        </button>
         <button type="button" class="alerts-sound-toggle" data-alert-sound-toggle aria-label="Mute alert sound">
             <i class="bi bi-volume-up-fill"></i>
         </button>
@@ -405,6 +423,7 @@
 {% endif %}
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="{% static 'js/theme-toggle.js' %}"></script>
 {% if not request.user.is_authenticated or not request.user.is_investor %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="{% static 'js/dashboard.js' %}"></script>

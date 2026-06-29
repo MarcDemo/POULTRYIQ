@@ -17,77 +17,142 @@
         {% endfor %}
     {% endif %}
 
-    <div class="row">
-        <div class="col-lg-4">
-            <div class="card">
+    <div class="row g-4 mb-4">
+        <div class="col-lg-6 col-xl-4">
+            <div class="card h-100">
                 <div class="card-body">
-                    <h5 class="card-title">Record Salary</h5>
+                    <h5 class="card-title">Prepare Monthly Payroll</h5>
                     <form method="POST">
                         {% csrf_token %}
+                        <input type="hidden" name="action" value="generate_monthly">
                         <div class="mb-3">
-                            <label class="form-label">Employee</label>
-                            <select name="employee" class="form-select" required>
-                                <option value="">-- Select Employee --</option>
-                                {% for emp in employees %}
-                                    <option value="{{ emp.id }}">{{ emp.get_full_name|default:emp.username }}</option>
-                                {% endfor %}
-                            </select>
+                            <label class="form-label">Payroll Month</label>
+                            <input type="month" name="batch_month" class="form-control" required>
                         </div>
-                        <div class="mb-3">
-                            <label class="form-label">Month</label>
-                            <input type="month" name="month" class="form-control" required>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">Amount</label>
-                            <input type="number" name="amount" step="0.01" class="form-control" required>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">Status</label>
-                            <select name="status" class="form-select">
-                                <option value="PENDING">Pending</option>
-                                <option value="PAID">Paid</option>
-                            </select>
-                        </div>
-                        <button type="submit" class="btn btn-primary w-100">Record Salary</button>
+                        <button type="submit" class="btn btn-success w-100">
+                            <i class="bi bi-people me-1"></i>Prepare All Salaries
+                        </button>
                     </form>
                 </div>
             </div>
         </div>
-
-        <div class="col-lg-8">
-            <div class="card">
-                <div class="table-responsive">
-                    <table class="table table-hover mb-0">
-                        <thead>
-                            <tr>
-                                <th>Employee</th>
-                                <th>Month</th>
-                                <th>Amount</th>
-                                <th>Status</th>
-                                <th>Recorded By</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for record in salary_records %}
-                                <tr>
-                                    <td>{{ record.employee.get_full_name|default:record.employee.username }}</td>
-                                    <td>{{ record.period_month }}</td>
-                                    <td>{{ record.amount|floatformat:2 }}</td>
-                                    <td>
-                                        <span class="badge {% if record.status == 'PAID' %}bg-success{% else %}bg-warning{% endif %}">
-                                            {{ record.get_status_display }}
-                                        </span>
-                                    </td>
-                                    <td>{{ record.recorded_by.username }}</td>
-                                </tr>
-                            {% empty %}
-                                <tr>
-                                    <td colspan="5" class="text-center text-muted">No salary records yet</td>
-                                </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
+        <div class="col-lg-6 col-xl-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h5 class="card-title">Grant Bonus</h5>
+                    <form method="POST">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="grant_bonus">
+                        <div class="mb-3">
+                            <label class="form-label">Employee</label>
+                            <select name="bonus_employee" class="form-select" required>
+                                <option value="">Select employee</option>
+                                {% for employee in employees %}
+                                    <option value="{{ employee.pk }}">{{ employee.display_name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="row g-2">
+                            <div class="col-md-6">
+                                <label class="form-label">Month</label>
+                                <input type="month" name="bonus_month" class="form-control" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Amount</label>
+                                <input type="number" name="bonus_amount" class="form-control" min="0.01" step="0.01" required>
+                            </div>
+                        </div>
+                        <div class="mt-3">
+                            <label class="form-label">Reason</label>
+                            <textarea name="bonus_reason" class="form-control" rows="2" required></textarea>
+                        </div>
+                        <button type="submit" class="btn btn-primary w-100 mt-3">
+                            <i class="bi bi-gift me-1"></i>Grant Bonus
+                        </button>
+                    </form>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <form method="POST" id="salary-pay-form">
+                    {% csrf_token %}
+                    <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+                        <div><i class="bi bi-table me-2"></i>Salary Records</div>
+                        <div class="d-flex gap-2 flex-wrap">
+                            <button type="submit" name="action" value="pay_selected" class="btn btn-sm btn-success" id="pay-selected-btn" disabled>
+                                <i class="bi bi-check2-circle me-1"></i>Pay Selected
+                            </button>
+                            <button type="submit" name="action" value="pay_all" class="btn btn-sm btn-outline-success">
+                                <i class="bi bi-check2-all me-1"></i>Pay All Pending
+                            </button>
+                        </div>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead>
+                                <tr>
+                                    <th style="width: 44px;">
+                                        <input class="form-check-input" type="checkbox" id="select-all-salaries" aria-label="Select all pending salaries">
+                                    </th>
+                                    <th>Employee</th>
+                                    <th>Month</th>
+                                    <th>Gross</th>
+                                    <th>PAYE</th>
+                                <th>NSSF</th>
+                                <th>Advances</th>
+                                <th>Bonus</th>
+                                <th>Net Pay</th>
+                                    <th>Pay Date</th>
+                                    <th>Status</th>
+                                    <th>Recorded By</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for record in salary_records %}
+                                    <tr>
+                                        <td>
+                                            {% if record.status == 'PENDING' %}
+                                                <input class="form-check-input salary-select" type="checkbox" name="salary_ids" value="{{ record.pk }}" aria-label="Select {{ record.employee.display_name }} {{ record.period_month }}">
+                                            {% endif %}
+                                        </td>
+                                        <td>{{ record.employee.get_full_name|default:record.employee.username }}</td>
+                                        <td>{{ record.period_month }}</td>
+                                        <td>{{ record.gross_salary|floatformat:0 }}</td>
+                                        <td>{{ record.paye_tax|floatformat:0 }}</td>
+                                        <td>
+                                            {{ record.nssf_employee|floatformat:0 }}
+                                            <div class="small text-muted">Employer: {{ record.nssf_employer|floatformat:0 }}</div>
+                                        </td>
+                                        <td>{{ record.advances_deducted|floatformat:0 }}</td>
+                                        <td>{{ record.bonus_amount|floatformat:0 }}</td>
+                                        <td><strong>{{ record.net_pay|default:record.amount|floatformat:0 }}</strong></td>
+                                        <td>{{ record.payment_date|default:"-" }}</td>
+                                        <td>
+                                            <span class="badge {% if record.status == 'PAID' %}bg-success{% else %}bg-warning{% endif %}">
+                                                {{ record.get_status_display }}
+                                            </span>
+                                        </td>
+                                        <td>{{ record.recorded_by.username }}</td>
+                                        <td>
+                                            <a class="btn btn-sm btn-warning" href="{% url 'edit_salary' record.pk %}">
+                                                <i class="bi bi-pencil-square me-1"></i>Edit
+                                            </a>
+                                        </td>
+                                    </tr>
+                                {% empty %}
+                                    <tr>
+                                        <td colspan="13" class="text-center text-muted">No salary records yet</td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </form>
             </div>
 
             {% if page_obj.has_other_pages %}
@@ -126,4 +191,36 @@
         </div>
     </div>
 </div>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const selectAll = document.getElementById('select-all-salaries');
+    const paySelected = document.getElementById('pay-selected-btn');
+    const checkboxes = Array.from(document.querySelectorAll('.salary-select'));
+
+    function syncPayButton() {
+        const checkedCount = checkboxes.filter(function (checkbox) { return checkbox.checked; }).length;
+        paySelected.disabled = checkedCount === 0;
+        if (selectAll) {
+            selectAll.checked = checkedCount > 0 && checkedCount === checkboxes.length;
+            selectAll.indeterminate = checkedCount > 0 && checkedCount < checkboxes.length;
+            selectAll.disabled = checkboxes.length === 0;
+        }
+    }
+
+    if (selectAll) {
+        selectAll.addEventListener('change', function () {
+            checkboxes.forEach(function (checkbox) {
+                checkbox.checked = selectAll.checked;
+            });
+            syncPayButton();
+        });
+    }
+
+    checkboxes.forEach(function (checkbox) {
+        checkbox.addEventListener('change', syncPayButton);
+    });
+
+    syncPayButton();
+});
+</script>
 {% endblock %}

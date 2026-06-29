@@ -9,15 +9,30 @@ from django.core.validators import MinValueValidator
 
 
 class Customer(models.Model):
+    class PaymentMethod(models.TextChoices):
+        CASH = "CASH", "Cash"
+        MOMO = "MOMO", "Mobile Money"
+        BANK = "BANK", "Bank"
+        CREDIT = "CREDIT", "Credit"
+
     customer_id = models.BigAutoField(primary_key=True)
     name = models.CharField(max_length=150, unique=True)
     contact_person = models.CharField(max_length=120, blank=True)
     phone_number = models.CharField(max_length=30, blank=True)
     email = models.EmailField(blank=True)
     address = models.CharField(max_length=255, blank=True)
+    preferred_payment_method = models.CharField(
+        max_length=10,
+        choices=PaymentMethod.choices,
+        default=PaymentMethod.CASH,
+    )
+    momo_receiving_number = models.CharField(max_length=50, blank=True)
+    bank_account_number = models.CharField(max_length=80, blank=True)
+    credit_repayment_plan = models.TextField(blank=True)
 
     # Credit controls
     allow_credit = models.BooleanField(default=True)
+    pay_wht = models.BooleanField(default=False)
     credit_limit = models.DecimalField(
         max_digits=14, decimal_places=2, default=Decimal("0.00"),
         validators=[MinValueValidator(Decimal("0.00"))]
@@ -56,6 +71,11 @@ class SaleInvoice(models.Model):
     due_date = models.DateField(null=True, blank=True, db_index=True)
 
     currency = models.CharField(max_length=10, default="UGX")
+    payment_method = models.CharField(
+        max_length=10,
+        choices=Customer.PaymentMethod.choices,
+        default=Customer.PaymentMethod.CASH,
+    )
 
     # Totals
     subtotal = models.DecimalField(
@@ -67,6 +87,10 @@ class SaleInvoice(models.Model):
         validators=[MinValueValidator(Decimal("0.00"))]
     )
     total_amount = models.DecimalField(
+        max_digits=14, decimal_places=2, default=Decimal("0.00"),
+        validators=[MinValueValidator(Decimal("0.00"))]
+    )
+    wht_amount = models.DecimalField(
         max_digits=14, decimal_places=2, default=Decimal("0.00"),
         validators=[MinValueValidator(Decimal("0.00"))]
     )
@@ -176,6 +200,7 @@ class CustomerPayment(models.Model):
         CASH = "CASH", "Cash"
         MOMO = "MOMO", "Mobile Money"
         BANK = "BANK", "Bank"
+        CREDIT = "CREDIT", "Credit"
         OTHER = "OTHER", "Other"
 
     payment_id = models.BigAutoField(primary_key=True)

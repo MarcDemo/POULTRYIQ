@@ -78,11 +78,13 @@ class ExpenseTransaction(models.Model):
     PAYMENT_CASH = "Cash"
     PAYMENT_MOBILE = "Mobile Money"
     PAYMENT_BANK = "Bank"
+    PAYMENT_CREDIT = "Credit"
     PAYMENT_CHECK = "Check"
     PAYMENT_METHOD_CHOICES = [
         (PAYMENT_CASH, "Cash"),
         (PAYMENT_MOBILE, "Mobile Money"),
         (PAYMENT_BANK, "Bank"),
+        (PAYMENT_CREDIT, "Credit"),
         (PAYMENT_CHECK, "Check"),
     ]
     payment_method = models.CharField(max_length=30, choices=PAYMENT_METHOD_CHOICES, default=PAYMENT_CASH, blank=True)

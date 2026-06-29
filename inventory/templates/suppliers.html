@@ -52,6 +52,54 @@
 </div>
 
 <div class="mb-3">
+    <label for="preferred_payment_method" class="form-label">
+        <i class="bi bi-wallet2 me-1"></i>Preferred Mode of Payment
+    </label>
+    <select class="form-select" id="preferred_payment_method" name="preferred_payment_method" required>
+        <option value="Cash" {% if request.POST.preferred_payment_method == "Cash" or not request.POST.preferred_payment_method %}selected{% endif %}>Cash</option>
+        <option value="Mobile Money" {% if request.POST.preferred_payment_method == "Mobile Money" %}selected{% endif %}>MoMo</option>
+        <option value="Bank" {% if request.POST.preferred_payment_method == "Bank" %}selected{% endif %}>Bank</option>
+        <option value="Credit" {% if request.POST.preferred_payment_method == "Credit" %}selected{% endif %}>Credit</option>
+    </select>
+</div>
+
+<div class="row g-3 mb-3" id="supplier_credit_terms" style="display:none;">
+   
+    <div class="col-md-4">
+        <label for="credit_paid_upfront" class="form-label">
+            <i class="bi bi-percent me-1"></i>Paid Upfront (%)
+        </label>
+        <input class="form-control" id="credit_paid_upfront" name="credit_paid_upfront" value="{{ request.POST.credit_paid_upfront|default:'' }}" type="number" min="0" max="100" step="0.01" placeholder="e.g., 50">
+    </div>
+    <div class="col-md-4">
+        <label for="credit_grace_period_days" class="form-label">
+            <i class="bi bi-hourglass-split me-1"></i>Grace Period
+        </label>
+        <input class="form-control" id="credit_grace_period_days" name="credit_grace_period_days" value="{{ request.POST.credit_grace_period_days|default:'' }}" type="number" min="0" step="1" placeholder="Days">
+    </div>
+    <div class="col-md-4">
+        <label for="credit_period" class="form-label">
+            <i class="bi bi-calendar-range me-1"></i>Credit Period
+        </label>
+        <input class="form-control" id="credit_period" name="credit_period" value="{{ request.POST.credit_period|default:'' }}" placeholder="e.g., 30 days">
+    </div>
+</div>
+
+<div class="mb-3" id="supplier_bank_terms" style="display:none;">
+    <label for="bank_account_number" class="form-label">
+        <i class="bi bi-bank me-1"></i>Bank Account Number
+    </label>
+    <input class="form-control" id="bank_account_number" name="bank_account_number" value="{{ request.POST.bank_account_number|default:'' }}" placeholder="Account number">
+</div>
+
+<div class="mb-3" id="supplier_momo_terms" style="display:none;">
+    <label for="momo_receiving_number" class="form-label">
+        <i class="bi bi-phone me-1"></i>MoMo Receiving Number
+    </label>
+    <input class="form-control" id="momo_receiving_number" name="momo_receiving_number" value="{{ request.POST.momo_receiving_number|default:'' }}" placeholder="+256...">
+</div>
+
+<div class="mb-3">
     <label class="form-label">
         <i class="bi bi-box me-1"></i>Products Supplied
     </label>
@@ -107,6 +155,8 @@
 <th>Phone</th>
 <th>Location</th>
 <th>Product</th>
+<th>Payment</th>
+<th>Credit Terms</th>
 <th>Actions</th>
 </tr>
 </thead>
@@ -120,11 +170,29 @@
 <td>{{ supplier.phone|default:"-" }}</td>
 <td>{{ supplier.location|default:"-" }}</td>
 <td>{{ supplier.product|default:"-" }}</td>
+<td>{{ supplier.get_preferred_payment_method_display }}</td>
+<td>
+    {% if supplier.preferred_payment_method == "Credit" %}
+        {{ supplier.credit_period|default:"-" }}
+        {% if supplier.credit_paid_upfront or supplier.credit_paid_upfront == 0 %}
+            <div class="small text-muted">{{ supplier.credit_paid_upfront|floatformat:2 }}% paid upfront, balance after {{ supplier.credit_grace_period_days }} days</div>
+        {% endif %}
+        {% if supplier.credit_repayment_plan %}
+            <div class="small text-muted">{{ supplier.credit_repayment_plan }}</div>
+        {% endif %}
+    {% elif supplier.preferred_payment_method == "Bank" %}
+        {{ supplier.bank_account_number|default:"-" }}
+    {% elif supplier.preferred_payment_method == "Mobile Money" %}
+        {{ supplier.momo_receiving_number|default:"-" }}
+    {% else %}
+        -
+    {% endif %}
+</td>
 <td><span class="badge bg-success">Active</span></td>
 </tr>
 {% empty %}
 <tr>
-<td colspan="6" class="text-center text-muted py-3">No suppliers recorded yet.</td>
+<td colspan="8" class="text-center text-muted py-3">No suppliers recorded yet.</td>
 </tr>
 {% endfor %}
 
@@ -152,6 +220,44 @@
     const productSearch = document.getElementById('product_search');
     const productOptions = Array.from(document.querySelectorAll('.supplier-product-option'));
     const productGroups = Array.from(document.querySelectorAll('.supplier-product-group'));
+    const paymentSelect = document.getElementById('preferred_payment_method');
+    const creditTerms = document.getElementById('supplier_credit_terms');
+    const bankTerms = document.getElementById('supplier_bank_terms');
+    const momoTerms = document.getElementById('supplier_momo_terms');
+    const bankAccountInput = document.getElementById('bank_account_number');
+    const momoReceivingInput = document.getElementById('momo_receiving_number');
+    const repaymentPlanInput = document.getElementById('credit_repayment_plan');
+    const creditPaidUpfrontInput = document.getElementById('credit_paid_upfront');
+    const gracePeriodInput = document.getElementById('credit_grace_period_days');
+    const creditPeriodInput = document.getElementById('credit_period');
+
+    function toggleSupplierPaymentTerms() {
+        const isCredit = paymentSelect && paymentSelect.value === 'Credit';
+        const isBank = paymentSelect && paymentSelect.value === 'Bank';
+        const isMomo = paymentSelect && paymentSelect.value === 'Mobile Money';
+        if (creditTerms) creditTerms.style.display = isCredit ? '' : 'none';
+        if (bankTerms) bankTerms.style.display = isBank ? '' : 'none';
+        if (momoTerms) momoTerms.style.display = isMomo ? '' : 'none';
+        if (bankAccountInput) bankAccountInput.required = isBank;
+        if (momoReceivingInput) momoReceivingInput.required = isMomo;
+        if (repaymentPlanInput) repaymentPlanInput.required = isCredit;
+        if (creditPaidUpfrontInput) creditPaidUpfrontInput.required = isCredit;
+        if (gracePeriodInput) gracePeriodInput.required = isCredit;
+        if (creditPeriodInput) creditPeriodInput.required = isCredit;
+        if (!isBank && bankAccountInput) bankAccountInput.value = '';
+        if (!isMomo && momoReceivingInput) momoReceivingInput.value = '';
+        if (!isCredit) {
+            if (repaymentPlanInput) repaymentPlanInput.value = '';
+            if (creditPaidUpfrontInput) creditPaidUpfrontInput.value = '';
+            if (gracePeriodInput) gracePeriodInput.value = '';
+            if (creditPeriodInput) creditPeriodInput.value = '';
+        }
+    }
+
+    if (paymentSelect) {
+        paymentSelect.addEventListener('change', toggleSupplierPaymentTerms);
+        toggleSupplierPaymentTerms();
+    }
 
     if (productSearch) {
         productSearch.addEventListener('input', function () {

@@ -29,6 +29,7 @@ from poultry.models import (
     egg_collection,
 )
 from sales.models import CustomerPayment, ReceivableLedger, SaleInvoice, SaleItem
+from accounting.services import get_pl_data, get_bs_data
 
 from .models import InvestorCapitalTransaction, Role, User, validate_house_assignment
 
@@ -1885,4 +1886,50 @@ def valuation(request):
 
 @login_required(login_url='login')
 def investor_reports(request):
-    return render(request, 'investor_reports.html')
+    start_date_str = request.GET.get("start_date", "").strip()
+    end_date_str = request.GET.get("end_date", "").strip()
+
+    if start_date_str:
+        try:
+            start_date = date.fromisoformat(start_date_str)
+        except ValueError:
+            start_date = None
+            messages.error(request, "Invalid start date. Please use YYYY-MM-DD.")
+    else:
+        start_date = None
+
+    if end_date_str:
+        try:
+            end_date = date.fromisoformat(end_date_str)
+        except ValueError:
+            end_date = None
+            messages.error(request, "Invalid end date. Please use YYYY-MM-DD.")
+    else:
+        end_date = None
+
+    pl_data = get_pl_data(start_date, end_date)
+    bs_data = get_bs_data(start_date, end_date)
+
+    fixed_assets_total = Decimal("0.00")
+    accumulated_depreciation_total = Decimal("0.00")
+
+    for group in bs_data.get("grouped_accounts", []):
+        for type_group in group.get("type_groups", []):
+            if type_group.get("type_value") == "FIXED_ASSET":
+                fixed_assets_total += type_group.get("type_total", Decimal("0.00"))
+            if type_group.get("type_value") == "ACCUMULATED_DEPRECIATION":
+                accumulated_depreciation_total += type_group.get("type_total", Decimal("0.00"))
+
+    net_book_value = fixed_assets_total - accumulated_depreciation_total
+
+    context = {
+        "start_date": start_date_str,
+        "end_date": end_date_str,
+        "pl_data": pl_data,
+        "bs_data": bs_data,
+        "fixed_assets_total": fixed_assets_total,
+        "accumulated_depreciation_total": accumulated_depreciation_total,
+        "net_book_value": net_book_value,
+    }
+
+    return render(request, 'investor_reports.html', context)

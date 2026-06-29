@@ -17,7 +17,7 @@
                 </div>
 
                 <div class="card-body">
-                    <form method="POST" novalidate>
+                    <form method="POST" enctype="multipart/form-data" novalidate>
                         {% csrf_token %}
 
                         <div class="row g-3">
@@ -47,6 +47,20 @@
                                     <i class="bi bi-telephone me-1"></i>Telephone
                                 </label>
                                 <input type="tel" id="phone_number" class="form-control" name="phone_number" value="{{ form_data.phone_number }}" placeholder="+256 700 000000">
+                            </div>
+
+                            <div class="col-md-2">
+                                <label for="age" class="form-label">
+                                    <i class="bi bi-calendar3 me-1"></i>Age
+                                </label>
+                                <input type="number" id="age" class="form-control" min="1" name="age" value="{{ form_data.age }}">
+                            </div>
+
+                            <div class="col-md-4">
+                                <label for="profile_photo" class="form-label">
+                                    <i class="bi bi-image me-1"></i>Profile Picture
+                                </label>
+                                <input type="file" id="profile_photo" class="form-control" name="profile_photo" accept="image/*">
                             </div>
 
                             {% if not editing_user %}
@@ -87,6 +101,108 @@
                                 </select>
                             </div>
 
+                            <div class="col-md-3">
+                                <label for="employee_number" class="form-label">
+                                    <i class="bi bi-person-badge me-1"></i>Employee #
+                                </label>
+                                <input type="text" id="employee_number" class="form-control" name="employee_number" value="{{ form_data.employee_number }}">
+                            </div>
+
+                            <div class="col-md-3">
+                                <label for="job_title" class="form-label">
+                                    <i class="bi bi-briefcase me-1"></i>Job Title
+                                </label>
+                                <input type="text" id="job_title" class="form-control" name="job_title" value="{{ form_data.job_title }}">
+                            </div>
+
+                            <div class="col-md-3">
+                                <label for="tin_number" class="form-label">
+                                    <i class="bi bi-receipt me-1"></i>TIN
+                                </label>
+                                <input type="text" id="tin_number" class="form-control" name="tin_number" value="{{ form_data.tin_number }}">
+                            </div>
+
+                            <div class="col-md-3">
+                                <label for="nssf_number" class="form-label">
+                                    <i class="bi bi-file-earmark-text me-1"></i>NSSF Number
+                                </label>
+                                <input type="text" id="nssf_number" class="form-control" name="nssf_number" value="{{ form_data.nssf_number }}">
+                            </div>
+
+                            <div class="col-md-3">
+                                <label for="national_id" class="form-label">
+                                    <i class="bi bi-card-text me-1"></i>National ID
+                                </label>
+                                <input type="text" id="national_id" class="form-control" name="national_id" value="{{ form_data.national_id }}">
+                            </div>
+
+                            <div class="col-md-3">
+                                <label for="hire_date" class="form-label">
+                                    <i class="bi bi-calendar-check me-1"></i>Hire Date
+                                </label>
+                                <input type="date" id="hire_date" class="form-control" name="hire_date" value="{{ form_data.hire_date }}">
+                            </div>
+
+                            <div class="col-md-6">
+                                <label for="monthly_salary" class="form-label">
+                                    <i class="bi bi-cash-coin me-1"></i>Gross Salary
+                                </label>
+                                <input type="number" id="monthly_salary" class="form-control" name="monthly_salary" value="{{ form_data.monthly_salary }}" min="0" step="0.01" placeholder="0.00">
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label d-block">
+                                    <i class="bi bi-receipt me-1"></i>Payroll Deductions
+                                </label>
+                                <div class="form-check form-check-inline">
+                                    <input class="form-check-input" type="checkbox" id="pay_nssf" name="pay_nssf" {% if form_data.pay_nssf != "False" %}checked{% endif %}>
+                                    <label class="form-check-label" for="pay_nssf">Pays NSSF</label>
+                                </div>
+                                <div class="form-check form-check-inline">
+                                    <input class="form-check-input" type="checkbox" id="pay_paye" name="pay_paye" {% if form_data.pay_paye != "False" %}checked{% endif %}>
+                                    <label class="form-check-label" for="pay_paye">Pays PAYE</label>
+                                </div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label for="employment_status" class="form-label">
+                                    <i class="bi bi-person-check me-1"></i>Employment Status
+                                </label>
+                                <select id="employment_status" class="form-select" name="employment_status">
+                                    {% for value, label in employment_status_choices %}
+                                    <option value="{{ value }}" {% if form_data.employment_status == value %}selected{% endif %}>{{ label }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+
+                            <div class="col-md-4">
+                                <label for="next_of_kin_name" class="form-label">
+                                    <i class="bi bi-people me-1"></i>Next of Kin Name
+                                </label>
+                                <input type="text" id="next_of_kin_name" class="form-control" name="next_of_kin_name" value="{{ form_data.next_of_kin_name }}">
+                            </div>
+
+                            <div class="col-md-4">
+                                <label for="next_of_kin_contact" class="form-label">
+                                    <i class="bi bi-telephone-plus me-1"></i>Next of Kin Contact
+                                </label>
+                                <input type="text" id="next_of_kin_contact" class="form-control" name="next_of_kin_contact" value="{{ form_data.next_of_kin_contact }}">
+                            </div>
+
+                            <div class="col-md-4">
+                                <label for="emergency_contact" class="form-label">
+                                    <i class="bi bi-telephone-inbound me-1"></i>Emergency Contact
+                                </label>
+                                <input type="text" id="emergency_contact" class="form-control" name="emergency_contact" value="{{ form_data.emergency_contact }}">
+                            </div>
+
+                            <div class="col-12">
+                                <label for="physical_address" class="form-label">
+                                    <i class="bi bi-geo-alt me-1"></i>Physical Address
+                                </label>
+                                <input type="text" id="physical_address" class="form-control" name="physical_address" value="{{ form_data.physical_address }}">
+                            </div>
+
                             <div class="col-12">
                                 <label for="houses" class="form-label">
                                     <i class="bi bi-house me-1"></i>Poultry Houses
@@ -99,6 +215,13 @@
                                     {% endfor %}
                                 </select>
                                 <small class="form-text text-muted">Workers and supervisors must be assigned to at least one house.</small>
+                            </div>
+
+                            <div class="col-12">
+                                <label for="notes" class="form-label">
+                                    <i class="bi bi-journal-text me-1"></i>Notes
+                                </label>
+                                <textarea id="notes" class="form-control" name="notes" rows="3">{{ form_data.notes }}</textarea>
                             </div>
                         </div>
 

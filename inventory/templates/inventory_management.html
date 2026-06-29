@@ -135,6 +135,58 @@
 </div>
 
 <div class="mb-3">
+    <label for="payment_method" class="form-label">
+        <i class="bi bi-wallet2 me-1"></i>Payment Method
+    </label>
+    <select class="form-select" id="payment_method" name="payment_method" required>
+        {% for value, label in payment_method_choices %}
+        <option value="{{ value }}" {% if request.POST.payment_method == value or not request.POST.payment_method and value == "Cash" %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+    </select>
+</div>
+
+<div class="row g-3 mb-3" id="purchaseCreditTerms" style="display:none;">
+    <div class="col-12">
+        <label for="credit_repayment_plan" class="form-label">
+            <i class="bi bi-list-check me-1"></i>Repayment Plan
+        </label>
+        <textarea class="form-control" id="credit_repayment_plan" name="credit_repayment_plan" rows="2" placeholder="e.g., Pay half now, balance after sale">{{ request.POST.credit_repayment_plan|default:"" }}</textarea>
+    </div>
+    <div class="col-md-4">
+        <label for="credit_paid_upfront" class="form-label">
+            <i class="bi bi-percent me-1"></i>Paid Upfront (%)
+        </label>
+        <input class="form-control" id="credit_paid_upfront" name="credit_paid_upfront" value="{{ request.POST.credit_paid_upfront|default:'' }}" type="number" min="0" max="100" step="0.01" placeholder="e.g., 50">
+    </div>
+    <div class="col-md-4">
+        <label for="credit_grace_period_days" class="form-label">
+            <i class="bi bi-hourglass-split me-1"></i>Grace Days
+        </label>
+        <input class="form-control" id="credit_grace_period_days" name="credit_grace_period_days" value="{{ request.POST.credit_grace_period_days|default:'' }}" type="number" min="0" step="1" placeholder="Days">
+    </div>
+    <div class="col-md-4">
+        <label for="credit_period" class="form-label">
+            <i class="bi bi-calendar-range me-1"></i>Credit Period
+        </label>
+        <input class="form-control" id="credit_period" name="credit_period" value="{{ request.POST.credit_period|default:'' }}" placeholder="e.g., 30 days">
+    </div>
+</div>
+
+<div class="mb-3" id="purchaseBankTerms" style="display:none;">
+    <label for="bank_account_number" class="form-label">
+        <i class="bi bi-bank me-1"></i>Bank Account Number
+    </label>
+    <input class="form-control" id="bank_account_number" name="bank_account_number" value="{{ request.POST.bank_account_number|default:'' }}" placeholder="Account number">
+</div>
+
+<div class="mb-3" id="purchaseMomoTerms" style="display:none;">
+    <label for="momo_receiving_number" class="form-label">
+        <i class="bi bi-phone me-1"></i>MoMo Receiving Number
+    </label>
+    <input class="form-control" id="momo_receiving_number" name="momo_receiving_number" value="{{ request.POST.momo_receiving_number|default:'' }}" placeholder="+256...">
+</div>
+
+<div class="mb-3">
     <label for="expiry_date" class="form-label">
         <i class="bi bi-calendar-event me-1"></i>Expiry Date
     </label>
@@ -233,11 +285,25 @@
 
 </div>
 
+{{ supplier_payment_terms|json_script:"supplier-payment-terms-data" }}
+
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     const categorySelect = document.getElementById('category');
     const otherWrapper = document.getElementById('otherCategoryWrapper');
     const otherInput = document.getElementById('other_category_name');
+    const supplierSelect = document.getElementById('supplier_name');
+    const paymentSelect = document.getElementById('payment_method');
+    const creditTerms = document.getElementById('purchaseCreditTerms');
+    const bankTerms = document.getElementById('purchaseBankTerms');
+    const momoTerms = document.getElementById('purchaseMomoTerms');
+    const bankAccountInput = document.getElementById('bank_account_number');
+    const momoReceivingInput = document.getElementById('momo_receiving_number');
+    const repaymentPlanInput = document.getElementById('credit_repayment_plan');
+    const creditPaidUpfrontInput = document.getElementById('credit_paid_upfront');
+    const gracePeriodInput = document.getElementById('credit_grace_period_days');
+    const creditPeriodInput = document.getElementById('credit_period');
+    const supplierPaymentTerms = JSON.parse(document.getElementById('supplier-payment-terms-data').textContent);
 
     function toggleOtherCategoryInput() {
         const selected = categorySelect.options[categorySelect.selectedIndex];
@@ -254,6 +320,46 @@ document.addEventListener('DOMContentLoaded', function () {
 
     categorySelect.addEventListener('change', toggleOtherCategoryInput);
     toggleOtherCategoryInput();
+
+    function togglePurchasePaymentTerms() {
+        const isCredit = paymentSelect.value === 'Credit';
+        const isBank = paymentSelect.value === 'Bank';
+        const isMomo = paymentSelect.value === 'Mobile Money';
+        creditTerms.style.display = isCredit ? '' : 'none';
+        bankTerms.style.display = isBank ? '' : 'none';
+        momoTerms.style.display = isMomo ? '' : 'none';
+        bankAccountInput.required = isBank;
+        momoReceivingInput.required = isMomo;
+        repaymentPlanInput.required = isCredit;
+        creditPaidUpfrontInput.required = isCredit;
+        gracePeriodInput.required = isCredit;
+        creditPeriodInput.required = isCredit;
+        if (!isBank) bankAccountInput.value = '';
+        if (!isMomo) momoReceivingInput.value = '';
+        if (!isCredit) {
+            repaymentPlanInput.value = '';
+            creditPaidUpfrontInput.value = '';
+            gracePeriodInput.value = '';
+            creditPeriodInput.value = '';
+        }
+    }
+
+    function applySupplierPaymentTerms() {
+        const terms = supplierPaymentTerms[supplierSelect.value];
+        if (!terms) return;
+        paymentSelect.value = terms.payment_method || 'Cash';
+        bankAccountInput.value = terms.bank_account_number || '';
+        momoReceivingInput.value = terms.momo_receiving_number || '';
+        repaymentPlanInput.value = terms.credit_repayment_plan || '';
+        creditPaidUpfrontInput.value = terms.credit_paid_upfront || '';
+        gracePeriodInput.value = terms.credit_grace_period_days ?? '';
+        creditPeriodInput.value = terms.credit_period || '';
+        togglePurchasePaymentTerms();
+    }
+
+    supplierSelect.addEventListener('change', applySupplierPaymentTerms);
+    paymentSelect.addEventListener('change', togglePurchasePaymentTerms);
+    togglePurchasePaymentTerms();
 });
 </script>
 

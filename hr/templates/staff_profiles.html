@@ -1,0 +1,62 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+        <h3><i class="bi bi-person-vcard me-2"></i>Staff Profiles</h3>
+    </div>
+
+    <form method="get" class="card mb-3">
+        <div class="card-body">
+            <div class="row g-2 align-items-end">
+                <div class="col-md-9">
+                    <label class="form-label" for="staffSearch">Search Staff</label>
+                    <input id="staffSearch" class="form-control" type="search" name="q" value="{{ q }}" placeholder="Search by name, phone, email, employee number, or job title">
+                </div>
+                <div class="col-md-3 d-flex gap-2">
+                    <button class="btn btn-primary flex-fill" type="submit"><i class="bi bi-search me-1"></i>Search</button>
+                    {% if q %}<a class="btn btn-light" href="{% url 'staff_profiles' %}">Clear</a>{% endif %}
+                </div>
+            </div>
+        </div>
+    </form>
+
+    <div class="card">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                    <thead>
+                        <tr>
+                            <th>Staff</th>
+                            <th>Role</th>
+                            <th>Job Title</th>
+                            <th>Contact</th>
+                            <th>Monthly Salary</th>
+                            <th>Status</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for user in staff_users %}
+                        <tr>
+                            <td><strong>{{ user.display_name }}</strong><div class="small text-muted">{{ user.staff_profile.employee_number|default:user.username }}</div></td>
+                            <td>{{ user.role.name|default:"-" }}</td>
+                            <td>{{ user.staff_profile.job_title|default:"-" }}</td>
+                            <td>{{ user.phone_number|default:"-" }}<div class="small text-muted">{{ user.email|default:"" }}</div></td>
+                            <td>UGX {{ user.staff_profile.monthly_salary|default:0|floatformat:0 }}</td>
+                            <td><span class="badge bg-success">{{ user.staff_profile.get_employment_status_display|default:"Active" }}</span></td>
+                            <td>
+                                <a class="btn btn-sm btn-primary" href="{% url 'staff_profile_detail' user.pk %}">View</a>
+                                <a class="btn btn-sm btn-warning" href="{% url 'edit_staff_profile' user.pk %}">Edit</a>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="7" class="text-center text-muted py-3">No staff profiles found.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% include "partials/pagination.html" %}
+</div>
+{% endblock %}

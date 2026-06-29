@@ -1,0 +1,154 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container-fluid">
+    <div class="page-header-row mb-4">
+        <div>
+            <h2 class="mb-1"><i class="bi bi-tools me-2"></i>{{ project.project_name }}</h2>
+            <small class="text-muted">{{ project.get_asset_category_display }} / {{ project.project_name }}</small>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="{% url 'asset_construction_projects' %}" class="btn btn-secondary">
+                <i class="bi bi-arrow-left me-2"></i>Back to Projects
+            </a>
+        </div>
+    </div>
+
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        {% endfor %}
+    {% endif %}
+
+    <div class="row g-4">
+        <div class="col-lg-5">
+            <div class="card mb-3">
+                <div class="card-header"><i class="bi bi-info-circle me-2"></i>Project Status</div>
+                <div class="card-body">
+                    <p class="mb-2"><strong>Status:</strong>
+                        {% if project.status == 'IN_PROGRESS' %}
+                        <span class="badge bg-warning text-dark">In Progress</span>
+                        {% else %}
+                        <span class="badge bg-success">Completed</span>
+                        {% endif %}
+                    </p>
+                    <p class="mb-2"><strong>Start:</strong> {{ project.start_date|date:'M d, Y' }}</p>
+                    <p class="mb-0"><strong>Total Cost:</strong> {{ project.total_cost|floatformat:2 }}</p>
+                </div>
+            </div>
+
+            {% if project.status == 'IN_PROGRESS' %}
+            <div class="card mb-3">
+                <div class="card-header"><i class="bi bi-plus-circle me-2"></i>Add Construction Cost</div>
+                <div class="card-body">
+                    <form method="post" class="row g-3">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="add_cost">
+                        <div class="col-md-6">
+                            <label class="form-label">Date</label>
+                            <input type="date" name="cost_date" class="form-control" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Amount</label>
+                            <input type="number" name="amount" step="0.01" min="0.01" class="form-control" required>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Cost Item</label>
+                            <select name="cost_item_name" id="cost-item-select" class="form-select" required>
+                                <option value="">Select cost item...</option>
+                                {% for item in construction_cost_items %}
+                                <option value="{{ item }}">{{ item }}</option>
+                                {% endfor %}
+                                <option value="OTHER">Other (Specify)</option>
+                            </select>
+                        </div>
+                        <div class="col-12 d-none" id="custom-cost-item-wrap">
+                            <label class="form-label">Custom Cost Item</label>
+                            <input name="custom_cost_item_name" id="custom-cost-item" class="form-control" placeholder="Enter custom cost item">
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Notes</label>
+                            <textarea name="notes" rows="2" class="form-control"></textarea>
+                        </div>
+                        <div class="col-12">
+                            <button class="btn btn-primary" type="submit">Add Cost Line</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <div class="card border-success">
+                <div class="card-header bg-success text-white"><i class="bi bi-check2-circle me-2"></i>Complete Project</div>
+                <div class="card-body">
+                    <form method="post" class="row g-3">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="complete">
+                        <div class="col-12">
+                            <label class="form-label">Completion Date</label>
+                            <input type="date" name="completed_date" class="form-control" required>
+                        </div>
+                        <div class="col-12">
+                            <button class="btn btn-success" type="submit">Complete and Capitalize</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <div class="col-lg-7">
+            <div class="card">
+                <div class="card-header"><i class="bi bi-table me-2"></i>Recorded Cost Lines</div>
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Date</th>
+                                <th>Cost Item</th>
+                                <th>Notes</th>
+                                <th class="text-end">Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in cost_lines %}
+                            <tr>
+                                <td>{{ row.cost_date|date:'M d, Y' }}</td>
+                                <td>{{ row.cost_item_name }}</td>
+                                <td>{{ row.notes|default:'-' }}</td>
+                                <td class="text-end">{{ row.amount|floatformat:2 }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="4" class="text-center text-muted py-3">No construction costs recorded yet.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+    document.addEventListener("DOMContentLoaded", function () {
+        const select = document.getElementById("cost-item-select");
+        const customWrap = document.getElementById("custom-cost-item-wrap");
+        const customInput = document.getElementById("custom-cost-item");
+        if (!select || !customWrap || !customInput) {
+            return;
+        }
+
+        const toggleCustomItem = function () {
+            const isOther = select.value === "OTHER";
+            customWrap.classList.toggle("d-none", !isOther);
+            customInput.required = isOther;
+            if (!isOther) {
+                customInput.value = "";
+            }
+        };
+
+        select.addEventListener("change", toggleCustomItem);
+        toggleCustomItem();
+    });
+</script>
+{% endblock %}

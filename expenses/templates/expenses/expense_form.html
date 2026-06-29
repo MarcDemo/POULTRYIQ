@@ -37,6 +37,14 @@
         <div class="tab-pane fade {% if active_tab != 'purchases' and active_tab != 'salaries' %}show active{% endif %}" id="expenses-panel">
             <div class="row">
                 <div class="col-lg-8">
+                    <div class="d-flex flex-wrap gap-2 mb-3">
+                        <a href="{% url 'fixed_assets' %}" class="btn btn-outline-primary">
+                            <i class="bi bi-building me-2"></i>Record Fixed Asset
+                        </a>
+                        <a href="{% url 'asset_construction_projects' %}" class="btn btn-outline-success">
+                            <i class="bi bi-hammer me-2"></i>Asset Construction
+                        </a>
+                    </div>
                     <div class="card">
                         <div class="card-header">
                             <h5 class="mb-0">Record Expense</h5>
@@ -78,6 +86,7 @@
                                         <option value="Cash">Cash</option>
                                         <option value="Mobile Money">Mobile Money</option>
                                         <option value="Bank">Bank</option>
+                                        <option value="Credit">Credit</option>
                                         <option value="Check">Check</option>
                                     </select>
                                 </div>
@@ -182,8 +191,38 @@
                                         <option value="Cash">Cash</option>
                                         <option value="Mobile Money">Mobile Money</option>
                                         <option value="Bank">Bank</option>
+                                        <option value="Credit">Credit</option>
                                         <option value="Check">Check</option>
                                     </select>
+                                </div>
+
+                                <div class="row mb-3" id="purchase-credit-terms" style="display:none;">
+                                    <div class="col-md-12">
+                                        <label class="form-label">Repayment Plan</label>
+                                        <textarea name="credit_repayment_plan" id="purchase-credit-repayment-plan" class="form-control" rows="2" placeholder="e.g., Pay 50% after 2 weeks, balance after 30 days"></textarea>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label">Paid Upfront (%)</label>
+                                        <input type="number" name="credit_paid_upfront" id="purchase-credit-paid-upfront" class="form-control" min="0" max="100" step="0.01" placeholder="e.g., 50">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label">Grace Period</label>
+                                        <input type="number" name="credit_grace_period_days" id="purchase-credit-grace-period-days" class="form-control" min="0" step="1" placeholder="Days">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label">Credit Period</label>
+                                        <input type="text" name="credit_period" id="purchase-credit-period" class="form-control" placeholder="e.g., 30 days">
+                                    </div>
+                                </div>
+
+                                <div class="mb-3" id="purchase-bank-terms" style="display:none;">
+                                    <label class="form-label">Bank Account Number</label>
+                                    <input type="text" name="bank_account_number" id="purchase-bank-account-number" class="form-control" placeholder="Account number">
+                                </div>
+
+                                <div class="mb-3" id="purchase-momo-terms" style="display:none;">
+                                    <label class="form-label">MoMo Receiving Number</label>
+                                    <input type="text" name="momo_receiving_number" id="purchase-momo-receiving-number" class="form-control" placeholder="+256...">
                                 </div>
                                 
                                 <button type="submit" class="btn btn-primary" {% if not suppliers %}disabled{% endif %}>Record Purchase</button>
@@ -275,6 +314,7 @@
 </style>
 
 {{ supplier_category_map|json_script:"supplier-category-map-data" }}
+{{ supplier_payment_terms|json_script:"supplier-payment-terms-data" }}
 {{ items_by_category|json_script:"items-by-category-data" }}
 
 <script>
@@ -288,7 +328,18 @@
         const quantityInput = document.getElementById('purchase-quantity');
         const unitPriceInput = document.getElementById('purchase-unit-price');
         const totalInput = document.getElementById('purchase-total');
+        const purchasePaymentSelect = document.querySelector('#purchases-panel select[name="payment_method"]');
+        const purchaseCreditTerms = document.getElementById('purchase-credit-terms');
+        const purchaseBankTerms = document.getElementById('purchase-bank-terms');
+        const purchaseMomoTerms = document.getElementById('purchase-momo-terms');
+        const purchaseBankAccountInput = document.getElementById('purchase-bank-account-number');
+        const purchaseMomoReceivingInput = document.getElementById('purchase-momo-receiving-number');
+        const purchaseRepaymentPlanInput = document.getElementById('purchase-credit-repayment-plan');
+        const purchaseCreditPaidUpfrontInput = document.getElementById('purchase-credit-paid-upfront');
+        const purchaseGracePeriodInput = document.getElementById('purchase-credit-grace-period-days');
+        const purchaseCreditPeriodInput = document.getElementById('purchase-credit-period');
         const supplierCategoryMap = JSON.parse(document.getElementById('supplier-category-map-data').textContent);
+        const supplierPaymentTerms = JSON.parse(document.getElementById('supplier-payment-terms-data').textContent);
         const itemsByCategory = JSON.parse(document.getElementById('items-by-category-data').textContent);
         const allCategoryOptions = Array.from(categorySelect.options).map(option => ({
             value: option.value,
@@ -328,6 +379,42 @@
                 });
         }
 
+        function togglePurchasePaymentTerms() {
+            const isCredit = purchasePaymentSelect.value === 'Credit';
+            const isBank = purchasePaymentSelect.value === 'Bank';
+            const isMomo = purchasePaymentSelect.value === 'Mobile Money';
+            purchaseCreditTerms.style.display = isCredit ? '' : 'none';
+            purchaseBankTerms.style.display = isBank ? '' : 'none';
+            purchaseMomoTerms.style.display = isMomo ? '' : 'none';
+            purchaseBankAccountInput.required = isBank;
+            purchaseMomoReceivingInput.required = isMomo;
+            purchaseRepaymentPlanInput.required = isCredit;
+            purchaseCreditPaidUpfrontInput.required = isCredit;
+            purchaseGracePeriodInput.required = isCredit;
+            purchaseCreditPeriodInput.required = isCredit;
+            if (!isBank) purchaseBankAccountInput.value = '';
+            if (!isMomo) purchaseMomoReceivingInput.value = '';
+            if (!isCredit) {
+                purchaseRepaymentPlanInput.value = '';
+                purchaseCreditPaidUpfrontInput.value = '';
+                purchaseGracePeriodInput.value = '';
+                purchaseCreditPeriodInput.value = '';
+            }
+        }
+
+        function applySupplierPaymentTerms() {
+            const terms = supplierPaymentTerms[supplierSelect.value];
+            if (!terms) return;
+            purchasePaymentSelect.value = terms.payment_method || 'Cash';
+            purchaseBankAccountInput.value = terms.bank_account_number || '';
+            purchaseMomoReceivingInput.value = terms.momo_receiving_number || '';
+            purchaseRepaymentPlanInput.value = terms.credit_repayment_plan || '';
+            purchaseCreditPaidUpfrontInput.value = terms.credit_paid_upfront || '';
+            purchaseGracePeriodInput.value = terms.credit_grace_period_days ?? '';
+            purchaseCreditPeriodInput.value = terms.credit_period || '';
+            togglePurchasePaymentTerms();
+        }
+
         function updatePurchaseItems() {
             const categoryId = categorySelect.value;
             const items = itemsByCategory[categoryId] || [];
@@ -347,12 +434,17 @@
             totalInput.value = (quantity * unitPrice).toFixed(2);
         }
 
-        supplierSelect.addEventListener('change', updatePurchaseCategories);
+        supplierSelect.addEventListener('change', function () {
+            updatePurchaseCategories();
+            applySupplierPaymentTerms();
+        });
         categorySelect.addEventListener('change', updatePurchaseItems);
         quantityInput.addEventListener('input', updatePurchaseTotal);
         unitPriceInput.addEventListener('input', updatePurchaseTotal);
+        purchasePaymentSelect.addEventListener('change', togglePurchasePaymentTerms);
         updatePurchaseCategories();
         updatePurchaseTotal();
+        togglePurchasePaymentTerms();
     });
 </script>
 {% endblock %}
