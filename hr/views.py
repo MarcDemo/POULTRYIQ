@@ -13,7 +13,7 @@ from accounts.models import Role, User, validate_house_assignment
 from accounts.views import get_post_login_redirect
 from accounts.decorators import supervisor_required
 from payroll.models import SalaryPayment
-from .models import WelfareRequest
+from .models import StaffProfile, WelfareRequest
 from poultry.models import PoultryHouse
 from poultryiq.pagination import paginate
 
@@ -33,6 +33,71 @@ def _manager_only(request):
 
 def _is_manager(user):
     return _role_code(user) in ("MANAGER", "OWNER")
+
+
+def _is_staff_profile_user(user):
+    return user.is_active and not user.is_investor
+
+
+def _staff_queryset():
+    return (
+        User.objects.select_related("role", "staff_profile")
+        .filter(is_active=True)
+        .exclude(Q(role__code__in=["OWNER", "INVESTOR"]) | Q(role__name__icontains="investor"))
+        .order_by("first_name", "username")
+    )
+
+
+def _ensure_staff_profile(user):
+    profile, _ = StaffProfile.objects.get_or_create(user=user)
+    return profile
+
+
+def _profile_form_data(profile, user):
+    return {
+        "full_name": user.get_full_name().strip() or user.username,
+        "phone_number": user.phone_number,
+        "email": user.email,
+        "age": profile.age or "",
+        "job_title": profile.job_title,
+        "employee_number": profile.employee_number,
+        "tin_number": profile.tin_number,
+        "nssf_number": profile.nssf_number,
+        "national_id": profile.national_id,
+        "next_of_kin_name": profile.next_of_kin_name,
+        "next_of_kin_contact": profile.next_of_kin_contact,
+        "physical_address": profile.physical_address,
+        "emergency_contact": profile.emergency_contact,
+        "monthly_salary": profile.monthly_salary,
+        "pay_nssf": "True" if profile.pay_nssf else "False",
+        "pay_paye": "True" if profile.pay_paye else "False",
+        "employment_status": profile.employment_status,
+        "hire_date": profile.hire_date.isoformat() if profile.hire_date else "",
+        "notes": profile.notes,
+    }
+
+
+def _staff_profile_context(target_user, can_edit=False, form_data=None):
+    profile = _ensure_staff_profile(target_user)
+    leave_history = WelfareRequest.objects.filter(
+        worker=target_user,
+        request_type=WelfareRequest.RequestType.LEAVE,
+    ).select_related("supervisor", "manager")[:20]
+    advance_history = WelfareRequest.objects.filter(
+        worker=target_user,
+        request_type=WelfareRequest.RequestType.SALARY_ADVANCE,
+    ).select_related("supervisor", "manager", "salary_payment")[:20]
+    salary_history = SalaryPayment.objects.filter(employee=target_user).select_related("recorded_by")[:20]
+    return {
+        "staff_user": target_user,
+        "profile": profile,
+        "can_edit": can_edit,
+        "form_data": form_data or _profile_form_data(profile, target_user),
+        "leave_history": leave_history,
+        "advance_history": advance_history,
+        "salary_history": salary_history,
+        "employment_status_choices": StaffProfile.EmploymentStatus.choices,
+    }
 
 
 def _worker_salary_summary(user):
@@ -83,13 +148,274 @@ def _editable_roles():
 
 
 def _user_form_context(form_data=None, selected_house_ids=None, editing_user=None):
+    form_data = form_data or {}
+    form_data.setdefault("age", "")
+    form_data.setdefault("job_title", "")
+    form_data.setdefault("employee_number", "")
+    form_data.setdefault("tin_number", "")
+    form_data.setdefault("nssf_number", "")
+    form_data.setdefault("national_id", "")
+    form_data.setdefault("next_of_kin_name", "")
+    form_data.setdefault("next_of_kin_contact", "")
+    form_data.setdefault("physical_address", "")
+    form_data.setdefault("emergency_contact", "")
+    form_data.setdefault("monthly_salary", "0.00")
+    form_data.setdefault("pay_nssf", "True")
+    form_data.setdefault("pay_paye", "True")
+    form_data.setdefault("employment_status", StaffProfile.EmploymentStatus.ACTIVE)
+    form_data.setdefault("hire_date", "")
+    form_data.setdefault("notes", "")
     return {
-        "form_data": form_data or {},
+        "form_data": form_data,
         "selected_house_ids": selected_house_ids or [],
         "editing_user": editing_user,
         "roles": _editable_roles(),
         "houses": PoultryHouse.objects.filter(is_active=True).order_by("house_code", "name"),
+        "employment_status_choices": StaffProfile.EmploymentStatus.choices,
     }
+
+
+def _profile_data_from_request(request):
+    pay_nssf = request.POST.get("pay_nssf") == "on"
+    pay_paye = request.POST.get("pay_paye") == "on"
+    return {
+        "age": request.POST.get("age", "").strip(),
+        "job_title": request.POST.get("job_title", "").strip(),
+        "employee_number": request.POST.get("employee_number", "").strip(),
+        "tin_number": request.POST.get("tin_number", "").strip(),
+        "nssf_number": request.POST.get("nssf_number", "").strip(),
+        "national_id": request.POST.get("national_id", "").strip(),
+        "next_of_kin_name": request.POST.get("next_of_kin_name", "").strip(),
+        "next_of_kin_contact": request.POST.get("next_of_kin_contact", "").strip(),
+        "physical_address": request.POST.get("physical_address", "").strip(),
+        "emergency_contact": request.POST.get("emergency_contact", "").strip(),
+        "monthly_salary": request.POST.get("monthly_salary", "0").strip(),
+        "pay_nssf": "True" if pay_nssf else "False",
+        "pay_paye": "True" if pay_paye else "False",
+        "employment_status": request.POST.get("employment_status", StaffProfile.EmploymentStatus.ACTIVE).strip(),
+        "hire_date": request.POST.get("hire_date", "").strip(),
+        "notes": request.POST.get("notes", "").strip(),
+    }
+
+
+def _validate_user_profile_data(form_data):
+    errors = []
+    age = None
+    hire_date = None
+    monthly_salary = Decimal("0.00")
+
+    try:
+        age = int(form_data["age"]) if form_data["age"] else None
+        if age is not None and age <= 0:
+            errors.append("Age must be greater than zero.")
+    except ValueError:
+        errors.append("Please enter a valid age.")
+
+    if form_data["hire_date"]:
+        try:
+            hire_date = date.fromisoformat(form_data["hire_date"])
+        except ValueError:
+            errors.append("Please enter a valid hire date.")
+
+    try:
+        monthly_salary = Decimal(form_data["monthly_salary"] or "0")
+        if monthly_salary < 0:
+            errors.append("Gross salary cannot be negative.")
+    except (InvalidOperation, ValueError):
+        errors.append("Please enter a valid gross salary.")
+
+    if form_data["employment_status"] not in dict(StaffProfile.EmploymentStatus.choices):
+        errors.append("Please select a valid employment status.")
+
+    return errors, age, hire_date, monthly_salary
+
+
+def _save_user_profile(user, form_data, age, hire_date, monthly_salary, profile_photo=None):
+    profile, _ = StaffProfile.objects.get_or_create(user=user)
+    profile.age = age
+    profile.job_title = form_data["job_title"]
+    profile.employee_number = form_data["employee_number"]
+    profile.tin_number = form_data["tin_number"]
+    profile.nssf_number = form_data["nssf_number"]
+    profile.national_id = form_data["national_id"]
+    profile.next_of_kin_name = form_data["next_of_kin_name"]
+    profile.next_of_kin_contact = form_data["next_of_kin_contact"]
+    profile.physical_address = form_data["physical_address"]
+    profile.emergency_contact = form_data["emergency_contact"]
+    profile.monthly_salary = monthly_salary
+    profile.pay_nssf = form_data["pay_nssf"] != "False"
+    profile.pay_paye = form_data["pay_paye"] != "False"
+    profile.employment_status = form_data["employment_status"]
+    profile.hire_date = hire_date
+    profile.notes = form_data["notes"]
+    if profile_photo:
+        profile.profile_photo = profile_photo
+    profile.save()
+    return profile
+
+
+@login_required(login_url="login")
+def staff_profiles(request):
+    if request.user.is_investor:
+        messages.error(request, "Staff profiles are not available to investors.")
+        return redirect(get_post_login_redirect(request.user))
+
+    if _is_manager(request.user):
+        query = request.GET.get("q", "").strip()
+        users = _staff_queryset()
+        if query:
+            users = users.filter(
+                Q(username__icontains=query)
+                | Q(first_name__icontains=query)
+                | Q(last_name__icontains=query)
+                | Q(email__icontains=query)
+                | Q(phone_number__icontains=query)
+                | Q(staff_profile__employee_number__icontains=query)
+                | Q(staff_profile__job_title__icontains=query)
+            )
+        page_obj, querystring = paginate(request, users, per_page=20)
+        return render(
+            request,
+            "staff_profiles.html",
+            {
+                "staff_users": page_obj,
+                "page_obj": page_obj,
+                "querystring": querystring,
+                "q": query,
+                "can_manage": True,
+            },
+        )
+
+    if not _is_staff_profile_user(request.user):
+        messages.error(request, "Staff profile not available.")
+        return redirect(get_post_login_redirect(request.user))
+    return redirect("staff_profile_detail", pk=request.user.pk)
+
+
+@login_required(login_url="login")
+def staff_profile_detail(request, pk):
+    target_user = get_object_or_404(_staff_queryset(), pk=pk)
+    if not _is_manager(request.user) and target_user.pk != request.user.pk:
+        messages.error(request, "You can only view your own staff profile.")
+        return redirect("staff_profile_detail", pk=request.user.pk)
+
+    return render(
+        request,
+        "staff_profile_detail.html",
+        _staff_profile_context(target_user, can_edit=_is_manager(request.user)),
+    )
+
+
+@login_required(login_url="login")
+def edit_staff_profile(request, pk):
+    denied = _manager_only(request)
+    if denied:
+        return denied
+
+    target_user = get_object_or_404(_staff_queryset(), pk=pk)
+    profile = _ensure_staff_profile(target_user)
+
+    if request.method == "POST":
+        full_name = request.POST.get("full_name", "").strip()
+        phone_number = request.POST.get("phone_number", "").strip()
+        email = request.POST.get("email", "").strip()
+        age_raw = request.POST.get("age", "").strip()
+        hire_date_raw = request.POST.get("hire_date", "").strip()
+        monthly_salary_raw = request.POST.get("monthly_salary", "0").strip()
+        pay_nssf = request.POST.get("pay_nssf") == "on"
+        pay_paye = request.POST.get("pay_paye") == "on"
+        form_data = {
+            "full_name": full_name,
+            "phone_number": phone_number,
+            "email": email,
+            "age": age_raw,
+            "job_title": request.POST.get("job_title", "").strip(),
+            "employee_number": request.POST.get("employee_number", "").strip(),
+            "tin_number": request.POST.get("tin_number", "").strip(),
+            "nssf_number": request.POST.get("nssf_number", "").strip(),
+            "national_id": request.POST.get("national_id", "").strip(),
+            "next_of_kin_name": request.POST.get("next_of_kin_name", "").strip(),
+            "next_of_kin_contact": request.POST.get("next_of_kin_contact", "").strip(),
+            "physical_address": request.POST.get("physical_address", "").strip(),
+            "emergency_contact": request.POST.get("emergency_contact", "").strip(),
+            "monthly_salary": monthly_salary_raw,
+            "pay_nssf": "True" if pay_nssf else "False",
+            "pay_paye": "True" if pay_paye else "False",
+            "employment_status": request.POST.get("employment_status", StaffProfile.EmploymentStatus.ACTIVE).strip(),
+            "hire_date": hire_date_raw,
+            "notes": request.POST.get("notes", "").strip(),
+        }
+        errors = []
+        age = None
+        hire_date = None
+        monthly_salary = None
+
+        if not full_name:
+            errors.append("Full name is required.")
+        try:
+            age = int(age_raw) if age_raw else None
+            if age is not None and age <= 0:
+                errors.append("Age must be greater than zero.")
+        except ValueError:
+            errors.append("Please enter a valid age.")
+        if hire_date_raw:
+            try:
+                hire_date = date.fromisoformat(hire_date_raw)
+            except ValueError:
+                errors.append("Please enter a valid hire date.")
+        try:
+            monthly_salary = Decimal(monthly_salary_raw or "0")
+            if monthly_salary < 0:
+                errors.append("Monthly salary cannot be negative.")
+        except (InvalidOperation, ValueError):
+            errors.append("Please enter a valid monthly salary.")
+        if form_data["employment_status"] not in dict(StaffProfile.EmploymentStatus.choices):
+            errors.append("Please select a valid employment status.")
+
+        if errors:
+            for error in errors:
+                messages.error(request, error)
+            return render(
+                request,
+                "staff_profile_edit.html",
+                _staff_profile_context(target_user, can_edit=True, form_data=form_data),
+            )
+
+        first_name, last_name = _split_full_name(full_name)
+        target_user.first_name = first_name
+        target_user.last_name = last_name
+        target_user.phone_number = phone_number
+        target_user.email = email
+        target_user.save(update_fields=["first_name", "last_name", "phone_number", "email"])
+
+        profile.age = age
+        profile.job_title = form_data["job_title"]
+        profile.employee_number = form_data["employee_number"]
+        profile.tin_number = form_data["tin_number"]
+        profile.nssf_number = form_data["nssf_number"]
+        profile.national_id = form_data["national_id"]
+        profile.next_of_kin_name = form_data["next_of_kin_name"]
+        profile.next_of_kin_contact = form_data["next_of_kin_contact"]
+        profile.physical_address = form_data["physical_address"]
+        profile.emergency_contact = form_data["emergency_contact"]
+        profile.monthly_salary = monthly_salary
+        profile.pay_nssf = pay_nssf
+        profile.pay_paye = pay_paye
+        profile.employment_status = form_data["employment_status"]
+        profile.hire_date = hire_date
+        profile.notes = form_data["notes"]
+        if request.FILES.get("profile_photo"):
+            profile.profile_photo = request.FILES["profile_photo"]
+        profile.save()
+
+        messages.success(request, f"Profile updated for {target_user.display_name}.")
+        return redirect("staff_profile_detail", pk=target_user.pk)
+
+    return render(
+        request,
+        "staff_profile_edit.html",
+        _staff_profile_context(target_user, can_edit=True),
+    )
 
 
 def worker_welfare(request):
@@ -381,6 +707,7 @@ def add_user(request):
         role_id = request.POST.get("role", "").strip()
         is_active = request.POST.get("is_active", "True") == "True"
         selected_house_ids = request.POST.getlist("houses")
+        profile_data = _profile_data_from_request(request)
         first_name, last_name = _split_full_name(full_name)
 
         form_data = {
@@ -390,11 +717,13 @@ def add_user(request):
             "phone_number": phone_number,
             "role": role_id,
             "is_active": "True" if is_active else "False",
+            **profile_data,
         }
         errors = []
         role = _editable_roles().filter(pk=role_id).first() if role_id else None
         houses = PoultryHouse.objects.filter(is_active=True).order_by("house_code", "name")
         selected_houses = list(houses.filter(pk__in=selected_house_ids))
+        profile_errors, age, hire_date, monthly_salary = _validate_user_profile_data(form_data)
 
         if not username:
             errors.append("Username is required.")
@@ -408,6 +737,7 @@ def add_user(request):
             validate_password(password)
         except ValidationError as exc:
             errors.extend(exc.messages)
+        errors.extend(profile_errors)
         if len(selected_houses) != len(set(selected_house_ids)):
             errors.append("Please select valid poultry houses.")
         if role:
@@ -432,6 +762,7 @@ def add_user(request):
             is_active=is_active,
         )
         user.houses.set(selected_houses)
+        _save_user_profile(user, form_data, age, hire_date, monthly_salary, request.FILES.get("profile_photo"))
         messages.success(request, f"User {user.display_name} created.")
         return redirect("manage_users")
 
@@ -457,6 +788,7 @@ def edit_user(request, pk):
         role_id = request.POST.get("role", "").strip()
         is_active = request.POST.get("is_active", "True") == "True"
         selected_house_ids = request.POST.getlist("houses")
+        profile_data = _profile_data_from_request(request)
         first_name, last_name = _split_full_name(full_name)
 
         form_data = {
@@ -466,11 +798,13 @@ def edit_user(request, pk):
             "phone_number": phone_number,
             "role": role_id,
             "is_active": "True" if is_active else "False",
+            **profile_data,
         }
         errors = []
         role = _editable_roles().filter(pk=role_id).first() if role_id else None
         houses = PoultryHouse.objects.filter(is_active=True).order_by("house_code", "name")
         selected_houses = list(houses.filter(pk__in=selected_house_ids))
+        profile_errors, age, hire_date, monthly_salary = _validate_user_profile_data(form_data)
 
         if not username:
             errors.append("Username is required.")
@@ -478,6 +812,7 @@ def edit_user(request, pk):
             errors.append("Username already exists.")
         if not role:
             errors.append("Please select a valid editable role.")
+        errors.extend(profile_errors)
         if len(selected_houses) != len(set(selected_house_ids)):
             errors.append("Please select valid poultry houses.")
         if role:
@@ -504,10 +839,12 @@ def edit_user(request, pk):
         target_user.is_active = is_active
         target_user.save(update_fields=["username", "first_name", "last_name", "email", "phone_number", "role", "is_active"])
         target_user.houses.set(selected_houses)
+        _save_user_profile(target_user, form_data, age, hire_date, monthly_salary, request.FILES.get("profile_photo"))
         messages.success(request, f"User {target_user.display_name} updated.")
         return redirect("manage_users")
 
     full_name = target_user.get_full_name().strip() or target_user.username
+    profile = getattr(target_user, "staff_profile", None)
     form_data = {
         "username": target_user.username,
         "full_name": full_name,
@@ -515,6 +852,22 @@ def edit_user(request, pk):
         "phone_number": target_user.phone_number,
         "role": str(target_user.role_id or ""),
         "is_active": "True" if target_user.is_active else "False",
+        "monthly_salary": profile.monthly_salary if profile else "0.00",
+        "pay_nssf": "True" if not profile or profile.pay_nssf else "False",
+        "pay_paye": "True" if not profile or profile.pay_paye else "False",
+        "age": profile.age if profile and profile.age else "",
+        "job_title": profile.job_title if profile else "",
+        "employee_number": profile.employee_number if profile else "",
+        "tin_number": profile.tin_number if profile else "",
+        "nssf_number": profile.nssf_number if profile else "",
+        "national_id": profile.national_id if profile else "",
+        "next_of_kin_name": profile.next_of_kin_name if profile else "",
+        "next_of_kin_contact": profile.next_of_kin_contact if profile else "",
+        "physical_address": profile.physical_address if profile else "",
+        "emergency_contact": profile.emergency_contact if profile else "",
+        "employment_status": profile.employment_status if profile else StaffProfile.EmploymentStatus.ACTIVE,
+        "hire_date": profile.hire_date.isoformat() if profile and profile.hire_date else "",
+        "notes": profile.notes if profile else "",
     }
     selected_house_ids = [str(pk) for pk in target_user.houses.values_list("pk", flat=True)]
     return render(

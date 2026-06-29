@@ -16,6 +16,7 @@ from .models import Customer, CustomerPayment, ReceivableLedger, SaleInvoice, Sa
 
 
 EGGS_PER_TRAY = Decimal("30")
+WHT_RATE = Decimal("0.06")
 
 
 PRODUCTS = {
@@ -229,6 +230,205 @@ def _pending_orders_metrics(queryset):
     }
 
 
+def _payment_method_from_post(raw_value):
+    return {
+        "CASH": Customer.PaymentMethod.CASH,
+        "MOBILE MONEY": Customer.PaymentMethod.MOMO,
+        "MOMO": Customer.PaymentMethod.MOMO,
+        "BANK": Customer.PaymentMethod.BANK,
+        "CREDIT": Customer.PaymentMethod.CREDIT,
+    }.get((raw_value or "").strip().upper(), Customer.PaymentMethod.CASH)
+
+
+def _customer_form_data(request):
+    return {
+        "name": request.POST.get("name", "").strip(),
+        "contact_person": request.POST.get("contact_person", "").strip(),
+        "phone_number": request.POST.get("phone_number", "").strip(),
+        "email": request.POST.get("email", "").strip(),
+        "address": request.POST.get("address", "").strip(),
+        "preferred_payment_method": _payment_method_from_post(request.POST.get("preferred_payment_method", "CASH")),
+        "momo_receiving_number": request.POST.get("momo_receiving_number", "").strip(),
+        "bank_account_number": request.POST.get("bank_account_number", "").strip(),
+        "credit_repayment_plan": request.POST.get("credit_repayment_plan", "").strip(),
+        "allow_credit": request.POST.get("allow_credit") == "on",
+        "pay_wht": request.POST.get("pay_wht") == "on",
+        "credit_limit": request.POST.get("credit_limit", "0").strip(),
+        "credit_days": request.POST.get("credit_days", "0").strip(),
+        "is_active": request.POST.get("is_active", "on") == "on",
+    }
+
+
+def _validate_customer_form(form_data, customer=None):
+    errors = []
+    credit_limit = Decimal("0.00")
+    credit_days = 0
+
+    if not form_data["name"]:
+        errors.append("Customer name is required.")
+    else:
+        duplicate_qs = Customer.objects.filter(name__iexact=form_data["name"])
+        if customer:
+            duplicate_qs = duplicate_qs.exclude(pk=customer.pk)
+        if duplicate_qs.exists():
+            errors.append("A customer with this name already exists.")
+
+    try:
+        credit_limit = Decimal(form_data["credit_limit"] or "0")
+        if credit_limit < 0:
+            errors.append("Credit limit cannot be negative.")
+    except (InvalidOperation, ValueError):
+        errors.append("Please enter a valid credit limit.")
+
+    try:
+        credit_days = int(form_data["credit_days"] or "0")
+        if credit_days < 0:
+            errors.append("Credit days cannot be negative.")
+    except ValueError:
+        errors.append("Please enter valid credit days.")
+
+    if form_data["preferred_payment_method"] == Customer.PaymentMethod.MOMO and not form_data["momo_receiving_number"]:
+        errors.append("MoMo number is required for mobile money customers.")
+    if form_data["preferred_payment_method"] == Customer.PaymentMethod.BANK and not form_data["bank_account_number"]:
+        errors.append("Bank account number is required for bank customers.")
+    if form_data["preferred_payment_method"] == Customer.PaymentMethod.CREDIT and not form_data["credit_repayment_plan"]:
+        errors.append("Credit repayment plan is required for credit customers.")
+
+    return errors, credit_limit, credit_days
+
+
+def _save_customer_from_form(form_data, credit_limit, credit_days, customer=None):
+    customer = customer or Customer()
+    customer.name = form_data["name"]
+    customer.contact_person = form_data["contact_person"]
+    customer.phone_number = form_data["phone_number"]
+    customer.email = form_data["email"]
+    customer.address = form_data["address"]
+    customer.preferred_payment_method = form_data["preferred_payment_method"]
+    customer.momo_receiving_number = form_data["momo_receiving_number"]
+    customer.bank_account_number = form_data["bank_account_number"]
+    customer.credit_repayment_plan = form_data["credit_repayment_plan"]
+    customer.allow_credit = form_data["allow_credit"]
+    customer.pay_wht = form_data["pay_wht"]
+    customer.credit_limit = credit_limit
+    customer.credit_days = credit_days
+    customer.is_active = form_data["is_active"]
+    customer.save()
+    return customer
+
+
+@login_required(login_url="login")
+def customers(request):
+    customers_qs = Customer.objects.annotate(
+        outstanding_balance=Coalesce(
+            Sum("invoices__receivable__balance"),
+            Value(Decimal("0.00")),
+            output_field=DecimalField(max_digits=14, decimal_places=2),
+        )
+    ).order_by("name")
+    query = request.GET.get("q", "").strip()
+    if query:
+        customers_qs = customers_qs.filter(
+            Q(name__icontains=query)
+            | Q(contact_person__icontains=query)
+            | Q(phone_number__icontains=query)
+            | Q(email__icontains=query)
+        )
+
+    if request.method == "POST":
+        form_data = _customer_form_data(request)
+        customer_id = request.POST.get("customer_id", "").strip()
+        customer = Customer.objects.filter(pk=customer_id).first() if customer_id else None
+        errors, credit_limit, credit_days = _validate_customer_form(form_data, customer=customer)
+
+        if errors:
+            for error in errors:
+                messages.error(request, error)
+        else:
+            customer = _save_customer_from_form(form_data, credit_limit, credit_days, customer=customer)
+            messages.success(request, f"Customer profile saved for {customer.name}.")
+            return redirect("customer_profile", pk=customer.pk)
+    else:
+        form_data = {
+            "preferred_payment_method": Customer.PaymentMethod.CASH,
+            "allow_credit": True,
+            "pay_wht": False,
+            "credit_limit": "0.00",
+            "credit_days": "0",
+            "is_active": True,
+        }
+
+    page_obj, querystring = paginate(request, customers_qs, per_page=20)
+    return render(
+        request,
+        "customers.html",
+        {
+            "customers": page_obj,
+            "page_obj": page_obj,
+            "querystring": querystring,
+            "q": query,
+            "form_data": form_data,
+            "payment_method_choices": Customer.PaymentMethod.choices,
+        },
+    )
+
+
+@login_required(login_url="login")
+def customer_profile(request, pk):
+    customer = get_object_or_404(Customer, pk=pk)
+    if request.method == "POST":
+        form_data = _customer_form_data(request)
+        errors, credit_limit, credit_days = _validate_customer_form(form_data, customer=customer)
+        if errors:
+            for error in errors:
+                messages.error(request, error)
+        else:
+            customer = _save_customer_from_form(form_data, credit_limit, credit_days, customer=customer)
+            messages.success(request, f"Customer profile updated for {customer.name}.")
+            return redirect("customer_profile", pk=customer.pk)
+    else:
+        form_data = {
+            "name": customer.name,
+            "contact_person": customer.contact_person,
+            "phone_number": customer.phone_number,
+            "email": customer.email,
+            "address": customer.address,
+            "preferred_payment_method": customer.preferred_payment_method,
+            "momo_receiving_number": customer.momo_receiving_number,
+            "bank_account_number": customer.bank_account_number,
+            "credit_repayment_plan": customer.credit_repayment_plan,
+            "allow_credit": customer.allow_credit,
+            "pay_wht": customer.pay_wht,
+            "credit_limit": customer.credit_limit,
+            "credit_days": customer.credit_days,
+            "is_active": customer.is_active,
+        }
+
+    invoices = (
+        customer.invoices.select_related("receivable", "created_by")
+        .prefetch_related("items")
+        .order_by("-invoice_date", "-invoice_id")[:20]
+    )
+    payments = customer.payments.select_related("invoice", "received_by").order_by("-payment_date", "-payment_id")[:20]
+    totals = customer.invoices.aggregate(
+        sales=Coalesce(Sum("total_amount"), Value(Decimal("0.00")), output_field=DecimalField(max_digits=14, decimal_places=2)),
+        paid=Coalesce(Sum("receivable__amount_paid"), Value(Decimal("0.00")), output_field=DecimalField(max_digits=14, decimal_places=2)),
+        balance=Coalesce(Sum("receivable__balance"), Value(Decimal("0.00")), output_field=DecimalField(max_digits=14, decimal_places=2)),
+    )
+    return render(
+        request,
+        "customer_profile.html",
+        {
+            "customer": customer,
+            "form_data": form_data,
+            "payment_method_choices": Customer.PaymentMethod.choices,
+            "invoices": invoices,
+            "payments": payments,
+            "totals": totals,
+        },
+    )
+
+
 @login_required(login_url="login")
 def sales(request):
     stock = _build_product_stock()
@@ -250,6 +450,8 @@ def sales(request):
 
         if not customer_name:
             errors.append("Customer name is required.")
+        elif not Customer.objects.filter(name__iexact=customer_name, is_active=True).exists():
+            errors.append("Please select a valid active customer.")
 
         if product_key not in stock:
             errors.append("Please select a valid product.")
@@ -278,14 +480,7 @@ def sales(request):
             deposit = Decimal("0")
             errors.append("Please provide a valid deposit.")
 
-        payment_method = CustomerPayment.Method.CASH
-        payment_map = {
-            "CASH": CustomerPayment.Method.CASH,
-            "MOBILE MONEY": CustomerPayment.Method.MOMO,
-            "MOMO": CustomerPayment.Method.MOMO,
-            "BANK": CustomerPayment.Method.BANK,
-        }
-        payment_method = payment_map.get(payment_method_raw, CustomerPayment.Method.CASH)
+        payment_method = _payment_method_from_post(payment_method_raw)
 
         delivery_date = None
         if sale_type == "booking" and delivery_date_raw:
@@ -306,13 +501,6 @@ def sales(request):
             today = date.today()
             line_total = (quantity * unit_price).quantize(Decimal("0.01"))
             amount_paid = deposit
-            balance = (line_total - amount_paid).quantize(Decimal("0.01"))
-            if balance <= 0:
-                invoice_status = SaleInvoice.Status.PAID
-            elif sale_type == "booking" and amount_paid == 0:
-                invoice_status = SaleInvoice.Status.DRAFT
-            else:
-                invoice_status = SaleInvoice.Status.ISSUED
 
             with transaction.atomic():
                 customer = Customer.objects.filter(name__iexact=customer_name).first()
@@ -320,8 +508,16 @@ def sales(request):
                     if phone and customer.phone_number != phone:
                         customer.phone_number = phone
                         customer.save(update_fields=["phone_number"])
+
+                wht_amount = (line_total * WHT_RATE).quantize(Decimal("0.01")) if customer.pay_wht else Decimal("0.00")
+                customer_amount_due = (line_total - wht_amount).quantize(Decimal("0.01"))
+                balance = (customer_amount_due - amount_paid).quantize(Decimal("0.01"))
+                if balance <= 0:
+                    invoice_status = SaleInvoice.Status.PAID
+                elif sale_type == "booking" and amount_paid == 0:
+                    invoice_status = SaleInvoice.Status.DRAFT
                 else:
-                    customer = Customer.objects.create(name=customer_name, phone_number=phone)
+                    invoice_status = SaleInvoice.Status.ISSUED
 
                 invoice = SaleInvoice.objects.create(
                     invoice_no=_next_invoice_no(today),
@@ -331,6 +527,8 @@ def sales(request):
                     subtotal=line_total,
                     discount_amount=Decimal("0.00"),
                     total_amount=line_total,
+                    wht_amount=wht_amount,
+                    payment_method=payment_method,
                     status=invoice_status,
                     delivery_status=(
                         SaleInvoice.DeliveryStatus.DELIVERED
@@ -371,7 +569,7 @@ def sales(request):
 
                 ReceivableLedger.objects.create(
                     invoice=invoice,
-                    amount_due=line_total,
+                    amount_due=customer_amount_due,
                     amount_paid=amount_paid,
                     balance=balance,
                     last_payment_date=today if amount_paid > 0 else None,
@@ -403,6 +601,16 @@ def sales(request):
         "stock_cards": [stock["eggs"], stock["manure"], stock["off_layers"]],
         "recent_sales": recent_sales,
         "pending_orders_preview": pending_orders[:5],
+        "customers": Customer.objects.filter(is_active=True).order_by("name"),
+        "customer_payment_defaults": {
+            customer.name: {
+                "phone": customer.phone_number,
+                "preferred_payment_method": customer.preferred_payment_method,
+                "pay_wht": customer.pay_wht,
+            }
+            for customer in Customer.objects.filter(is_active=True).order_by("name")
+        },
+        "payment_method_choices": Customer.PaymentMethod.choices,
         **_pending_orders_metrics(pending_orders),
     }
     return render(request, "sales.html", context)

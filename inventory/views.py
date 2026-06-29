@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
 import json
 import re
@@ -19,6 +19,7 @@ from accounts.views import get_post_login_redirect
 from expenses.models import ExpenseCategory, ExpenseTransaction
 from poultry.models import PoultryBatch
 from poultryiq.pagination import paginate
+from .credit_alerts import create_credit_payment_alerts
 from .models import InventoryRequisition, InventoryTransaction, Item, ItemCategory, Store, Supplier
 from .purchase_catalog import PURCHASE_CATALOG, purchase_catalog_item_names
 
@@ -28,9 +29,10 @@ DEFAULT_ITEM_CATEGORIES = [
     ("DRUG", "Drugs & Vaccines"),
     ("BEDDING", "Bedding & Litter"),
     ("CONSUMABLE", "Consumables"),
-    ("EQUIPMENT", "Equipment"),
     ("OTHER", "Other"),
 ]
+
+FIXED_ASSET_INVENTORY_CATEGORY_CODES = {"EQUIPMENT"}
 
 
 def _role_code(user) -> str:
@@ -133,6 +135,26 @@ def ensure_inventory_defaults():
         defaults={"name": "Inventory Purchases", "is_active": True},
     )
     return store
+
+
+def _parse_paid_upfront(value):
+    try:
+        paid_upfront = Decimal((value or "").strip())
+    except (InvalidOperation, ValueError):
+        return None, "Please enter a valid paid upfront percentage."
+    if paid_upfront < 0 or paid_upfront > 100:
+        return None, "Paid upfront percentage must be between 0 and 100."
+    return paid_upfront, ""
+
+
+def _parse_grace_period_days(value):
+    try:
+        grace_period_days = int((value or "").strip())
+    except (TypeError, ValueError):
+        return None, "Please enter a valid grace period in days."
+    if grace_period_days < 0:
+        return None, "Grace period cannot be negative."
+    return grace_period_days, ""
 
 
 def _stock_status(percent_left):
@@ -295,10 +317,28 @@ def suppliers(request):
         tin_number = request.POST.get("tin_number", "").strip()
         phone = request.POST.get("phone", "").strip()
         location = request.POST.get("location", "").strip()
+        preferred_payment_method = request.POST.get(
+            "preferred_payment_method",
+            Supplier.PaymentMethod.CASH,
+        ).strip()
+        bank_account_number = request.POST.get("bank_account_number", "").strip()
+        momo_receiving_number = request.POST.get("momo_receiving_number", "").strip()
+        credit_repayment_plan = request.POST.get("credit_repayment_plan", "").strip()
+        credit_paid_upfront_raw = request.POST.get("credit_paid_upfront", "").strip()
+        credit_grace_period_days_raw = request.POST.get("credit_grace_period_days", "").strip()
+        credit_period = request.POST.get("credit_period", "").strip()
         selected_products = request.POST.getlist("products")
         valid_product_names = set(purchase_catalog_item_names())
         supplied_items = [name for name in selected_products if name in valid_product_names]
         product = ", ".join(sorted(supplied_items))
+        valid_payment_methods = {value for value, _label in Supplier.PaymentMethod.choices}
+        credit_paid_upfront = None
+        credit_grace_period_days = None
+        percentage_error = ""
+        grace_error = ""
+        if preferred_payment_method == Supplier.PaymentMethod.CREDIT:
+            credit_paid_upfront, percentage_error = _parse_paid_upfront(credit_paid_upfront_raw)
+            credit_grace_period_days, grace_error = _parse_grace_period_days(credit_grace_period_days_raw)
 
         if not name:
             messages.error(request, "Supplier name is required.")
@@ -306,8 +346,31 @@ def suppliers(request):
             messages.error(request, "Invalid TIN number. A Uganda TIN should be 10 digits.")
         elif not supplied_items:
             messages.error(request, "Select at least one supplied item.")
+        elif preferred_payment_method not in valid_payment_methods:
+            messages.error(request, "Select a valid preferred payment method.")
+        elif preferred_payment_method == Supplier.PaymentMethod.BANK and not bank_account_number:
+            messages.error(request, "Enter the bank account number for bank payments.")
+        elif preferred_payment_method == Supplier.PaymentMethod.MOBILE_MONEY and not momo_receiving_number:
+            messages.error(request, "Enter the receiving number for MoMo payments.")
+        elif preferred_payment_method == Supplier.PaymentMethod.CREDIT and not credit_repayment_plan:
+            messages.error(request, "Enter the repayment plan for credit suppliers.")
+        elif preferred_payment_method == Supplier.PaymentMethod.CREDIT and percentage_error:
+            messages.error(request, percentage_error)
+        elif preferred_payment_method == Supplier.PaymentMethod.CREDIT and grace_error:
+            messages.error(request, grace_error)
+        elif preferred_payment_method == Supplier.PaymentMethod.CREDIT and not credit_period:
+            messages.error(request, "Enter the credit period for credit suppliers.")
         else:
             tin_number = _normalise_tin(tin_number)
+            if preferred_payment_method != Supplier.PaymentMethod.BANK:
+                bank_account_number = ""
+            if preferred_payment_method != Supplier.PaymentMethod.MOBILE_MONEY:
+                momo_receiving_number = ""
+            if preferred_payment_method != Supplier.PaymentMethod.CREDIT:
+                credit_repayment_plan = ""
+                credit_paid_upfront = None
+                credit_grace_period_days = None
+                credit_period = ""
             supplier, created = Supplier.objects.update_or_create(
                 name__iexact=name,
                 defaults={
@@ -316,6 +379,13 @@ def suppliers(request):
                     "phone": phone,
                     "location": location,
                     "product": product,
+                    "preferred_payment_method": preferred_payment_method,
+                    "bank_account_number": bank_account_number,
+                    "momo_receiving_number": momo_receiving_number,
+                    "credit_repayment_plan": credit_repayment_plan,
+                    "credit_paid_upfront": credit_paid_upfront,
+                    "credit_grace_period_days": credit_grace_period_days,
+                    "credit_period": credit_period,
                     "is_active": True,
                 },
             )
@@ -341,8 +411,22 @@ def suppliers(request):
 
 def inventory_management(request):
     store = ensure_inventory_defaults()
-    categories = ItemCategory.objects.order_by("name")
+    categories = ItemCategory.objects.exclude(
+        code__in=FIXED_ASSET_INVENTORY_CATEGORY_CODES,
+    ).order_by("name")
     supplier_list = Supplier.objects.filter(is_active=True).order_by("name")
+    supplier_payment_terms = {
+        supplier.name: {
+            "payment_method": supplier.preferred_payment_method,
+            "bank_account_number": supplier.bank_account_number,
+            "momo_receiving_number": supplier.momo_receiving_number,
+            "credit_repayment_plan": supplier.credit_repayment_plan,
+            "credit_paid_upfront": str(supplier.credit_paid_upfront) if supplier.credit_paid_upfront is not None else "",
+            "credit_grace_period_days": supplier.credit_grace_period_days,
+            "credit_period": supplier.credit_period,
+        }
+        for supplier in supplier_list
+    }
 
     if request.method == "POST":
         item_name = request.POST.get("item", "").strip()
@@ -353,23 +437,91 @@ def inventory_management(request):
         supplier_name = request.POST.get("supplier_name", "").strip()
         unit_price_raw = request.POST.get("unit_price", "").strip()
         expiry_raw = request.POST.get("expiry_date", "").strip()
+        payment_method = request.POST.get("payment_method", "").strip()
+        bank_account_number = request.POST.get("bank_account_number", "").strip()
+        momo_receiving_number = request.POST.get("momo_receiving_number", "").strip()
+        credit_repayment_plan = request.POST.get("credit_repayment_plan", "").strip()
+        credit_paid_upfront_raw = request.POST.get("credit_paid_upfront", "").strip()
+        credit_grace_period_days_raw = request.POST.get("credit_grace_period_days", "").strip()
+        credit_period = request.POST.get("credit_period", "").strip()
 
         errors = []
         category = ItemCategory.objects.filter(pk=category_id).first() if category_id else None
         final_category = category
         pending_custom_category_name = ""
+        supplier = None
         quantity = None
         unit_price = None
         expiry_date = None
+        credit_paid_upfront = None
+        credit_grace_period_days = None
+        credit_due_date = None
+        valid_payment_methods = {value for value, _label in InventoryTransaction.PaymentMethod.choices}
 
         if not item_name:
             errors.append("Item name is required.")
 
         if not category:
             errors.append("Please select a valid category.")
+        elif category.code in FIXED_ASSET_INVENTORY_CATEGORY_CODES:
+            errors.append("Fixed assets must be recorded in the Fixed Assets page.")
 
-        if supplier_name and not Supplier.objects.filter(name__iexact=supplier_name, is_active=True).exists():
-            errors.append("Please select a valid supplier from the list.")
+        if supplier_name:
+            supplier = Supplier.objects.filter(name__iexact=supplier_name, is_active=True).first()
+            if supplier is None:
+                errors.append("Please select a valid supplier from the list.")
+
+        if not payment_method and supplier:
+            payment_method = supplier.preferred_payment_method
+            bank_account_number = bank_account_number or supplier.bank_account_number
+            momo_receiving_number = momo_receiving_number or supplier.momo_receiving_number
+            credit_repayment_plan = credit_repayment_plan or supplier.credit_repayment_plan
+            credit_paid_upfront_raw = credit_paid_upfront_raw or (
+                str(supplier.credit_paid_upfront) if supplier.credit_paid_upfront is not None else ""
+            )
+            credit_grace_period_days_raw = credit_grace_period_days_raw or str(supplier.credit_grace_period_days or "")
+            credit_period = credit_period or supplier.credit_period
+        if not payment_method:
+            payment_method = InventoryTransaction.PaymentMethod.CASH
+
+        if payment_method not in valid_payment_methods:
+            errors.append("Please select a valid payment method.")
+        elif payment_method == InventoryTransaction.PaymentMethod.BANK:
+            if not bank_account_number:
+                errors.append("Please enter the bank account number for this purchase.")
+            momo_receiving_number = ""
+            credit_repayment_plan = ""
+            credit_paid_upfront = None
+            credit_grace_period_days = None
+            credit_period = ""
+        elif payment_method == InventoryTransaction.PaymentMethod.MOBILE_MONEY:
+            if not momo_receiving_number:
+                errors.append("Please enter the receiving number for this MoMo purchase.")
+            bank_account_number = ""
+            credit_repayment_plan = ""
+            credit_paid_upfront = None
+            credit_grace_period_days = None
+            credit_period = ""
+        elif payment_method == InventoryTransaction.PaymentMethod.CREDIT:
+            credit_paid_upfront, percentage_error = _parse_paid_upfront(credit_paid_upfront_raw)
+            credit_grace_period_days, grace_error = _parse_grace_period_days(credit_grace_period_days_raw)
+            if not credit_repayment_plan:
+                errors.append("Please enter the repayment plan for this credit purchase.")
+            if percentage_error:
+                errors.append(percentage_error)
+            if grace_error:
+                errors.append(grace_error)
+            if not credit_period:
+                errors.append("Please enter the credit period for this credit purchase.")
+            bank_account_number = ""
+            momo_receiving_number = ""
+        else:
+            bank_account_number = ""
+            momo_receiving_number = ""
+            credit_repayment_plan = ""
+            credit_paid_upfront = None
+            credit_grace_period_days = None
+            credit_period = ""
 
         if category and category.code == "OTHER":
             if not other_category_name:
@@ -399,6 +551,9 @@ def inventory_management(request):
             except ValueError:
                 errors.append("Please enter a valid expiry date.")
 
+        if payment_method == InventoryTransaction.PaymentMethod.CREDIT and credit_grace_period_days is not None:
+            credit_due_date = date.today() + timedelta(days=credit_grace_period_days)
+
         if not errors and final_category and quantity is not None and unit_price is not None:
             existing_item = Item.objects.filter(name__iexact=item_name).first()
 
@@ -427,6 +582,14 @@ def inventory_management(request):
                     supplier_name=supplier_name,
                     unit_price=unit_price,
                     expiry_date=expiry_date,
+                    payment_method=payment_method,
+                    bank_account_number=bank_account_number,
+                    momo_receiving_number=momo_receiving_number,
+                    credit_repayment_plan=credit_repayment_plan,
+                    credit_paid_upfront=credit_paid_upfront,
+                    credit_grace_period_days=credit_grace_period_days,
+                    credit_period=credit_period,
+                    credit_due_date=credit_due_date,
                     created_by=request.user,
                 )
 
@@ -435,21 +598,55 @@ def inventory_management(request):
                 description = f"Inventory purchase: {item.name} ({quantity} {item.unit})"
                 if supplier_name:
                     description = f"{description} - Supplier: {supplier_name}"
+                if payment_method == InventoryTransaction.PaymentMethod.BANK:
+                    description = f"{description} - Bank account: {bank_account_number}"
+                if payment_method == InventoryTransaction.PaymentMethod.MOBILE_MONEY:
+                    description = f"{description} - MoMo number: {momo_receiving_number}"
+                if payment_method == InventoryTransaction.PaymentMethod.CREDIT:
+                    description = f"{description} - Credit: {credit_paid_upfront}% paid upfront, balance due by {credit_due_date}"
+
+                payment_notes = ""
+                if payment_method == InventoryTransaction.PaymentMethod.BANK:
+                    payment_notes = f"Bank account number: {bank_account_number}"
+                elif payment_method == InventoryTransaction.PaymentMethod.MOBILE_MONEY:
+                    payment_notes = f"MoMo receiving number: {momo_receiving_number}"
+                elif payment_method == InventoryTransaction.PaymentMethod.CREDIT:
+                    payment_notes = (
+                        f"Credit repayment plan: {credit_repayment_plan}\n"
+                        f"Paid upfront: {credit_paid_upfront}%\n"
+                        f"Grace period: {credit_grace_period_days} days\n"
+                        f"Credit due date: {credit_due_date}\n"
+                        f"Credit period: {credit_period}"
+                    )
 
                 expense = ExpenseTransaction.objects.create(
                     expense_date=date.today(),
                     category=expense_category,
                     description=description,
                     total_amount=total_amount,
-                    payment_method=ExpenseTransaction.PAYMENT_CASH,
+                    supplier_name=supplier.name if supplier else supplier_name,
+                    supplier_contact=supplier.phone if supplier else "",
+                    payment_method=payment_method,
                     period_year=date.today().year,
                     period_month=date.today().month,
                     status=ExpenseTransaction.Status.DRAFT,
+                    notes=payment_notes,
                     created_by=request.user,
                 )
 
                 tx.reference = f"EXP-{expense.expense_id}"
                 tx.save(update_fields=["reference"])
+
+                if payment_method == InventoryTransaction.PaymentMethod.CREDIT:
+                    credit_amount_due = (total_amount * (Decimal("100") - credit_paid_upfront) / Decimal("100")).quantize(Decimal("0.01"))
+                    create_credit_payment_alerts(
+                        supplier_name=supplier_name,
+                        item_name=item.name,
+                        amount_due=credit_amount_due,
+                        due_date=credit_due_date,
+                        paid_upfront=credit_paid_upfront,
+                        created_by=request.user,
+                    )
 
             messages.success(request, "Inventory item saved and expense recorded.")
             return redirect("inventory_management")
@@ -469,6 +666,8 @@ def inventory_management(request):
             'querystring': querystring,
             'categories': categories,
             'suppliers': supplier_list,
+            'payment_method_choices': InventoryTransaction.PaymentMethod.choices,
+            'supplier_payment_terms': supplier_payment_terms,
         },
     )
 

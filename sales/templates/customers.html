@@ -1,0 +1,94 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+        <div>
+            <h2 class="mb-1"><i class="bi bi-person-vcard me-2"></i>Customer Profiles</h2>
+            <small class="text-muted">Regular customers, payment preferences, and credit terms</small>
+        </div>
+        <a class="btn btn-primary" href="{% url 'sales' %}"><i class="bi bi-cart-check me-1"></i>Make Sale</a>
+    </div>
+
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        {% endfor %}
+    {% endif %}
+
+    <div class="row g-4">
+        <div class="col-xl-4">
+            <div class="card">
+                <div class="card-header"><i class="bi bi-person-plus me-2"></i>Add Customer</div>
+                <div class="card-body">
+                    <form method="post">
+                        {% csrf_token %}
+                        {% include 'partials/customer_form_fields.html' %}
+                        <button class="btn btn-success w-100 mt-3" type="submit">Save Customer</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-8">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+                    <span><i class="bi bi-people me-2"></i>Regular Customers</span>
+                    <form class="d-flex gap-2" method="get">
+                        <input class="form-control form-control-sm" name="q" value="{{ q }}" placeholder="Search customers">
+                        <button class="btn btn-sm btn-outline-primary">Search</button>
+                        {% if q %}<a class="btn btn-sm btn-light" href="{% url 'customers' %}">Clear</a>{% endif %}
+                    </form>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Contact</th>
+                                <th>Preferred Pay</th>
+                                <th>Credit</th>
+                                <th>Outstanding</th>
+                                <th>Status</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for customer in customers %}
+                            <tr>
+                                <td>
+                                    <div class="fw-semibold">{{ customer.name }}</div>
+                                    <div class="small text-muted">{{ customer.contact_person|default:"-" }}</div>
+                                </td>
+                                <td>
+                                    <div>{{ customer.phone_number|default:"-" }}</div>
+                                    <div class="small text-muted">{{ customer.email|default:"" }}</div>
+                                </td>
+                                <td>{{ customer.get_preferred_payment_method_display }}</td>
+                                <td>
+                                    {% if customer.allow_credit %}
+                                        UGX {{ customer.credit_limit|floatformat:0 }} / {{ customer.credit_days }} days
+                                    {% else %}
+                                        <span class="text-muted">No credit</span>
+                                    {% endif %}
+                                </td>
+                                <td>UGX {{ customer.outstanding_balance|floatformat:0 }}</td>
+                                <td>
+                                    <span class="badge {% if customer.is_active %}bg-success{% else %}bg-secondary{% endif %}">
+                                        {% if customer.is_active %}Active{% else %}Inactive{% endif %}
+                                    </span>
+                                </td>
+                                <td><a class="btn btn-sm btn-primary" href="{% url 'customer_profile' customer.pk %}">View</a></td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="7" class="text-center text-muted py-4">No customers yet.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

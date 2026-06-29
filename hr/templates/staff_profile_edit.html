@@ -1,0 +1,107 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+        <h3><i class="bi bi-pencil-square me-2"></i>Edit Staff Profile</h3>
+        <a class="btn btn-light" href="{% url 'staff_profile_detail' staff_user.pk %}">Back</a>
+    </div>
+
+    <form method="post" enctype="multipart/form-data" class="card">
+        {% csrf_token %}
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label">Full Names</label>
+                    <input class="form-control" name="full_name" value="{{ form_data.full_name }}" required>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Contact</label>
+                    <input class="form-control" name="phone_number" value="{{ form_data.phone_number }}">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Email</label>
+                    <input class="form-control" type="email" name="email" value="{{ form_data.email }}">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Age</label>
+                    <input class="form-control" type="number" min="1" name="age" value="{{ form_data.age }}">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Profile Picture</label>
+                    <input class="form-control" type="file" name="profile_photo" accept="image/*">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Employee #</label>
+                    <input class="form-control" name="employee_number" value="{{ form_data.employee_number }}">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Job Title</label>
+                    <input class="form-control" name="job_title" value="{{ form_data.job_title }}">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">TIN</label>
+                    <input class="form-control" name="tin_number" value="{{ form_data.tin_number }}">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">NSSF Number</label>
+                    <input class="form-control" name="nssf_number" value="{{ form_data.nssf_number }}">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">National ID</label>
+                    <input class="form-control" name="national_id" value="{{ form_data.national_id }}">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Hire Date</label>
+                    <input class="form-control" type="date" name="hire_date" value="{{ form_data.hire_date }}">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Next of Kin Name</label>
+                    <input class="form-control" name="next_of_kin_name" value="{{ form_data.next_of_kin_name }}">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Next of Kin Contact</label>
+                    <input class="form-control" name="next_of_kin_contact" value="{{ form_data.next_of_kin_contact }}">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Emergency Contact</label>
+                    <input class="form-control" name="emergency_contact" value="{{ form_data.emergency_contact }}">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Gross Salary</label>
+                    <input class="form-control" type="number" min="0" step="0.01" name="monthly_salary" value="{{ form_data.monthly_salary }}">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label d-block">Payroll Deductions</label>
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="checkbox" id="pay_nssf" name="pay_nssf" {% if form_data.pay_nssf != "False" %}checked{% endif %}>
+                        <label class="form-check-label" for="pay_nssf">Pays NSSF</label>
+                    </div>
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="checkbox" id="pay_paye" name="pay_paye" {% if form_data.pay_paye != "False" %}checked{% endif %}>
+                        <label class="form-check-label" for="pay_paye">Pays PAYE</label>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Employment Status</label>
+                    <select class="form-select" name="employment_status">
+                        {% for value, label in employment_status_choices %}
+                        <option value="{{ value }}" {% if form_data.employment_status == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-12">
+                    <label class="form-label">Physical Address</label>
+                    <input class="form-control" name="physical_address" value="{{ form_data.physical_address }}">
+                </div>
+                <div class="col-12">
+                    <label class="form-label">Notes</label>
+                    <textarea class="form-control" name="notes" rows="3">{{ form_data.notes }}</textarea>
+                </div>
+            </div>
+        </div>
+        <div class="card-footer text-end">
+            <button class="btn btn-primary" type="submit"><i class="bi bi-check-circle me-1"></i>Save Profile</button>
+        </div>
+    </form>
+</div>
+{% endblock %}

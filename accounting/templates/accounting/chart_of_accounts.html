@@ -4,12 +4,12 @@
     <div class="page-header-row mb-4">
         <div>
             <h2 class="mb-1">
-                <i class="bi bi-graph-up me-2"></i>Chart of Accounts
+                <i class="bi bi-graph-up me-2"></i>Profit & Loss Report
             </h2>
             <small class="text-muted">Profit & Loss Report by Account Type</small>
         </div>
-        <a href="{% url 'managerdash' %}" class="btn btn-secondary">
-            <i class="bi bi-arrow-left me-2"></i>Back to Dashboard
+        <a href="{% url 'reports' %}" class="btn btn-secondary">
+            <i class="bi bi-arrow-left me-2"></i>Back to Reports center
         </a>
     </div>
 
@@ -57,55 +57,126 @@
                     </tr>
                 </thead>
                 <tbody>
-                    <!-- REVENUE Section -->
-                    {% if pl_data.revenue %}
+                    <!-- INCOME Section -->
+                    {% if pl_data.income %}
                         <tr class="table-primary fw-bold">
-                            <td colspan="5">REVENUE</td>
+                            <td colspan="5">
+                                <button
+                                    type="button"
+                                    class="btn btn-link p-0 text-decoration-none text-reset fw-bold pl-section-toggle"
+                                    data-section="income"
+                                    aria-expanded="false"
+                                    aria-controls="income-empty-row"
+                                >
+                                    <i class="bi bi-chevron-right me-2 toggle-icon"></i>INCOME
+                                </button>
+                            </td>
                         </tr>
-                        {% for item in pl_data.revenue %}
-                            <tr>
+                        {% for item in pl_data.income %}
+                            <tr class="pl-section-row d-none" data-section="income">
                                 <td><code>{{ item.code }}</code></td>
                                 <td>{{ item.account_name }}</td>
-                                <td><span class="badge bg-success">{{ item.type }}</span></td>
+                                <td><span class="badge bg-success">{{ item.type }} / {{ item.class }}</span></td>
                                 <td class="text-end">{{ item.amount|floatformat:2 }}</td>
                                 <td>{{ item.date|date:"M d, Y" }}</td>
                             </tr>
                         {% endfor %}
                         <tr class="table-light fw-bold">
-                            <td colspan="3">Total Revenue</td>
-                            <td class="text-end">{{ pl_data.totals.revenue|floatformat:2 }}</td>
+                            <td colspan="3">Total Income</td>
+                            <td class="text-end">{{ pl_data.totals.income|floatformat:2 }}</td>
                             <td></td>
                         </tr>
                     {% else %}
                         <tr class="table-primary fw-bold">
-                            <td colspan="5">REVENUE</td>
+                            <td colspan="5">
+                                <button
+                                    type="button"
+                                    class="btn btn-link p-0 text-decoration-none text-reset fw-bold pl-section-toggle"
+                                    data-section="income"
+                                    aria-expanded="false"
+                                    aria-controls="income-empty-row"
+                                >
+                                    <i class="bi bi-chevron-right me-2 toggle-icon"></i>INCOME
+                                </button>
+                            </td>
                         </tr>
-                        <tr>
-                            <td colspan="5" class="text-center text-muted">No revenue transactions</td>
+                        <tr class="pl-section-row d-none" data-section="income" id="income-empty-row">
+                            <td colspan="5" class="text-center text-muted">No income transactions</td>
                         </tr>
                         <tr class="table-light fw-bold">
-                            <td colspan="3">Total Revenue</td>
+                            <td colspan="3">Total Income</td>
                             <td class="text-end">0.00</td>
                             <td></td>
                         </tr>
                     {% endif %}
 
-                    <!-- COST OF REVENUE Section -->
-                    <tr class="table-warning fw-bold">
-                        <td colspan="5">COST OF REVENUE</td>
+                    <!-- OTHER INCOME Section -->
+                    <tr class="table-success fw-bold">
+                        <td colspan="5">
+                            <button
+                                type="button"
+                                class="btn btn-link p-0 text-decoration-none text-reset fw-bold pl-section-toggle"
+                                data-section="other-income"
+                                aria-expanded="false"
+                                aria-controls="other-income-empty-row"
+                            >
+                                <i class="bi bi-chevron-right me-2 toggle-icon"></i>OTHER INCOME
+                            </button>
+                        </td>
                     </tr>
-                    {% if pl_data.cost_of_revenue %}
-                        {% for item in pl_data.cost_of_revenue %}
-                            <tr>
+                    {% if pl_data.other_income %}
+                        {% for item in pl_data.other_income %}
+                            <tr class="pl-section-row d-none" data-section="other-income">
                                 <td><code>{{ item.code }}</code></td>
                                 <td>{{ item.account_name }}</td>
-                                <td><span class="badge bg-warning text-dark">{{ item.type }}</span></td>
+                                <td><span class="badge bg-success">{{ item.type }} / {{ item.class }}</span></td>
                                 <td class="text-end">{{ item.amount|floatformat:2 }}</td>
                                 <td>{{ item.date|date:"M d, Y" }}</td>
                             </tr>
                         {% endfor %}
                     {% else %}
-                        <tr>
+                        <tr class="pl-section-row d-none" data-section="other-income" id="other-income-empty-row">
+                            <td colspan="5" class="text-center text-muted">No other income transactions</td>
+                        </tr>
+                    {% endif %}
+                    <tr class="table-light fw-bold">
+                        <td colspan="3">Total Other Income</td>
+                        <td class="text-end">{{ pl_data.totals.other_income|floatformat:2 }}</td>
+                        <td></td>
+                    </tr>
+
+                    <tr class="table-info fw-bold">
+                        <td colspan="3">TOTAL INCOME</td>
+                        <td class="text-end">{{ pl_data.totals.total_income|floatformat:2 }}</td>
+                        <td></td>
+                    </tr>
+
+                    <!-- COST OF REVENUE Section -->
+                    <tr class="table-warning fw-bold">
+                        <td colspan="5">
+                            <button
+                                type="button"
+                                class="btn btn-link p-0 text-decoration-none text-reset fw-bold pl-section-toggle"
+                                data-section="cost-of-revenue"
+                                aria-expanded="false"
+                                aria-controls="cost-of-revenue-empty-row"
+                            >
+                                <i class="bi bi-chevron-right me-2 toggle-icon"></i>COST OF REVENUE
+                            </button>
+                        </td>
+                    </tr>
+                    {% if pl_data.cost_of_revenue %}
+                        {% for item in pl_data.cost_of_revenue %}
+                            <tr class="pl-section-row d-none" data-section="cost-of-revenue">
+                                <td><code>{{ item.code }}</code></td>
+                                <td>{{ item.account_name }}</td>
+                                <td><span class="badge bg-warning text-dark">{{ item.type }} / {{ item.class }}</span></td>
+                                <td class="text-end">{{ item.amount|floatformat:2 }}</td>
+                                <td>{{ item.date|date:"M d, Y" }}</td>
+                            </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr class="pl-section-row d-none" data-section="cost-of-revenue" id="cost-of-revenue-empty-row">
                             <td colspan="5" class="text-center text-muted">No cost of revenue transactions</td>
                         </tr>
                     {% endif %}
@@ -116,7 +187,7 @@
                     </tr>
 
                     <!-- Gross Profit -->
-                    {% with gross_profit=pl_data.totals.revenue|add:pl_data.totals.cost_of_revenue %}
+                    {% with gross_profit=pl_data.totals.gross_profit %}
                         <tr class="table-info fw-bold">
                             <td colspan="3">GROSS PROFIT</td>
                             <td class="text-end">{{ gross_profit|floatformat:2 }}</td>
@@ -126,20 +197,30 @@
 
                     <!-- DEPRECIATION Section -->
                     <tr class="table-secondary fw-bold">
-                        <td colspan="5">DEPRECIATION</td>
+                        <td colspan="5">
+                            <button
+                                type="button"
+                                class="btn btn-link p-0 text-decoration-none text-reset fw-bold pl-section-toggle"
+                                data-section="depreciation"
+                                aria-expanded="false"
+                                aria-controls="depreciation-empty-row"
+                            >
+                                <i class="bi bi-chevron-right me-2 toggle-icon"></i>DEPRECIATION
+                            </button>
+                        </td>
                     </tr>
                     {% if pl_data.depreciation %}
                         {% for item in pl_data.depreciation %}
-                            <tr>
+                            <tr class="pl-section-row d-none" data-section="depreciation">
                                 <td><code>{{ item.code }}</code></td>
                                 <td>{{ item.account_name }}</td>
-                                <td><span class="badge bg-secondary">{{ item.type }}</span></td>
+                                <td><span class="badge bg-secondary">{{ item.type }} / {{ item.class }}</span></td>
                                 <td class="text-end">{{ item.amount|floatformat:2 }}</td>
                                 <td>{{ item.date|date:"M d, Y" }}</td>
                             </tr>
                         {% endfor %}
                     {% else %}
-                        <tr>
+                        <tr class="pl-section-row d-none" data-section="depreciation" id="depreciation-empty-row">
                             <td colspan="5" class="text-center text-muted">No depreciation transactions</td>
                         </tr>
                     {% endif %}
@@ -149,33 +230,78 @@
                         <td></td>
                     </tr>
 
-                    <!-- MONTHLY EXPENSES Section -->
+                    <!-- EXPENSES Section -->
                     <tr class="table-danger fw-bold">
-                        <td colspan="5">MONTHLY EXPENSES</td>
+                        <td colspan="5">
+                            <button
+                                type="button"
+                                class="btn btn-link p-0 text-decoration-none text-reset fw-bold pl-section-toggle"
+                                data-section="expenses"
+                                aria-expanded="false"
+                                aria-controls="expenses-empty-row"
+                            >
+                                <i class="bi bi-chevron-right me-2 toggle-icon"></i>EXPENSES
+                            </button>
+                        </td>
                     </tr>
-                    {% if pl_data.monthly_expenses %}
-                        {% for item in pl_data.monthly_expenses %}
-                            <tr>
+                    {% if pl_data.expenses %}
+                        {% for item in pl_data.expenses %}
+                            <tr class="pl-section-row d-none" data-section="expenses">
                                 <td><code>{{ item.code }}</code></td>
                                 <td>{{ item.account_name }}</td>
-                                <td><span class="badge bg-danger">{{ item.type }}</span></td>
+                                <td><span class="badge bg-danger">{{ item.type }} / {{ item.class }}</span></td>
                                 <td class="text-end">{{ item.amount|floatformat:2 }}</td>
                                 <td>{{ item.date|date:"M d, Y" }}</td>
                             </tr>
                         {% endfor %}
                     {% else %}
-                        <tr>
-                            <td colspan="5" class="text-center text-muted">No monthly expense transactions</td>
+                        <tr class="pl-section-row d-none" data-section="expenses" id="expenses-empty-row">
+                            <td colspan="5" class="text-center text-muted">No expense transactions</td>
                         </tr>
                     {% endif %}
                     <tr class="table-light fw-bold">
-                        <td colspan="3">Total Monthly Expenses</td>
-                        <td class="text-end">{{ pl_data.totals.monthly_expenses|floatformat:2 }}</td>
+                        <td colspan="3">Total Expenses</td>
+                        <td class="text-end">{{ pl_data.totals.expenses|floatformat:2 }}</td>
+                        <td></td>
+                    </tr>
+
+                    <!-- OTHER EXPENSES Section -->
+                    <tr class="table-danger fw-bold">
+                        <td colspan="5">
+                            <button
+                                type="button"
+                                class="btn btn-link p-0 text-decoration-none text-reset fw-bold pl-section-toggle"
+                                data-section="other-expenses"
+                                aria-expanded="false"
+                                aria-controls="other-expenses-empty-row"
+                            >
+                                <i class="bi bi-chevron-right me-2 toggle-icon"></i>OTHER EXPENSES
+                            </button>
+                        </td>
+                    </tr>
+                    {% if pl_data.other_expenses %}
+                        {% for item in pl_data.other_expenses %}
+                            <tr class="pl-section-row d-none" data-section="other-expenses">
+                                <td><code>{{ item.code }}</code></td>
+                                <td>{{ item.account_name }}</td>
+                                <td><span class="badge bg-danger">{{ item.type }} / {{ item.class }}</span></td>
+                                <td class="text-end">{{ item.amount|floatformat:2 }}</td>
+                                <td>{{ item.date|date:"M d, Y" }}</td>
+                            </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr class="pl-section-row d-none" data-section="other-expenses" id="other-expenses-empty-row">
+                            <td colspan="5" class="text-center text-muted">No other expense transactions</td>
+                        </tr>
+                    {% endif %}
+                    <tr class="table-light fw-bold">
+                        <td colspan="3">Total Other Expenses</td>
+                        <td class="text-end">{{ pl_data.totals.other_expenses|floatformat:2 }}</td>
                         <td></td>
                     </tr>
 
                     <!-- Total Expenses -->
-                    {% with total_expenses=pl_data.totals.cost_of_revenue|add:pl_data.totals.depreciation|add:pl_data.totals.monthly_expenses %}
+                    {% with total_expenses=pl_data.totals.total_expenses %}
                         <tr class="table-light fw-bold">
                             <td colspan="3">TOTAL EXPENSES</td>
                             <td class="text-end">{{ total_expenses|floatformat:2 }}</td>
@@ -207,8 +333,8 @@
         <div class="col-md-3">
             <div class="card text-center">
                 <div class="card-body">
-                    <h6 class="card-title text-success">Total Revenue</h6>
-                    <h3 class="text-success">{{ pl_data.totals.revenue|floatformat:2 }}</h3>
+                    <h6 class="card-title text-success">Total Income</h6>
+                    <h3 class="text-success">{{ pl_data.totals.total_income|floatformat:2 }}</h3>
                 </div>
             </div>
         </div>
@@ -223,16 +349,18 @@
         <div class="col-md-3">
             <div class="card text-center">
                 <div class="card-body">
-                    <h6 class="card-title text-info">Total Depreciation</h6>
-                    <h3 class="text-info">{{ pl_data.totals.depreciation|floatformat:2 }}</h3>
+                    <h6 class="card-title text-info">Total Expenses</h6>
+                    <h3 class="text-info">{{ pl_data.totals.total_expenses|floatformat:2 }}</h3>
                 </div>
             </div>
         </div>
         <div class="col-md-3">
             <div class="card text-center">
                 <div class="card-body">
-                    <h6 class="card-title text-danger">Total Monthly Expenses</h6>
-                    <h3 class="text-danger">{{ pl_data.totals.monthly_expenses|floatformat:2 }}</h3>
+                    <h6 class="card-title text-danger">Net Profit / Loss</h6>
+                    <h3 class="{% if pl_data.totals.profit_loss >= 0 %}text-success{% else %}text-danger{% endif %}">
+                        {{ pl_data.totals.profit_loss|floatformat:2 }}
+                    </h3>
                 </div>
             </div>
         </div>
@@ -240,11 +368,25 @@
 </div>
 
 <style>
+    .pl-section-toggle {
+        font-size: 0.95rem;
+    }
+
+    .pl-section-toggle .toggle-icon {
+        display: inline-block;
+        transition: transform 0.15s ease-in-out;
+    }
+
+    .pl-section-toggle[aria-expanded="true"] .toggle-icon {
+        transform: rotate(90deg);
+    }
+
     @media print {
         .page-header-row, .card:first-child { display: none; }
         body { font-size: 11pt; }
         table { font-size: 10pt; }
         .btn { display: none; }
+        .pl-section-row { display: table-row !important; }
     }
 </style>
 
@@ -252,5 +394,23 @@
     function printPL() {
         window.print();
     }
+
+    document.addEventListener("DOMContentLoaded", function () {
+        const toggles = document.querySelectorAll(".pl-section-toggle");
+
+        toggles.forEach(function (toggle) {
+            toggle.addEventListener("click", function () {
+                const section = toggle.getAttribute("data-section");
+                const isExpanded = toggle.getAttribute("aria-expanded") === "true";
+                const nextExpandedState = !isExpanded;
+
+                toggle.setAttribute("aria-expanded", String(nextExpandedState));
+
+                document.querySelectorAll('.pl-section-row[data-section="' + section + '"]').forEach(function (row) {
+                    row.classList.toggle("d-none", !nextExpandedState);
+                });
+            });
+        });
+    });
 </script>
 {% endblock %}

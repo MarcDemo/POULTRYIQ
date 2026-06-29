@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
 
 from django.contrib import messages
@@ -8,6 +8,7 @@ from django.shortcuts import redirect, render
 
 from .models import ExpenseCategory, ExpenseTransaction
 from accounting.models import AccountingCode
+from inventory.credit_alerts import create_credit_payment_alerts
 from inventory.models import InventoryTransaction, Item, ItemCategory, Store, Supplier
 from inventory.purchase_catalog import PURCHASE_CATALOG, find_purchase_catalog_item
 from poultryiq.pagination import paginate
@@ -46,6 +47,7 @@ DEFAULT_EXPENSE_CATEGORIES = [
 
 MANUAL_EXPENSE_HIDDEN_CATEGORY_CODES = ["INVENTORY_PURCHASE", "BATCH_PURCHASE"]
 SALARY_CATEGORY_CODES = ["SALARY"]
+OTHER_EXPENSE_CATEGORY_CODES = {"OTHER", "LOSS_ON_DISPOSAL", "DONATIONS"}
 
 
 def _normalise_label(value):
@@ -150,13 +152,32 @@ def ensure_default_expense_categories():
     ExpenseCategory.objects.filter(code__in=["FEED", "BEDDING"]).update(is_active=False)
 
 
+def _parse_paid_upfront(value):
+    try:
+        paid_upfront = Decimal((value or "").strip())
+    except (InvalidOperation, ValueError):
+        return None, "Please enter a valid paid upfront percentage."
+    if paid_upfront < 0 or paid_upfront > 100:
+        return None, "Paid upfront percentage must be between 0 and 100."
+    return paid_upfront, ""
+
+
+def _parse_grace_period_days(value):
+    try:
+        grace_period_days = int((value or "").strip())
+    except (TypeError, ValueError):
+        return None, "Please enter a valid grace period in days."
+    if grace_period_days < 0:
+        return None, "Grace period cannot be negative."
+    return grace_period_days, ""
+
+
 def expense_form(request):
     ensure_default_expense_categories()
     expense_categories = ExpenseCategory.objects.filter(
         is_active=True,
         expense_type__in=[
             ExpenseCategory.ExpenseType.MONTHLY_EXPENSES,
-            ExpenseCategory.ExpenseType.DEPRECIATION,
         ],
     ).exclude(code__in=SALARY_CATEGORY_CODES).order_by("name")
     purchase_categories = ExpenseCategory.objects.filter(
@@ -164,6 +185,18 @@ def expense_form(request):
         expense_type=ExpenseCategory.ExpenseType.COST_OF_REVENUE,
     ).order_by("name")
     suppliers = Supplier.objects.filter(is_active=True).order_by("name")
+    supplier_payment_terms = {
+        str(supplier.pk): {
+            "payment_method": supplier.preferred_payment_method,
+            "bank_account_number": supplier.bank_account_number,
+            "momo_receiving_number": supplier.momo_receiving_number,
+            "credit_repayment_plan": supplier.credit_repayment_plan,
+            "credit_paid_upfront": str(supplier.credit_paid_upfront) if supplier.credit_paid_upfront is not None else "",
+            "credit_grace_period_days": supplier.credit_grace_period_days,
+            "credit_period": supplier.credit_period,
+        }
+        for supplier in suppliers
+    }
     supplier_category_map = {
         str(supplier.pk): [
             category["code"]
@@ -195,6 +228,12 @@ def expense_form(request):
         other_category_detail = request.POST.get("other_category_detail", "").strip()
         amount_str = request.POST.get("amount", "0").strip()
         payment_method = request.POST.get("payment_method", ExpenseTransaction.PAYMENT_CASH)
+        bank_account_number = request.POST.get("bank_account_number", "").strip()
+        momo_receiving_number = request.POST.get("momo_receiving_number", "").strip()
+        credit_repayment_plan = request.POST.get("credit_repayment_plan", "").strip()
+        credit_paid_upfront_raw = request.POST.get("credit_paid_upfront", "").strip()
+        credit_grace_period_days_raw = request.POST.get("credit_grace_period_days", "").strip()
+        credit_period = request.POST.get("credit_period", "").strip()
         supplier_id = request.POST.get("supplier", "").strip()
         catalog_category_code = request.POST.get("inventory_category", "").strip()
         item_name = request.POST.get("item", "").strip()
@@ -211,6 +250,10 @@ def expense_form(request):
         inventory_item = None
         quantity = None
         unit_price = None
+        credit_paid_upfront = None
+        credit_grace_period_days = None
+        credit_due_date = None
+        valid_payment_methods = {value for value, _label in ExpenseTransaction.PAYMENT_METHOD_CHOICES}
 
         if transaction_type == "salary":
             messages.info(request, "Salaries are recorded in the Payroll module.")
@@ -240,6 +283,8 @@ def expense_form(request):
                 errors.append("Please choose a purchase category.")
             elif transaction_type == "expense" and category.expense_type == ExpenseCategory.ExpenseType.COST_OF_REVENUE:
                 errors.append("Please choose an expense category.")
+            elif transaction_type == "expense" and category.expense_type != ExpenseCategory.ExpenseType.MONTHLY_EXPENSES:
+                errors.append("Fixed assets must be recorded in the Fixed Assets page.")
             elif transaction_type == "expense" and category.code in SALARY_CATEGORY_CODES:
                 errors.append("Salaries should be recorded in Payroll.")
 
@@ -253,6 +298,17 @@ def expense_form(request):
                 supplier = Supplier.objects.filter(pk=supplier_id, is_active=True).first()
                 if not supplier:
                     errors.append("Invalid supplier selected.")
+
+            if not payment_method and supplier:
+                payment_method = supplier.preferred_payment_method
+                bank_account_number = bank_account_number or supplier.bank_account_number
+                momo_receiving_number = momo_receiving_number or supplier.momo_receiving_number
+                credit_repayment_plan = credit_repayment_plan or supplier.credit_repayment_plan
+                credit_paid_upfront_raw = credit_paid_upfront_raw or (
+                    str(supplier.credit_paid_upfront) if supplier.credit_paid_upfront is not None else ""
+                )
+                credit_grace_period_days_raw = credit_grace_period_days_raw or str(supplier.credit_grace_period_days or "")
+                credit_period = credit_period or supplier.credit_period
 
             if not catalog_category_code:
                 errors.append("Category is required for purchases.")
@@ -301,6 +357,45 @@ def expense_form(request):
             if quantity is not None and unit_price is not None:
                 total_amount = (quantity * unit_price).quantize(Decimal("0.01"))
 
+        if payment_method not in valid_payment_methods:
+            errors.append("Please select a valid payment method.")
+        elif transaction_type == "purchase" and payment_method == ExpenseTransaction.PAYMENT_BANK:
+            if not bank_account_number:
+                errors.append("Please enter the bank account number for this purchase.")
+            momo_receiving_number = ""
+            credit_repayment_plan = ""
+            credit_paid_upfront = None
+            credit_grace_period_days = None
+            credit_period = ""
+        elif transaction_type == "purchase" and payment_method == ExpenseTransaction.PAYMENT_MOBILE:
+            if not momo_receiving_number:
+                errors.append("Please enter the receiving number for this MoMo purchase.")
+            bank_account_number = ""
+            credit_repayment_plan = ""
+            credit_paid_upfront = None
+            credit_grace_period_days = None
+            credit_period = ""
+        elif transaction_type == "purchase" and payment_method == ExpenseTransaction.PAYMENT_CREDIT:
+            credit_paid_upfront, percentage_error = _parse_paid_upfront(credit_paid_upfront_raw)
+            credit_grace_period_days, grace_error = _parse_grace_period_days(credit_grace_period_days_raw)
+            if not credit_repayment_plan:
+                errors.append("Please enter the repayment plan for this credit purchase.")
+            if percentage_error:
+                errors.append(percentage_error)
+            if grace_error:
+                errors.append(grace_error)
+            if not credit_period:
+                errors.append("Please enter the credit period for this credit purchase.")
+            bank_account_number = ""
+            momo_receiving_number = ""
+        elif transaction_type == "purchase":
+            bank_account_number = ""
+            momo_receiving_number = ""
+            credit_repayment_plan = ""
+            credit_paid_upfront = None
+            credit_grace_period_days = None
+            credit_period = ""
+
         if category and category.code == "OTHER" and not other_category_detail:
             errors.append("Please describe the other category.")
 
@@ -315,10 +410,38 @@ def expense_form(request):
             except InvalidOperation:
                 errors.append("Invalid amount.")
 
+        if (
+            transaction_type == "purchase"
+            and payment_method == ExpenseTransaction.PAYMENT_CREDIT
+            and expense_date
+            and credit_grace_period_days is not None
+        ):
+            credit_due_date = expense_date + timedelta(days=credit_grace_period_days)
+
         if not errors and expense_date and total_amount is not None and category:
             if transaction_type == "purchase":
                 supplier_label = supplier.name if supplier else ""
                 description = f"Purchase: {item_name}. Category: {catalog_category['name']}. Supplier: {supplier_label}. {description}"
+                if payment_method == ExpenseTransaction.PAYMENT_BANK:
+                    description = f"{description} Bank account: {bank_account_number}."
+                if payment_method == ExpenseTransaction.PAYMENT_MOBILE:
+                    description = f"{description} MoMo number: {momo_receiving_number}."
+                if payment_method == ExpenseTransaction.PAYMENT_CREDIT:
+                    description = f"{description} Credit: {credit_paid_upfront}% paid upfront, balance due by {credit_due_date}."
+
+            payment_notes = ""
+            if transaction_type == "purchase" and payment_method == ExpenseTransaction.PAYMENT_BANK:
+                payment_notes = f"Bank account number: {bank_account_number}"
+            elif transaction_type == "purchase" and payment_method == ExpenseTransaction.PAYMENT_MOBILE:
+                payment_notes = f"MoMo receiving number: {momo_receiving_number}"
+            elif transaction_type == "purchase" and payment_method == ExpenseTransaction.PAYMENT_CREDIT:
+                payment_notes = (
+                    f"Credit repayment plan: {credit_repayment_plan}\n"
+                    f"Paid upfront: {credit_paid_upfront}%\n"
+                    f"Grace period: {credit_grace_period_days} days\n"
+                    f"Credit due date: {credit_due_date}\n"
+                    f"Credit period: {credit_period}"
+                )
 
             expense = ExpenseTransaction.objects.create(
                 expense_date=expense_date,
@@ -335,27 +458,32 @@ def expense_form(request):
                 period_year=expense_date.year,
                 period_month=expense_date.month,
                 status=ExpenseTransaction.Status.DRAFT,
+                notes=payment_notes,
                 created_by=request.user,
             )
             
-            # Generate accounting code for this expense
-            expense_type_map = {
-                'COST_OF_REVENUE': ('CRO', 'Cost of Revenue'),
-                'DEPRECIATION': ('DEP', 'Depreciation'),
-                'MONTHLY_EXPENSES': ('ME', 'Monthly Expenses'),
-            }
-            
-            prefix, _ = expense_type_map.get(
-                category.expense_type,
-                ('ME', 'Monthly Expenses')
-            )
+            # Generate accounting code with Excel-aligned P&L account types.
+            if category.expense_type == ExpenseCategory.ExpenseType.COST_OF_REVENUE:
+                account_type = "COST_OF_REVENUE"
+                prefix = "CRO"
+            elif category.expense_type == ExpenseCategory.ExpenseType.DEPRECIATION:
+                account_type = "DEPRECIATION"
+                prefix = "DEP"
+            elif category.code in OTHER_EXPENSE_CATEGORY_CODES:
+                account_type = "OTHER_EXPENSES"
+                prefix = "OEX"
+            else:
+                # Keep MONTHLY_EXPENSES categories in the ExpenseCategory model,
+                # but post accounting codes as EXPENSES for P&L reporting.
+                account_type = "EXPENSES"
+                prefix = "EXP"
             
             # Format account name as "expense_of_{category_name}"
             account_name = f"expense_of_{category.name.lower()}"
             
             AccountingCode.create_or_get_accounting_code(
                 prefix=prefix,
-                account_type=category.expense_type,
+                account_type=account_type,
                 account_name=account_name,
                 content_object=expense,
             )
@@ -374,9 +502,28 @@ def expense_form(request):
                     quantity=quantity,
                     supplier_name=supplier.name if supplier else "",
                     unit_price=unit_price,
+                    payment_method=payment_method,
+                    bank_account_number=bank_account_number,
+                    momo_receiving_number=momo_receiving_number,
+                    credit_repayment_plan=credit_repayment_plan,
+                    credit_paid_upfront=credit_paid_upfront,
+                    credit_grace_period_days=credit_grace_period_days,
+                    credit_period=credit_period,
+                    credit_due_date=credit_due_date,
                     reference=f"EXP-{expense.expense_id}",
                     created_by=request.user,
                 )
+
+                if payment_method == ExpenseTransaction.PAYMENT_CREDIT:
+                    credit_amount_due = (total_amount * (Decimal("100") - credit_paid_upfront) / Decimal("100")).quantize(Decimal("0.01"))
+                    create_credit_payment_alerts(
+                        supplier_name=supplier.name if supplier else "",
+                        item_name=item_name,
+                        amount_due=credit_amount_due,
+                        due_date=credit_due_date,
+                        paid_upfront=credit_paid_upfront,
+                        created_by=request.user,
+                    )
             
             label = "Purchase" if transaction_type == "purchase" else "Expense"
             messages.success(request, f"{label} recorded successfully.")
@@ -410,6 +557,7 @@ def expense_form(request):
         "inventory_categories": PURCHASE_CATALOG,
         "items_by_category": items_by_category,
         "supplier_category_map": supplier_category_map,
+        "supplier_payment_terms": supplier_payment_terms,
         "suppliers": suppliers,
         "active_tab": active_tab,
         "today_expenses": today_expenses,

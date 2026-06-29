@@ -1,19 +1,43 @@
 from django.db import models
 from decimal import Decimal
 from django.conf import settings
-from django.core.validators import MinValueValidator
+from django.core.validators import MaxValueValidator, MinValueValidator
 
 # Create your models here.
 
 
 class Supplier(models.Model):
+    class PaymentMethod(models.TextChoices):
+        CASH = "Cash", "Cash"
+        MOBILE_MONEY = "Mobile Money", "MoMo"
+        BANK = "Bank", "Bank"
+        CREDIT = "Credit", "Credit"
+
     name = models.CharField(max_length=150, unique=True)
     tin_number = models.CharField(max_length=50, blank=True)
     phone = models.CharField(max_length=30, blank=True)
     location = models.CharField(max_length=150, blank=True)
     product = models.CharField(max_length=150, blank=True)
+    preferred_payment_method = models.CharField(
+        max_length=30,
+        choices=PaymentMethod.choices,
+        default=PaymentMethod.CASH,
+    )
+    bank_account_number = models.CharField(max_length=80, blank=True)
+    momo_receiving_number = models.CharField(max_length=30, blank=True)
+    credit_repayment_plan = models.TextField(blank=True)
+    credit_paid_upfront = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal("0.00")), MaxValueValidator(Decimal("100.00"))],
+    )
+    credit_grace_period_days = models.PositiveIntegerField(null=True, blank=True)
+    credit_period = models.CharField(max_length=100, blank=True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    
 
     class Meta:
         ordering = ["name"]
@@ -65,6 +89,12 @@ class InventoryTransaction(models.Model):
         OUT = "OUT", "Stock Out"
         ADJUST = "ADJUST", "Adjustment"
 
+    class PaymentMethod(models.TextChoices):
+        CASH = "Cash", "Cash"
+        MOBILE_MONEY = "Mobile Money", "MoMo"
+        BANK = "Bank", "Bank"
+        CREDIT = "Credit", "Credit"
+
     tx_id = models.BigAutoField(primary_key=True)
     tx_date = models.DateField(db_index=True)
     tx_type = models.CharField(max_length=10, choices=TxType.choices, db_index=True)
@@ -83,6 +113,20 @@ class InventoryTransaction(models.Model):
         validators=[MinValueValidator(Decimal("0.00"))]
     )
     expiry_date = models.DateField(null=True, blank=True)
+    payment_method = models.CharField(max_length=30, choices=PaymentMethod.choices, default=PaymentMethod.CASH)
+    bank_account_number = models.CharField(max_length=80, blank=True)
+    momo_receiving_number = models.CharField(max_length=30, blank=True)
+    credit_repayment_plan = models.TextField(blank=True)
+    credit_paid_upfront = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal("0.00")), MaxValueValidator(Decimal("100.00"))],
+    )
+    credit_grace_period_days = models.PositiveIntegerField(null=True, blank=True)
+    credit_period = models.CharField(max_length=100, blank=True)
+    credit_due_date = models.DateField(null=True, blank=True)
 
     # Link stock-out to a batch (optional; replace with your actual model path)
     batch = models.ForeignKey(
