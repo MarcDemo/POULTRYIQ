@@ -48,7 +48,7 @@
                         <input type="hidden" name="action" value="add_cost">
                         <div class="col-md-6">
                             <label class="form-label">Date</label>
-                            <input type="date" name="cost_date" class="form-control" required>
+                            <input type="date" name="cost_date" class="form-control" value="{{ today|date:'Y-m-d' }}" required>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Amount</label>
@@ -87,7 +87,7 @@
                         <input type="hidden" name="action" value="complete">
                         <div class="col-12">
                             <label class="form-label">Completion Date</label>
-                            <input type="date" name="completed_date" class="form-control" required>
+                            <input type="date" name="completed_date" class="form-control" value="{{ today|date:'Y-m-d' }}" required>
                         </div>
                         <div class="col-12">
                             <button class="btn btn-success" type="submit">Complete and Capitalize</button>

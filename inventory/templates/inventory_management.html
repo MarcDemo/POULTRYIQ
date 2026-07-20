@@ -76,10 +76,20 @@
 {% csrf_token %}
 
 <div class="mb-3">
-    <label for="item" class="form-label">
-        <i class="bi bi-box me-1"></i>Item Name
+    <label for="supplier_product" class="form-label">
+        <i class="bi bi-box me-1"></i>Product
     </label>
-    <input class="form-control" id="item" name="item" placeholder="e.g., Layer Feed" required>
+    <select class="form-select" id="supplier_product" name="supplier_product" required>
+        <option value="">-- Select supplier first --</option>
+    </select>
+</div>
+
+<div class="mb-3" id="otherItemWrapper" style="display:none;">
+    <label for="other_item_name" class="form-label">
+        <i class="bi bi-pencil-square me-1"></i>Specify Product
+    </label>
+    <input class="form-control" id="other_item_name" name="other_item_name" value="{{ request.POST.other_item_name|default:'' }}" placeholder="Enter product name">
+    <input type="hidden" id="item" name="item" value="{{ request.POST.item|default:'' }}">
 </div>
 
 <div class="mb-3">
@@ -286,12 +296,18 @@
 </div>
 
 {{ supplier_payment_terms|json_script:"supplier-payment-terms-data" }}
+{{ supplier_product_choices|json_script:"supplier-product-choices-data" }}
 
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     const categorySelect = document.getElementById('category');
     const otherWrapper = document.getElementById('otherCategoryWrapper');
     const otherInput = document.getElementById('other_category_name');
+    const itemInput = document.getElementById('item');
+    const unitInput = document.getElementById('unit');
+    const supplierProductSelect = document.getElementById('supplier_product');
+    const otherItemWrapper = document.getElementById('otherItemWrapper');
+    const otherItemInput = document.getElementById('other_item_name');
     const supplierSelect = document.getElementById('supplier_name');
     const paymentSelect = document.getElementById('payment_method');
     const creditTerms = document.getElementById('purchaseCreditTerms');
@@ -304,6 +320,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const gracePeriodInput = document.getElementById('credit_grace_period_days');
     const creditPeriodInput = document.getElementById('credit_period');
     const supplierPaymentTerms = JSON.parse(document.getElementById('supplier-payment-terms-data').textContent);
+    const supplierProductChoices = JSON.parse(document.getElementById('supplier-product-choices-data').textContent);
 
     function toggleOtherCategoryInput() {
         const selected = categorySelect.options[categorySelect.selectedIndex];
@@ -357,8 +374,60 @@ document.addEventListener('DOMContentLoaded', function () {
         togglePurchasePaymentTerms();
     }
 
-    supplierSelect.addEventListener('change', applySupplierPaymentTerms);
+    function rebuildSupplierProducts() {
+        const products = supplierProductChoices[supplierSelect.value] || [];
+        supplierProductSelect.innerHTML = '';
+
+        const placeholder = document.createElement('option');
+        placeholder.value = '';
+        placeholder.textContent = supplierSelect.value ? '-- Select product --' : '-- Select supplier first --';
+        supplierProductSelect.appendChild(placeholder);
+
+        products.forEach(function (product) {
+            const option = document.createElement('option');
+            option.value = product.id;
+            option.textContent = `${product.name} (${product.unit})`;
+            option.dataset.unit = product.unit || '';
+            option.dataset.itemName = product.name || '';
+            supplierProductSelect.appendChild(option);
+        });
+
+        const otherOption = document.createElement('option');
+        otherOption.value = '__other__';
+        otherOption.textContent = 'Other';
+        supplierProductSelect.appendChild(otherOption);
+
+        supplierProductSelect.value = '{{ request.POST.supplier_product|default:"" }}';
+        if (supplierProductSelect.value !== '{{ request.POST.supplier_product|default:"" }}') {
+            supplierProductSelect.value = '';
+        }
+        toggleOtherItemInput();
+    }
+
+    function toggleOtherItemInput() {
+        const selected = supplierProductSelect.options[supplierProductSelect.selectedIndex];
+        const isOther = supplierProductSelect.value === '__other__';
+        if (otherItemWrapper) otherItemWrapper.style.display = isOther ? '' : 'none';
+        if (otherItemInput) {
+            otherItemInput.required = isOther;
+            if (!isOther) otherItemInput.value = '';
+        }
+        if (itemInput) itemInput.value = isOther ? (otherItemInput ? otherItemInput.value : '') : (selected ? selected.dataset.itemName || '' : '');
+        if (!isOther && selected && selected.dataset.unit && unitInput) unitInput.value = selected.dataset.unit;
+    }
+
+    supplierSelect.addEventListener('change', function () {
+        applySupplierPaymentTerms();
+        rebuildSupplierProducts();
+    });
+    supplierProductSelect.addEventListener('change', toggleOtherItemInput);
+    if (otherItemInput) {
+        otherItemInput.addEventListener('input', function () {
+            if (itemInput) itemInput.value = otherItemInput.value;
+        });
+    }
     paymentSelect.addEventListener('change', togglePurchasePaymentTerms);
+    rebuildSupplierProducts();
     togglePurchasePaymentTerms();
 });
 </script>

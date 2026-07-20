@@ -2,6 +2,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
+from django.db import transaction
 from django.db.models import Sum
 from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect, render
@@ -13,6 +14,7 @@ from accounts.models import Role, User, validate_house_assignment
 from accounts.views import get_post_login_redirect
 from accounts.decorators import supervisor_required
 from payroll.models import SalaryPayment
+from accounting.services import post_salary_advance
 from .models import StaffProfile, WelfareRequest
 from poultry.models import PoultryHouse
 from poultryiq.pagination import paginate
@@ -431,11 +433,15 @@ def worker_welfare(request):
         leave_start_raw = request.POST.get("leave_start", "").strip()
         leave_end_raw = request.POST.get("leave_end", "").strip()
         advance_amount_raw = request.POST.get("advance_amount", "").strip()
+        advance_period_start_raw = request.POST.get("advance_period_start", "").strip()
+        advance_period_end_raw = request.POST.get("advance_period_end", "").strip()
 
         errors = []
         leave_start = None
         leave_end = None
         advance_amount = None
+        advance_period_start = None
+        advance_period_end = None
 
         if request_type not in dict(WelfareRequest.RequestType.choices):
             errors.append("Please select a valid welfare request type.")
@@ -463,6 +469,16 @@ def worker_welfare(request):
                     errors.append("Salary advance amount must be greater than zero.")
             except (InvalidOperation, ValueError):
                 errors.append("Please enter a valid salary advance amount.")
+            try:
+                advance_period_start = date.fromisoformat(advance_period_start_raw)
+            except ValueError:
+                errors.append("Please provide the salary advance period start date.")
+            try:
+                advance_period_end = date.fromisoformat(advance_period_end_raw)
+            except ValueError:
+                errors.append("Please provide the salary advance period end date.")
+            if advance_period_start and advance_period_end and advance_period_end < advance_period_start:
+                errors.append("Salary advance period end date cannot be before the start date.")
 
         if errors:
             for error in errors:
@@ -481,6 +497,8 @@ def worker_welfare(request):
                 leave_start=leave_start,
                 leave_end=leave_end,
                 advance_amount=advance_amount,
+                advance_period_start=advance_period_start,
+                advance_period_end=advance_period_end,
                 status=initial_status,
             )
             messages.success(
@@ -618,10 +636,18 @@ def manager_review_welfare(request, pk):
         messages.error(request, "Unknown welfare review action.")
         return redirect("manager_welfare")
 
-    welfare_request.manager = request.user
-    welfare_request.manager_notes = notes
-    welfare_request.manager_reviewed_at = timezone.now()
-    welfare_request.save(update_fields=["status", "manager", "manager_notes", "manager_reviewed_at", "updated_at"])
+    try:
+        with transaction.atomic():
+            welfare_request.manager = request.user
+            welfare_request.manager_notes = notes
+            welfare_request.manager_reviewed_at = timezone.now()
+            welfare_request.save(update_fields=["status", "manager", "manager_notes", "manager_reviewed_at", "updated_at"])
+            if action == "approve" and welfare_request.request_type == WelfareRequest.RequestType.SALARY_ADVANCE:
+                post_salary_advance(welfare_request, created_by=request.user)
+    except ValidationError as exc:
+        messages.error(request, "; ".join(exc.messages) if hasattr(exc, "messages") else str(exc))
+        return redirect("manager_welfare")
+
     messages.success(request, message)
     return redirect("manager_welfare")
 

@@ -12,6 +12,7 @@ from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.db.models import Count, DecimalField, Q, Sum, Value
 from django.db.models.functions import Coalesce
+from django.urls import reverse
 from django.utils import timezone
 from django.utils.text import slugify
 from datetime import date, timedelta
@@ -29,6 +30,7 @@ from poultry.models import (
     egg_collection,
 )
 from sales.models import CustomerPayment, ReceivableLedger, SaleInvoice, SaleItem
+from accounting.models import FinancialStatement
 from accounting.services import get_pl_data, get_bs_data
 
 from .models import InvestorCapitalTransaction, Role, User, validate_house_assignment
@@ -118,6 +120,52 @@ REPORT_CARDS = [
         "metric_label": "actions logged",
     },
 ]
+
+
+ACCOUNTING_STATEMENT_META = {
+    "PROFIT_LOSS": {
+        "short_name": "P&L",
+        "icon": "bi-graph-up-arrow",
+        "description": "Profit and loss",
+        "url_name": "chart_of_accounts",
+    },
+    "BALANCE_SHEET": {
+        "short_name": "BS",
+        "icon": "bi-bank",
+        "description": "Balance sheet",
+        "url_name": "balance_sheet",
+    },
+    "TRIAL_BALANCE": {
+        "short_name": "TB",
+        "icon": "bi-list-check",
+        "description": "Trial balance",
+        "url_name": "trial_balance",
+    },
+    "CASH_FLOW": {
+        "short_name": "Cash Flow",
+        "icon": "bi-cash-stack",
+        "description": "Cash movement",
+        "url_name": "cash_flow",
+    },
+}
+
+
+def _accounting_statement_cards():
+    cards = []
+    statements = FinancialStatement.objects.filter(is_active=True).order_by("display_order", "name")
+    for statement in statements:
+        meta = ACCOUNTING_STATEMENT_META.get(statement.code, {})
+        url_name = meta.get("url_name")
+        cards.append(
+            {
+                "name": statement.name,
+                "short_name": meta.get("short_name") or statement.code.replace("_", " ").title(),
+                "description": meta.get("description") or "Custom financial statement",
+                "icon": meta.get("icon") or "bi-file-earmark-spreadsheet",
+                "url": reverse(url_name) if url_name else reverse("financial_statement", args=[statement.code]),
+            }
+        )
+    return cards
 
 
 def _next_month_start(month_start):
@@ -1699,6 +1747,7 @@ def reports(request):
         "period_options": _report_period_options(),
         "report_cards": _build_report_cards(_report_metrics(month_start, month_end)),
         "selected_report": selected_report,
+        "accounting_statement_cards": _accounting_statement_cards(),
     }
     return render(request, 'reports.html', context)
 

@@ -9,6 +9,7 @@ from urllib.request import Request, urlopen
 from django.contrib import messages
 from django.conf import settings
 from django.db import transaction
+from django.db.models import Prefetch
 from django.http import JsonResponse
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import get_object_or_404, redirect, render
@@ -17,11 +18,11 @@ from django.utils.text import slugify
 
 from accounts.views import get_post_login_redirect
 from expenses.models import ExpenseCategory, ExpenseTransaction
+from accounting.models import ChartOfAccount
 from poultry.models import PoultryBatch
 from poultryiq.pagination import paginate
 from .credit_alerts import create_credit_payment_alerts
-from .models import InventoryRequisition, InventoryTransaction, Item, ItemCategory, Store, Supplier
-from .purchase_catalog import PURCHASE_CATALOG, purchase_catalog_item_names
+from .models import InventoryRequisition, InventoryTransaction, Item, ItemCategory, Store, Supplier, SupplierProduct
 
 
 DEFAULT_ITEM_CATEGORIES = [
@@ -33,6 +34,25 @@ DEFAULT_ITEM_CATEGORIES = [
 ]
 
 FIXED_ASSET_INVENTORY_CATEGORY_CODES = {"EQUIPMENT"}
+
+
+def supplier_visible_accounts():
+    return ChartOfAccount.objects.select_related("account_type").filter(
+        is_active=True,
+        show_on_suppliers=True,
+        account_type__is_active=True,
+        account_type__show_on_suppliers=True,
+    )
+
+
+def supplier_visible_products():
+    return SupplierProduct.objects.select_related("account", "account__account_type").filter(
+        is_active=True,
+        account__is_active=True,
+        account__show_on_suppliers=True,
+        account__account_type__is_active=True,
+        account__account_type__show_on_suppliers=True,
+    )
 
 
 def _role_code(user) -> str:
@@ -313,10 +333,39 @@ def tin_lookup(request):
 
 def suppliers(request):
     if request.method == "POST":
+        action = request.POST.get("action", "save_supplier").strip()
+        if action == "add_supplier_product":
+            account_id = request.POST.get("product_account", "").strip()
+            product_name = request.POST.get("product_name", "").strip()
+            unit = request.POST.get("product_unit", "unit").strip() or "unit"
+            account = ChartOfAccount.objects.filter(
+                pk=account_id,
+                is_active=True,
+                show_on_suppliers=True,
+                account_type__is_active=True,
+                account_type__show_on_suppliers=True,
+            ).first()
+            if not account:
+                messages.error(request, "Select a supplier-enabled chart account.")
+            elif not product_name:
+                messages.error(request, "Product name is required.")
+            else:
+                SupplierProduct.objects.get_or_create(
+                    account=account,
+                    name=product_name,
+                    defaults={"unit": unit, "is_active": True},
+                )
+                messages.success(request, f"{product_name} added under {account.account_name}.")
+            return redirect("suppliers")
+
         name = request.POST.get("name", "").strip()
         tin_number = request.POST.get("tin_number", "").strip()
         phone = request.POST.get("phone", "").strip()
         location = request.POST.get("location", "").strip()
+        use_other_supplied_product = request.POST.get("use_other_supplied_product") == "on"
+        other_product_account_id = request.POST.get("other_product_account", "").strip()
+        other_product_name = request.POST.get("other_product_name", "").strip()
+        other_product_unit = request.POST.get("other_product_unit", "unit").strip() or "unit"
         preferred_payment_method = request.POST.get(
             "preferred_payment_method",
             Supplier.PaymentMethod.CASH,
@@ -327,10 +376,19 @@ def suppliers(request):
         credit_paid_upfront_raw = request.POST.get("credit_paid_upfront", "").strip()
         credit_grace_period_days_raw = request.POST.get("credit_grace_period_days", "").strip()
         credit_period = request.POST.get("credit_period", "").strip()
-        selected_products = request.POST.getlist("products")
-        valid_product_names = set(purchase_catalog_item_names())
-        supplied_items = [name for name in selected_products if name in valid_product_names]
-        product = ", ".join(sorted(supplied_items))
+        selected_product_ids = request.POST.getlist("supplied_products")
+        supplied_products = list(
+            supplier_visible_products().filter(
+                pk__in=selected_product_ids,
+            )
+        )
+        product_names = sorted(item.name for item in supplied_products)
+        other_product_account = None
+        if use_other_supplied_product:
+            other_product_account = supplier_visible_accounts().filter(pk=other_product_account_id).first()
+            if other_product_name:
+                product_names.append(other_product_name)
+        product = ", ".join(product_names)
         valid_payment_methods = {value for value, _label in Supplier.PaymentMethod.choices}
         credit_paid_upfront = None
         credit_grace_period_days = None
@@ -344,8 +402,14 @@ def suppliers(request):
             messages.error(request, "Supplier name is required.")
         elif tin_number and not re.fullmatch(r"\d{10}", _normalise_tin(tin_number)):
             messages.error(request, "Invalid TIN number. A Uganda TIN should be 10 digits.")
-        elif not supplied_items:
-            messages.error(request, "Select at least one supplied item.")
+        elif not supplied_products and not use_other_supplied_product:
+            messages.error(request, "Select at least one supplied product or choose Other.")
+        elif use_other_supplied_product and not other_product_account:
+            messages.error(request, "Select the category for the other supplied product.")
+        elif use_other_supplied_product and not other_product_name:
+            messages.error(request, "Specify the other supplied product.")
+        elif use_other_supplied_product and SupplierProduct.objects.filter(name__iexact=other_product_name).exists():
+            messages.error(request, "That product name already exists. Please select it from the list instead.")
         elif preferred_payment_method not in valid_payment_methods:
             messages.error(request, "Select a valid preferred payment method.")
         elif preferred_payment_method == Supplier.PaymentMethod.BANK and not bank_account_number:
@@ -371,31 +435,63 @@ def suppliers(request):
                 credit_paid_upfront = None
                 credit_grace_period_days = None
                 credit_period = ""
-            supplier, created = Supplier.objects.update_or_create(
-                name__iexact=name,
-                defaults={
-                    "name": name,
-                    "tin_number": tin_number,
-                    "phone": phone,
-                    "location": location,
-                    "product": product,
-                    "preferred_payment_method": preferred_payment_method,
-                    "bank_account_number": bank_account_number,
-                    "momo_receiving_number": momo_receiving_number,
-                    "credit_repayment_plan": credit_repayment_plan,
-                    "credit_paid_upfront": credit_paid_upfront,
-                    "credit_grace_period_days": credit_grace_period_days,
-                    "credit_period": credit_period,
-                    "is_active": True,
-                },
-            )
+            with transaction.atomic():
+                if use_other_supplied_product:
+                    other_product = SupplierProduct.objects.create(
+                        account=other_product_account,
+                        name=other_product_name,
+                        unit=other_product_unit,
+                        is_active=True,
+                    )
+                    supplied_products.append(other_product)
+
+                supplier, created = Supplier.objects.update_or_create(
+                    name__iexact=name,
+                    defaults={
+                        "name": name,
+                        "tin_number": tin_number,
+                        "phone": phone,
+                        "location": location,
+                        "product": product,
+                        "other_supplied_products": "",
+                        "preferred_payment_method": preferred_payment_method,
+                        "bank_account_number": bank_account_number,
+                        "momo_receiving_number": momo_receiving_number,
+                        "credit_repayment_plan": credit_repayment_plan,
+                        "credit_paid_upfront": credit_paid_upfront,
+                        "credit_grace_period_days": credit_grace_period_days,
+                        "credit_period": credit_period,
+                        "is_active": True,
+                    },
+                )
+                supplier.supplied_products.set(supplied_products)
+                supplier.supplied_accounts.set([item.account for item in supplied_products])
             if created:
                 messages.success(request, "Supplier saved successfully.")
             else:
                 messages.success(request, "Supplier details updated.")
             return redirect("suppliers")
 
-    suppliers_qs = Supplier.objects.filter(is_active=True).order_by("name")
+    suppliers_qs = (
+        Supplier.objects.filter(is_active=True)
+        .prefetch_related(
+            Prefetch(
+                "supplied_products",
+                queryset=supplier_visible_products().order_by("account__account_type__name", "account__account_name", "name"),
+                to_attr="visible_supplied_products",
+            )
+        )
+        .order_by("name")
+    )
+    product_groups = []
+    accounts = (
+        supplier_visible_accounts()
+        .order_by("account_type__name", "account_name")
+    )
+    for account in accounts:
+        products = list(account.supplier_products.filter(is_active=True).order_by("name"))
+        if products:
+            product_groups.append({"account": account, "products": products})
     page_obj, querystring = paginate(request, suppliers_qs, per_page=20)
     return render(
         request,
@@ -404,7 +500,8 @@ def suppliers(request):
             "suppliers": page_obj,
             "page_obj": page_obj,
             "querystring": querystring,
-            "purchase_catalog": PURCHASE_CATALOG,
+            "product_groups": product_groups,
+            "product_accounts": accounts,
         },
     )
 
@@ -414,7 +511,17 @@ def inventory_management(request):
     categories = ItemCategory.objects.exclude(
         code__in=FIXED_ASSET_INVENTORY_CATEGORY_CODES,
     ).order_by("name")
-    supplier_list = Supplier.objects.filter(is_active=True).order_by("name")
+    supplier_list = (
+        Supplier.objects.filter(is_active=True)
+        .prefetch_related(
+            Prefetch(
+                "supplied_products",
+                queryset=supplier_visible_products().order_by("account__account_type__name", "account__account_name", "name"),
+                to_attr="visible_supplied_products",
+            )
+        )
+        .order_by("name")
+    )
     supplier_payment_terms = {
         supplier.name: {
             "payment_method": supplier.preferred_payment_method,
@@ -427,9 +534,24 @@ def inventory_management(request):
         }
         for supplier in supplier_list
     }
+    supplier_product_choices = {
+        supplier.name: [
+            {
+                "id": product.pk,
+                "name": product.name,
+                "unit": product.unit,
+                "account": product.account_id,
+                "account_label": f"{product.account.code} - {product.account.account_name}",
+            }
+            for product in supplier.visible_supplied_products
+        ]
+        for supplier in supplier_list
+    }
 
     if request.method == "POST":
         item_name = request.POST.get("item", "").strip()
+        supplier_product_id = request.POST.get("supplier_product", "").strip()
+        other_item_name = request.POST.get("other_item_name", "").strip()
         category_id = request.POST.get("category", "").strip()
         other_category_name = request.POST.get("other_category_name", "").strip()
         quantity_raw = request.POST.get("quantity", "").strip()
@@ -450,6 +572,7 @@ def inventory_management(request):
         final_category = category
         pending_custom_category_name = ""
         supplier = None
+        selected_supplier_product = None
         quantity = None
         unit_price = None
         expiry_date = None
@@ -457,9 +580,6 @@ def inventory_management(request):
         credit_grace_period_days = None
         credit_due_date = None
         valid_payment_methods = {value for value, _label in InventoryTransaction.PaymentMethod.choices}
-
-        if not item_name:
-            errors.append("Item name is required.")
 
         if not category:
             errors.append("Please select a valid category.")
@@ -470,6 +590,23 @@ def inventory_management(request):
             supplier = Supplier.objects.filter(name__iexact=supplier_name, is_active=True).first()
             if supplier is None:
                 errors.append("Please select a valid supplier from the list.")
+
+        if supplier_product_id == "__other__":
+            if not other_item_name:
+                errors.append("Specify the product when Other is selected.")
+            else:
+                item_name = other_item_name
+        elif supplier_product_id:
+            selected_supplier_product = supplier_visible_products().filter(pk=supplier_product_id).first()
+            if selected_supplier_product and supplier and not supplier.supplied_products.filter(pk=selected_supplier_product.pk).exists():
+                selected_supplier_product = None
+            if not selected_supplier_product:
+                errors.append("Please select a valid product for this supplier.")
+            else:
+                item_name = selected_supplier_product.name
+                unit = selected_supplier_product.unit or unit
+        elif not item_name:
+            errors.append("Select a supplied product or choose Other.")
 
         if not payment_method and supplier:
             payment_method = supplier.preferred_payment_method
@@ -622,7 +759,12 @@ def inventory_management(request):
                 expense = ExpenseTransaction.objects.create(
                     expense_date=date.today(),
                     category=expense_category,
+                    account=selected_supplier_product.account if selected_supplier_product else expense_category.account,
                     description=description,
+                    item_name=item.name,
+                    quantity=quantity,
+                    unit=item.unit,
+                    unit_cost=unit_price,
                     total_amount=total_amount,
                     supplier_name=supplier.name if supplier else supplier_name,
                     supplier_contact=supplier.phone if supplier else "",
@@ -668,6 +810,7 @@ def inventory_management(request):
             'suppliers': supplier_list,
             'payment_method_choices': InventoryTransaction.PaymentMethod.choices,
             'supplier_payment_terms': supplier_payment_terms,
+            'supplier_product_choices': supplier_product_choices,
         },
     )
 

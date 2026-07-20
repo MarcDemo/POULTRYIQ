@@ -1,6 +1,7 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import Avg, Count, DecimalField, Max, Q, Sum, Value
 from django.db.models.functions import Coalesce
@@ -12,6 +13,7 @@ from decimal import Decimal, InvalidOperation
 from accounts.decorators import worker_required, supervisor_required
 from accounts.models import InvestorCapitalTransaction, User
 from accounting.models import AccountingCode
+from accounting.services import post_expense
 from alerts.models import Alert
 from expenses.models import ExpenseAllocation, ExpenseCategory, ExpenseTransaction
 from payroll.models import SalaryPayment
@@ -2568,6 +2570,10 @@ def add_batch(request):
                     batch_expense_category.is_active = True
                     batch_expense_category.save(update_fields=["expense_type", "is_active"])
 
+                if not batch_expense_category.account_id:
+                    messages.error(request, "Bird Batch Purchase is not mapped to a cost account. Please map it in Expense Categories.")
+                    return redirect("birds")
+
                 expense = ExpenseTransaction.objects.create(
                     expense_date=batch.date_stocked,
                     category=batch_expense_category,
@@ -2583,12 +2589,12 @@ def add_batch(request):
                     status=ExpenseTransaction.Status.DRAFT,
                     created_by=request.user,
                 )
-                AccountingCode.create_or_get_accounting_code(
-                    prefix="CRO",
-                    account_type="COST_OF_REVENUE",
-                    account_name="expense_of_bird_batch_purchase",
+                AccountingCode.create_for(
+                    account=batch_expense_category.account,
                     content_object=expense,
+                    description="Bird batch purchase",
                 )
+                post_expense(expense, created_by=request.user)
 
             messages.success(request, f"Batch {batch.batch_code} created successfully!")
             return redirect("birds")

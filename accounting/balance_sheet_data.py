@@ -29,6 +29,7 @@ BALANCE_SHEET_ACCOUNTS = [
     ("341001", "Prepaid Electricity", "ASSETS", "PREPAYMENT", True, ""),
     ("341002", "Prepaid Salaries", "ASSETS", "PREPAYMENT", True, ""),
     ("341003", "Prepaid Rent", "ASSETS", "PREPAYMENT", True, ""),
+    ("341004", "Prepaid Water", "ASSETS", "PREPAYMENT", True, "NEW"),
     ("351001", "Fixed Deposit Account", "ASSETS", "BANK_AND_CASH", False, ""),
     ("351002", "Centenary Bank UGX Account (Sales)", "ASSETS", "BANK_AND_CASH", False, ""),
     ("351003", "Centenary Bank UGX Account (Operations)", "ASSETS", "BANK_AND_CASH", False, ""),

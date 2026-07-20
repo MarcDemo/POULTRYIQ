@@ -207,6 +207,8 @@ class WelfareRequest(models.Model):
         blank=True,
         validators=[MinValueValidator(Decimal("0.00"))],
     )
+    advance_period_start = models.DateField(null=True, blank=True, db_index=True)
+    advance_period_end = models.DateField(null=True, blank=True, db_index=True)
     currency = models.CharField(max_length=10, default="UGX")
 
     status = models.CharField(

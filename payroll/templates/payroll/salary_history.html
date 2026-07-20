@@ -1,0 +1,70 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container-fluid">
+    <div class="page-header-row mb-4 d-flex justify-content-between align-items-start flex-wrap gap-2">
+        <div>
+            <h2 class="mb-1"><i class="bi bi-clock-history me-2"></i>Salary History</h2>
+            <small class="text-muted">Prepared and paid salary records</small>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+            <a class="btn btn-outline-primary" href="{% url 'pending_salaries' current_period_month %}">
+                <i class="bi bi-wallet2 me-1"></i>Pending Salaries
+            </a>
+            <a class="btn btn-outline-primary" href="{% url 'salary_bonuses' %}">
+                <i class="bi bi-gift me-1"></i>Bonuses
+            </a>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>Employee</th>
+                        <th>Month</th>
+                        <th>Gross</th>
+                        <th>PAYE</th>
+                        <th>NSSF</th>
+                        <th>Advances</th>
+                        <th>Bonus</th>
+                        <th>Net Pay</th>
+                        <th>Status</th>
+                        <th>Pay Date</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for record in salary_records %}
+                        <tr>
+                            <td>{{ record.employee.get_full_name|default:record.employee.username }}</td>
+                            <td>{{ record.period_month }}</td>
+                            <td>{{ record.gross_salary|floatformat:0 }}</td>
+                            <td>{{ record.paye_tax|floatformat:0 }}</td>
+                            <td>{{ record.nssf_employee|floatformat:0 }}</td>
+                            <td>{{ record.advances_deducted|floatformat:0 }}</td>
+                            <td>{{ record.bonus_amount|floatformat:0 }}</td>
+                            <td><strong>{{ record.net_pay|default:record.amount|floatformat:0 }}</strong></td>
+                            <td>
+                                <span class="badge {% if record.status == 'PAID' %}bg-success{% else %}bg-warning{% endif %}">
+                                    {{ record.get_status_display }}
+                                </span>
+                            </td>
+                            <td>{{ record.payment_date|default:"-" }}</td>
+                            <td>
+                                <a class="btn btn-sm btn-warning" href="{% url 'edit_salary' record.pk %}">
+                                    <i class="bi bi-pencil-square me-1"></i>Edit
+                                </a>
+                            </td>
+                        </tr>
+                    {% empty %}
+                        <tr>
+                            <td colspan="11" class="text-center text-muted">No salary records yet</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

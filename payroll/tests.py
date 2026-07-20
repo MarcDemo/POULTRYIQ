@@ -2,7 +2,9 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
+from datetime import date
 from decimal import Decimal
+from unittest.mock import patch
 
 from accounts.models import Role
 from hr.models import StaffProfile, WelfareRequest
@@ -23,7 +25,7 @@ class SalariesViewTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "payroll/salaries.html")
-        self.assertContains(response, "Salary Management")
+        self.assertContains(response, "Pending Salaries")
 
     def test_generate_monthly_payroll_deducts_approved_advances(self):
         manager_role = Role.objects.create(code=Role.RoleCode.MANAGER, name="Farm Manager")
@@ -45,6 +47,8 @@ class SalariesViewTests(TestCase):
             title="School fees",
             details="Advance request",
             advance_amount="100000.00",
+            advance_period_start=date(2026, 6, 1),
+            advance_period_end=date(2026, 6, 30),
             status=WelfareRequest.Status.MANAGER_APPROVED,
             manager=manager,
             manager_reviewed_at=timezone.now(),
@@ -56,12 +60,48 @@ class SalariesViewTests(TestCase):
             {"action": "generate_monthly", "batch_month": "2026-06"},
         )
 
-        self.assertRedirects(response, reverse("salaries"))
+        self.assertRedirects(response, reverse("pending_salaries", args=["2026-06"]))
         salary = SalaryPayment.objects.get(employee=worker, period_month="2026-06")
         self.assertEqual(salary.gross_salary, Decimal("1000000.00"))
         self.assertEqual(salary.advances_deducted, Decimal("100000.00"))
         self.assertEqual(salary.payment_date.isoformat(), "2026-06-28")
         self.assertEqual(WelfareRequest.objects.get(worker=worker).salary_payment, salary)
+
+    def test_generate_monthly_payroll_uses_advance_period_not_approval_date(self):
+        manager_role = Role.objects.create(code=Role.RoleCode.MANAGER, name="Farm Manager")
+        worker_role = Role.objects.create(code=Role.RoleCode.WORKER, name="Farm Worker")
+        manager = get_user_model().objects.create_user(
+            username="period-advance-manager",
+            password="pass1234",
+            role=manager_role,
+        )
+        worker = get_user_model().objects.create_user(
+            username="period-advance-worker",
+            password="pass1234",
+            role=worker_role,
+        )
+        StaffProfile.objects.create(user=worker, monthly_salary="1000000.00", pay_nssf=False, pay_paye=False)
+        WelfareRequest.objects.create(
+            worker=worker,
+            request_type=WelfareRequest.RequestType.SALARY_ADVANCE,
+            title="July salary advance",
+            details="Advance request",
+            advance_amount="100000.00",
+            advance_period_start=date(2026, 7, 1),
+            advance_period_end=date(2026, 7, 31),
+            status=WelfareRequest.Status.MANAGER_APPROVED,
+            manager=manager,
+            manager_reviewed_at=timezone.now(),
+        )
+        self.client.force_login(manager)
+
+        self.client.post(reverse("salaries"), {"action": "generate_monthly", "batch_month": "2026-06"})
+        june_salary = SalaryPayment.objects.get(employee=worker, period_month="2026-06")
+        self.assertEqual(june_salary.advances_deducted, Decimal("0.00"))
+
+        self.client.post(reverse("salaries"), {"action": "generate_monthly", "batch_month": "2026-07"})
+        july_salary = SalaryPayment.objects.get(employee=worker, period_month="2026-07")
+        self.assertEqual(july_salary.advances_deducted, Decimal("100000.00"))
 
     def test_generate_monthly_payroll_includes_managers_and_bonuses(self):
         manager_role = Role.objects.create(code=Role.RoleCode.MANAGER, name="Farm Manager")
@@ -74,6 +114,7 @@ class SalariesViewTests(TestCase):
         SalaryBonus.objects.create(
             employee=manager,
             period_month="2026-06",
+            bonus_name="Performance Bonus",
             amount=Decimal("150000.00"),
             reason="Performance",
             granted_by=manager,
@@ -85,7 +126,7 @@ class SalariesViewTests(TestCase):
             {"action": "generate_monthly", "batch_month": "2026-06"},
         )
 
-        self.assertRedirects(response, reverse("salaries"))
+        self.assertRedirects(response, reverse("pending_salaries", args=["2026-06"]))
         salary = SalaryPayment.objects.get(employee=manager, period_month="2026-06")
         self.assertEqual(salary.bonus_amount, Decimal("150000.00"))
         self.assertEqual(salary.net_pay, Decimal("1150000.00"))
@@ -143,7 +184,7 @@ class SalariesViewTests(TestCase):
             {"action": "generate_monthly", "batch_month": "2026-06"},
         )
 
-        self.assertRedirects(response, reverse("salaries"))
+        self.assertRedirects(response, reverse("pending_salaries", args=["2026-06"]))
         salary = SalaryPayment.objects.get(employee=worker, period_month="2026-06")
         self.assertEqual(salary.gross_salary, Decimal("1000000.00"))
         self.assertEqual(salary.nssf_employee, Decimal("0.00"))
@@ -180,7 +221,7 @@ class SalariesViewTests(TestCase):
         )
         self.client.force_login(manager)
 
-        response = self.client.get(reverse("salaries"))
+        response = self.client.get(reverse("pending_salaries", args=["2026-06"]))
         self.assertContains(response, reverse("edit_salary", args=[salary.pk]))
 
         response = self.client.post(
@@ -197,7 +238,7 @@ class SalariesViewTests(TestCase):
             },
         )
 
-        self.assertRedirects(response, reverse("salaries"))
+        self.assertRedirects(response, reverse("salary_history"))
         salary.refresh_from_db()
         self.assertEqual(salary.gross_salary, Decimal("700000.00"))
         self.assertEqual(salary.nssf_employee, Decimal("35000.00"))
@@ -285,7 +326,7 @@ class SalariesViewTests(TestCase):
             },
         )
 
-        self.assertRedirects(response, reverse("salaries"))
+        self.assertRedirects(response, reverse("pending_salaries", args=["2026-06"]))
         salary.refresh_from_db()
         self.assertEqual(salary.gross_salary, Decimal("840000.00"))
         self.assertEqual(salary.net_pay, Decimal("800000.00"))
@@ -327,14 +368,14 @@ class SalariesViewTests(TestCase):
         self.client.force_login(manager)
 
         response = self.client.post(
-            reverse("salaries"),
+            reverse("pending_salaries", args=["2026-06"]),
             {
                 "action": "pay_selected",
                 "salary_ids": [str(first_salary.pk)],
             },
         )
 
-        self.assertRedirects(response, reverse("salaries"))
+        self.assertRedirects(response, reverse("pending_salaries", args=["2026-06"]))
         first_salary.refresh_from_db()
         second_salary.refresh_from_db()
         self.assertEqual(first_salary.status, SalaryPayment.Status.PAID)
@@ -389,12 +430,118 @@ class SalariesViewTests(TestCase):
         )
         self.client.force_login(manager)
 
-        response = self.client.post(reverse("salaries"), {"action": "pay_all"})
+        response = self.client.post(reverse("pending_salaries", args=["2026-06"]), {"action": "pay_all"})
 
-        self.assertRedirects(response, reverse("salaries"))
+        self.assertRedirects(response, reverse("pending_salaries", args=["2026-06"]))
         first_salary.refresh_from_db()
         second_salary.refresh_from_db()
         already_paid.refresh_from_db()
         self.assertEqual(first_salary.status, SalaryPayment.Status.PAID)
         self.assertEqual(second_salary.status, SalaryPayment.Status.PAID)
         self.assertEqual(already_paid.status, SalaryPayment.Status.PAID)
+
+    def test_paid_salaries_disappear_from_pending_month_page(self):
+        manager_role = Role.objects.create(code=Role.RoleCode.MANAGER, name="Farm Manager")
+        worker_role = Role.objects.create(code=Role.RoleCode.WORKER, name="Farm Worker")
+        manager = get_user_model().objects.create_user(
+            username="pending-only-manager",
+            password="pass1234",
+            role=manager_role,
+        )
+        pending_worker = get_user_model().objects.create_user(
+            username="pending-only-worker",
+            password="pass1234",
+            role=worker_role,
+        )
+        paid_worker = get_user_model().objects.create_user(
+            username="paid-hidden-worker",
+            password="pass1234",
+            role=worker_role,
+        )
+        SalaryPayment.objects.create(
+            employee=pending_worker,
+            period_month="2026-06",
+            amount=Decimal("500000.00"),
+            net_pay=Decimal("500000.00"),
+            status=SalaryPayment.Status.PENDING,
+            recorded_by=manager,
+        )
+        SalaryPayment.objects.create(
+            employee=paid_worker,
+            period_month="2026-06",
+            amount=Decimal("600000.00"),
+            net_pay=Decimal("600000.00"),
+            status=SalaryPayment.Status.PAID,
+            recorded_by=manager,
+        )
+        self.client.force_login(manager)
+
+        response = self.client.get(reverse("pending_salaries", args=["2026-06"]))
+
+        self.assertContains(response, "pending-only-worker")
+        self.assertNotContains(response, "paid-hidden-worker")
+
+    def test_current_month_pending_salaries_hidden_before_28th(self):
+        manager_role = Role.objects.create(code=Role.RoleCode.MANAGER, name="Farm Manager")
+        worker_role = Role.objects.create(code=Role.RoleCode.WORKER, name="Farm Worker")
+        manager = get_user_model().objects.create_user(
+            username="early-month-manager",
+            password="pass1234",
+            role=manager_role,
+        )
+        worker = get_user_model().objects.create_user(
+            username="early-month-worker",
+            password="pass1234",
+            role=worker_role,
+        )
+        SalaryPayment.objects.create(
+            employee=worker,
+            period_month="2026-07",
+            amount=Decimal("500000.00"),
+            net_pay=Decimal("500000.00"),
+            status=SalaryPayment.Status.PENDING,
+            recorded_by=manager,
+        )
+        self.client.force_login(manager)
+
+        with patch("payroll.views.timezone.localdate", return_value=date(2026, 7, 27)):
+            response = self.client.get(reverse("pending_salaries", args=["2026-07"]))
+
+        self.assertContains(response, "Current month salaries will appear as pending from July 28, 2026")
+        self.assertNotContains(response, "early-month-worker")
+
+    def test_manager_can_create_named_bonus_on_bonus_page(self):
+        manager_role = Role.objects.create(code=Role.RoleCode.MANAGER, name="Farm Manager")
+        worker_role = Role.objects.create(code=Role.RoleCode.WORKER, name="Farm Worker")
+        manager = get_user_model().objects.create_user(
+            username="bonus-page-manager",
+            password="pass1234",
+            role=manager_role,
+        )
+        worker = get_user_model().objects.create_user(
+            username="bonus-page-worker",
+            password="pass1234",
+            role=worker_role,
+        )
+        second_worker = get_user_model().objects.create_user(
+            username="bonus-page-worker-two",
+            password="pass1234",
+            role=worker_role,
+        )
+        self.client.force_login(manager)
+
+        response = self.client.post(
+            reverse("salary_bonuses"),
+            {
+                "bonus_employees": [str(worker.pk), str(second_worker.pk)],
+                "bonus_month": "2026-07",
+                "bonus_name": "Manager Award",
+                "bonus_amount": "250000",
+                "bonus_reason": "Outstanding work",
+            },
+        )
+
+        self.assertRedirects(response, reverse("salary_bonuses"))
+        bonus = SalaryBonus.objects.get(employee=worker, period_month="2026-07")
+        self.assertEqual(bonus.bonus_name, "Manager Award")
+        self.assertTrue(SalaryBonus.objects.filter(employee=second_worker, period_month="2026-07").exists())

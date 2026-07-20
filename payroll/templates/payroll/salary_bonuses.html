@@ -1,0 +1,133 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container-fluid">
+    <div class="page-header-row mb-4 d-flex justify-content-between align-items-start flex-wrap gap-2">
+        <div>
+            <h2 class="mb-1"><i class="bi bi-gift me-2"></i>Salary Bonuses</h2>
+            <small class="text-muted">Create manager-named bonuses for payroll</small>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+            <a class="btn btn-outline-primary" href="{% url 'pending_salaries' current_period_month %}">
+                <i class="bi bi-wallet2 me-1"></i>Pending Salaries
+            </a>
+            <a class="btn btn-outline-secondary" href="{% url 'salary_history' %}">
+                <i class="bi bi-clock-history me-1"></i>History
+            </a>
+        </div>
+    </div>
+
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        {% endfor %}
+    {% endif %}
+
+    <div class="row g-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Grant Bonus</h5>
+                    <form method="POST">
+                        {% csrf_token %}
+                        <div class="row g-3">
+                            <div class="col-lg-4">
+                                <label class="form-label">Bonus Name</label>
+                                <input type="text" name="bonus_name" class="form-control" maxlength="120" required>
+                            </div>
+                            <div class="col-md-4 col-lg-2">
+                                <label class="form-label">Month</label>
+                                <input type="month" name="bonus_month" class="form-control" value="{{ current_period_month }}" required>
+                            </div>
+                            <div class="col-md-4 col-lg-2">
+                                <label class="form-label">Amount</label>
+                                <input type="number" name="bonus_amount" class="form-control" min="0.01" step="0.01" required>
+                            </div>
+                            <div class="col-lg-4">
+                                <label class="form-label">Notes</label>
+                                <textarea name="bonus_reason" class="form-control" rows="1"></textarea>
+                            </div>
+                        </div>
+
+                        <div class="mt-3">
+                            <label class="form-label">Employees</label>
+                            <input type="search" id="employee-bonus-search" class="form-control mb-2" placeholder="Search employees">
+                            <div class="border rounded p-2" style="max-height: 280px; overflow-y: auto;">
+                                {% for employee in employees %}
+                                    <div class="form-check bonus-employee-row" data-employee-name="{{ employee.display_name|lower }}">
+                                        <input class="form-check-input" type="checkbox" name="bonus_employees" value="{{ employee.pk }}" id="bonus-employee-{{ employee.pk }}">
+                                        <label class="form-check-label" for="bonus-employee-{{ employee.pk }}">
+                                            {{ employee.display_name }}
+                                        </label>
+                                    </div>
+                                {% empty %}
+                                    <div class="text-muted small">No employees available</div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-primary w-100 mt-3">
+                            <i class="bi bi-gift me-1"></i>Grant Bonus
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+        <div class="col-12">
+            <div class="card">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Employee</th>
+                                <th>Month</th>
+                                <th>Name</th>
+                                <th>Amount</th>
+                                <th>Granted By</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for bonus in bonuses %}
+                                <tr>
+                                    <td>{{ bonus.employee.get_full_name|default:bonus.employee.username }}</td>
+                                    <td>{{ bonus.period_month }}</td>
+                                    <td>
+                                        {{ bonus.bonus_name }}
+                                        {% if bonus.reason %}
+                                            <div class="small text-muted">{{ bonus.reason }}</div>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ bonus.amount|floatformat:0 }}</td>
+                                    <td>{{ bonus.granted_by.username }}</td>
+                                </tr>
+                            {% empty %}
+                                <tr>
+                                    <td colspan="5" class="text-center text-muted">No bonuses yet</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const search = document.getElementById('employee-bonus-search');
+    const rows = Array.from(document.querySelectorAll('.bonus-employee-row'));
+
+    if (!search) {
+        return;
+    }
+
+    search.addEventListener('input', function () {
+        const query = search.value.trim().toLowerCase();
+        rows.forEach(function (row) {
+            row.classList.toggle('d-none', query && !row.dataset.employeeName.includes(query));
+        });
+    });
+});
+</script>
+{% endblock %}

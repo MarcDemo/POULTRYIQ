@@ -134,6 +134,20 @@ class SaleItem(models.Model):
     batch = models.ForeignKey(
         "poultry.PoultryBatch", on_delete=models.PROTECT, null=True, blank=True, related_name="sale_items"
     )
+    category = models.ForeignKey(
+        "accounting.TransactionCategory",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="sales",
+    )
+    account = models.ForeignKey(
+        "accounting.ChartOfAccount",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="sale_items",
+    )
 
     product_name = models.CharField(max_length=120)  # e.g. Eggs, Off-layers, Manure
     quantity = models.DecimalField(

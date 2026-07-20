@@ -1,7 +1,9 @@
 from django.db import models
 from decimal import Decimal
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
+from django.db.models.functions import Lower
 
 # Create your models here.
 
@@ -18,6 +20,17 @@ class Supplier(models.Model):
     phone = models.CharField(max_length=30, blank=True)
     location = models.CharField(max_length=150, blank=True)
     product = models.CharField(max_length=150, blank=True)
+    supplied_accounts = models.ManyToManyField(
+        "accounting.ChartOfAccount",
+        blank=True,
+        related_name="suppliers",
+    )
+    supplied_products = models.ManyToManyField(
+        "SupplierProduct",
+        blank=True,
+        related_name="suppliers",
+    )
+    other_supplied_products = models.TextField(blank=True)
     preferred_payment_method = models.CharField(
         max_length=30,
         choices=PaymentMethod.choices,
@@ -44,6 +57,35 @@ class Supplier(models.Model):
 
     def __str__(self) -> str:
         return self.name
+
+
+class SupplierProduct(models.Model):
+    account = models.ForeignKey(
+        "accounting.ChartOfAccount",
+        on_delete=models.PROTECT,
+        related_name="supplier_products",
+    )
+    name = models.CharField(max_length=120)
+    unit = models.CharField(max_length=20, default="unit")
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["account__account_name", "name"]
+        unique_together = ("account", "name")
+        constraints = [
+            models.UniqueConstraint(Lower("name"), name="unique_supplier_product_name_ci"),
+        ]
+
+    def __str__(self):
+        return f"{self.name} ({self.account.account_name})"
+
+    def clean(self):
+        duplicate = SupplierProduct.objects.filter(name__iexact=self.name)
+        if self.pk:
+            duplicate = duplicate.exclude(pk=self.pk)
+        if duplicate.exists():
+            raise ValidationError({"name": "A supplier product with this name already exists."})
 
 
 

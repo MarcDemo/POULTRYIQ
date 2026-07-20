@@ -235,9 +235,9 @@ class SalesPageTests(TestCase):
 		bs_data = get_bs_data()
 		assets_group = next(row for row in bs_data["grouped_accounts"] if row["group_value"] == "ASSETS")
 		receivables = next(row for row in assets_group["type_groups"] if row["type_value"] == "RECEIVABLE")
-		wht_row = next(row for row in receivables["accounts"] if row["code"] == f"WHT-{invoice.invoice_no}")
+		wht_row = next(row for row in receivables["accounts"] if row["code"] == "331004")
 
-		self.assertEqual(wht_row["account_name"], f"WHT Receivable / {invoice.invoice_no} - WHT Buyer")
+		self.assertEqual(wht_row["account_name"], "WHT Receivable")
 		self.assertEqual(wht_row["amount"], Decimal("600.00"))
 
 	def test_sale_method_can_override_customer_default_payment_method(self):

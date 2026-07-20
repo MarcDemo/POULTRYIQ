@@ -2,18 +2,27 @@ from datetime import date
 from decimal import Decimal, InvalidOperation
 
 from django.contrib import messages
-from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
-from django.db.models import Sum
+from django.core.exceptions import ValidationError
+from django.db import transaction
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
 from accounts.views import get_post_login_redirect
-from hr.models import StaffProfile, WelfareRequest
+from accounting.services import post_salary_accrual, post_salary_payment
 from .models import SalaryBonus, SalaryPayment, SalaryPaymentEditLog
+from .services import (
+    calculate_gross_from_net,
+    calculate_paye,
+    calculate_salary_breakdown,
+    money,
+    period_end,
+    prepare_monthly_payroll,
+    salary_payable_date,
+    staff_users,
+    validate_period_month,
+)
 from poultryiq.pagination import paginate
-
-User = get_user_model()
 
 
 def _role_code(user) -> str:
@@ -30,95 +39,33 @@ def _manager_only(request):
 
 
 def _staff_users():
-    return (
-        User.objects.select_related("role", "staff_profile")
-        .filter(is_active=True, role__code__in=["WORKER", "SUPERVISOR", "MANAGER"])
-        .exclude(role__code__in=["OWNER", "INVESTOR"])
-        .exclude(role__name__icontains="investor")
-        .order_by("first_name", "username")
-    )
+    return staff_users()
 
 
 def _money(value):
-    return (value or Decimal("0.00")).quantize(Decimal("0.01"))
-
-
-def calculate_paye(monthly_taxable_pay):
-    income = _money(monthly_taxable_pay)
-    if income <= Decimal("235000"):
-        return Decimal("0.00")
-    if income <= Decimal("335000"):
-        return _money((income - Decimal("235000")) * Decimal("0.10"))
-    if income <= Decimal("410000"):
-        return _money(Decimal("10000") + (income - Decimal("335000")) * Decimal("0.20"))
-
-    paye = Decimal("25000") + (income - Decimal("410000")) * Decimal("0.30")
-    if income > Decimal("10000000"):
-        paye += (income - Decimal("10000000")) * Decimal("0.10")
-    return _money(paye)
-
-
-def calculate_salary_breakdown(gross_salary, advances, bonuses=Decimal("0.00"), pay_nssf=True, pay_paye=True):
-    gross = _money(gross_salary)
-    nssf_employee = _money(gross * Decimal("0.05")) if pay_nssf else Decimal("0.00")
-    nssf_employer = _money(gross * Decimal("0.10")) if pay_nssf else Decimal("0.00")
-    taxable_pay = max(gross - nssf_employee, Decimal("0.00"))
-    paye_tax = calculate_paye(taxable_pay) if pay_paye else Decimal("0.00")
-    advances = _money(advances)
-    bonuses = _money(bonuses)
-    net_pay = max(gross - nssf_employee - paye_tax - advances + bonuses, Decimal("0.00"))
-    return {
-        "gross_salary": gross,
-        "nssf_employee": nssf_employee,
-        "nssf_employer": nssf_employer,
-        "paye_tax": paye_tax,
-        "advances_deducted": advances,
-        "bonus_amount": bonuses,
-        "net_pay": _money(net_pay),
-    }
-
-
-def calculate_gross_from_net(target_net, advances, bonuses=Decimal("0.00"), pay_nssf=True, pay_paye=True):
-    target = _money(target_net)
-    advances = _money(advances)
-    bonuses = _money(bonuses)
-    low = Decimal("0.00")
-    high = max(target + advances - bonuses, Decimal("1.00"))
-
-    while calculate_salary_breakdown(high, advances, bonuses, pay_nssf=pay_nssf, pay_paye=pay_paye)["net_pay"] < target:
-        high *= Decimal("2")
-
-    for _ in range(48):
-        mid = (low + high) / Decimal("2")
-        net_pay = calculate_salary_breakdown(mid, advances, bonuses, pay_nssf=pay_nssf, pay_paye=pay_paye)["net_pay"]
-        if net_pay < target:
-            low = mid
-        else:
-            high = mid
-
-    return _money(high)
+    return money(value)
 
 
 def _period_end(period_month):
-    year, month = [int(part) for part in period_month.split("-")]
-    return date(year, month, 28)
+    return period_end(period_month)
 
 
-def _approved_advances_for_period(employee, period_month):
-    end_date = _period_end(period_month)
-    return WelfareRequest.objects.filter(
-        worker=employee,
-        request_type=WelfareRequest.RequestType.SALARY_ADVANCE,
-        status=WelfareRequest.Status.MANAGER_APPROVED,
-        salary_payment__isnull=True,
-        manager_reviewed_at__date__lte=end_date,
-    )
+def _salary_payable_date(period_month):
+    return salary_payable_date(period_month)
 
 
-def _bonus_total_for_period(employee, period_month):
-    return SalaryBonus.objects.filter(employee=employee, period_month=period_month).aggregate(total=Sum("amount"))[
-        "total"
-    ] or Decimal("0.00")
+def _current_period_month():
+    return timezone.localdate().strftime("%Y-%m")
+
+
+def _period_or_current(period_month):
+    period_month = (period_month or _current_period_month()).strip()
+    validate_period_month(period_month)
+    return period_month
+
+
+def _redirect_for_salary(salary):
+    return redirect("pending_salaries", period_month=salary.period_month)
 
 
 @login_required(login_url="login")
@@ -126,155 +73,110 @@ def salaries(request):
     denied = _manager_only(request)
     if denied:
         return denied
+    return pending_salaries(request, _current_period_month())
 
-    employees = _staff_users()
-    salary_records = SalaryPayment.objects.select_related("employee", "recorded_by").order_by(
-        "-period_month", "employee__username"
-    )
+
+@login_required(login_url="login")
+def pending_salaries(request, period_month):
+    denied = _manager_only(request)
+    if denied:
+        return denied
+
+    try:
+        period_month = _period_or_current(period_month)
+    except ValidationError as exc:
+        messages.error(request, "; ".join(exc.messages))
+        return redirect("salaries")
+
+    employees = staff_users()
+    salary_records = SalaryPayment.objects.select_related("employee", "recorded_by").filter(
+        period_month=period_month,
+        status=SalaryPayment.Status.PENDING,
+    ).order_by("employee__username")
+    current_period_month = _current_period_month()
+    pending_visible_from = salary_payable_date(period_month)
+    hide_current_pending = period_month == current_period_month and timezone.localdate() < pending_visible_from
+    if hide_current_pending:
+        salary_records = salary_records.none()
 
     if request.method == "POST":
         action = request.POST.get("action", "record").strip()
         if action == "generate_monthly":
-            period_month = request.POST.get("batch_month", "").strip()
-            if not period_month:
-                messages.error(request, "Month is required.")
-                return redirect("salaries")
-
-            prepared = 0
-            created = 0
-            for employee in employees:
-                profile = getattr(employee, "staff_profile", None)
-                gross_salary = profile.monthly_salary if profile else Decimal("0.00")
-                pay_nssf = profile.pay_nssf if profile else True
-                pay_paye = profile.pay_paye if profile else True
-                advance_qs = _approved_advances_for_period(employee, period_month)
-                advances = advance_qs.aggregate(total=Sum("advance_amount"))["total"] or Decimal("0.00")
-                bonuses = _bonus_total_for_period(employee, period_month)
-                breakdown = calculate_salary_breakdown(
-                    gross_salary,
-                    advances,
-                    bonuses=bonuses,
-                    pay_nssf=pay_nssf,
-                    pay_paye=pay_paye,
-                )
-                salary, was_created = SalaryPayment.objects.update_or_create(
-                    employee=employee,
-                    period_month=period_month,
-                    defaults={
-                        "amount": breakdown["net_pay"],
-                        "gross_salary": breakdown["gross_salary"],
-                        "paye_tax": breakdown["paye_tax"],
-                        "nssf_employee": breakdown["nssf_employee"],
-                        "nssf_employer": breakdown["nssf_employer"],
-                        "advances_deducted": breakdown["advances_deducted"],
-                        "bonus_amount": breakdown["bonus_amount"],
-                        "net_pay": breakdown["net_pay"],
-                        "payment_date": _period_end(period_month),
-                        "status": SalaryPayment.Status.PENDING,
-                        "recorded_by": request.user,
-                    },
-                )
-                advance_qs.update(salary_payment=salary)
-                prepared += 1
-                created += 1 if was_created else 0
-
-            messages.success(request, f"Monthly payroll prepared. Records ready: {prepared}. New records: {created}.")
-            return redirect("salaries")
-
-        if action == "grant_bonus":
-            employee_id = request.POST.get("bonus_employee", "").strip()
-            period_month = request.POST.get("bonus_month", "").strip()
-            amount_raw = request.POST.get("bonus_amount", "0").strip()
-            reason = request.POST.get("bonus_reason", "").strip()
-            employee = employees.filter(pk=employee_id).first() if employee_id else None
-            errors = []
-            amount = Decimal("0.00")
-
-            if not employee:
-                errors.append("Please select a valid employee for the bonus.")
-            if not period_month:
-                errors.append("Bonus month is required.")
-            if not reason:
-                errors.append("Bonus reason is required.")
+            requested_month = request.POST.get("batch_month", period_month).strip()
             try:
-                amount = Decimal(amount_raw or "0")
-                if amount <= 0:
-                    errors.append("Bonus amount must be greater than zero.")
-            except (InvalidOperation, ValueError):
-                errors.append("Please enter a valid bonus amount.")
+                summary = prepare_monthly_payroll(requested_month, created_by=request.user)
+            except ValidationError as exc:
+                messages.error(request, "; ".join(exc.messages) if hasattr(exc, "messages") else str(exc))
+                return redirect("pending_salaries", period_month=period_month)
 
-            if errors:
-                for error in errors:
-                    messages.error(request, error)
-            else:
-                SalaryBonus.objects.create(
-                    employee=employee,
-                    period_month=period_month,
-                    amount=amount,
-                    reason=reason,
-                    granted_by=request.user,
-                )
-                messages.success(request, f"Bonus granted to {employee.display_name}. Prepare payroll to include it.")
-            return redirect("salaries")
+            message = (
+                "Monthly payroll prepared and accrued. "
+                f"Records ready: {summary['prepared']}. New records: {summary['created']}."
+            )
+            if summary["skipped_paid"]:
+                message += f" Already-paid records skipped: {summary['skipped_paid']}."
+            messages.success(request, message)
+            return redirect("pending_salaries", period_month=summary["period_month"])
 
         if action in {"pay_selected", "pay_all"}:
             if action == "pay_selected":
                 selected_ids = request.POST.getlist("salary_ids")
                 if not selected_ids:
                     messages.error(request, "Select at least one salary record to pay.")
-                    return redirect("salaries")
-                records_to_pay = salary_records.filter(pk__in=selected_ids, status=SalaryPayment.Status.PENDING)
+                    return redirect("pending_salaries", period_month=period_month)
+                records_to_pay = salary_records.filter(pk__in=selected_ids)
             else:
-                records_to_pay = salary_records.filter(status=SalaryPayment.Status.PENDING)
+                records_to_pay = salary_records
 
             paid_count = 0
             today = timezone.localdate()
-            for salary in records_to_pay:
-                salary.status = SalaryPayment.Status.PAID
-                salary.recorded_by = request.user
-                if not salary.payment_date:
-                    salary.payment_date = today
-                salary.save(update_fields=["status", "recorded_by", "payment_date"])
-                paid_count += 1
+            try:
+                with transaction.atomic():
+                    for salary in records_to_pay:
+                        payable_date = salary_payable_date(salary.period_month)
+                        if today < payable_date:
+                            raise ValidationError(
+                                f"{salary.employee.display_name} salary for {salary.period_month} can only be paid on "
+                                f"{payable_date.strftime('%Y-%m-%d')} or later."
+                            )
+                        post_salary_accrual(salary, created_by=request.user)
+                        salary.status = SalaryPayment.Status.PAID
+                        salary.recorded_by = request.user
+                        salary.payment_date = today
+                        salary.save(update_fields=["status", "recorded_by", "payment_date"])
+                        post_salary_payment(salary, created_by=request.user)
+                        paid_count += 1
+            except ValidationError as exc:
+                messages.error(request, "; ".join(exc.messages) if hasattr(exc, "messages") else str(exc))
+                return redirect("pending_salaries", period_month=period_month)
 
             if paid_count:
                 messages.success(request, f"{paid_count} salary record(s) marked as paid.")
             else:
                 messages.info(request, "No pending salary records were available to pay.")
-            return redirect("salaries")
+            return redirect("pending_salaries", period_month=period_month)
 
         employee_id = request.POST.get("employee", "").strip()
-        period_month = request.POST.get("month", "").strip()
         amount_str = request.POST.get("amount", "0").strip()
         status = request.POST.get("status", SalaryPayment.Status.PENDING)
 
         errors = []
-        employee = None
+        employee = employees.filter(pk=employee_id).first() if employee_id else None
         amount = None
-
-        if not employee_id:
-            errors.append("Please select an employee.")
-        else:
-            employee = employees.filter(pk=employee_id).first()
-            if not employee:
-                errors.append("Invalid employee selected.")
-
-        if not period_month:
-            errors.append("Month is required.")
-
+        if not employee:
+            errors.append("Please select a valid employee.")
         try:
             amount = Decimal(amount_str)
             if amount < 0:
                 errors.append("Amount must be positive.")
-        except InvalidOperation:
+        except (InvalidOperation, ValueError):
             errors.append("Invalid amount.")
-
         if status not in {SalaryPayment.Status.PAID, SalaryPayment.Status.PENDING}:
             errors.append("Invalid status.")
 
         if not errors and employee and amount is not None:
             breakdown = calculate_salary_breakdown(amount, Decimal("0.00"), bonuses=Decimal("0.00"))
-            SalaryPayment.objects.update_or_create(
+            salary, _created = SalaryPayment.objects.update_or_create(
                 employee=employee,
                 period_month=period_month,
                 defaults={
@@ -285,26 +187,121 @@ def salaries(request):
                     "nssf_employer": breakdown["nssf_employer"],
                     "bonus_amount": breakdown["bonus_amount"],
                     "net_pay": breakdown["net_pay"],
-                    "payment_date": _period_end(period_month),
+                    "payment_date": period_end(period_month),
                     "status": status,
                     "recorded_by": request.user,
                 },
             )
             messages.success(request, "Salary record saved.")
-            return redirect("salaries")
+            return _redirect_for_salary(salary)
 
         for error in errors:
             messages.error(request, error)
 
     page_obj, querystring = paginate(request, salary_records, per_page=20)
-
     context = {
         "employees": employees,
         "salary_records": page_obj,
         "page_obj": page_obj,
         "querystring": querystring,
+        "period_month": period_month,
+        "current_period_month": current_period_month,
+        "hide_current_pending": hide_current_pending,
+        "pending_visible_from": pending_visible_from,
     }
     return render(request, "payroll/salaries.html", context)
+
+
+@login_required(login_url="login")
+def salary_history(request):
+    denied = _manager_only(request)
+    if denied:
+        return denied
+
+    salary_records = SalaryPayment.objects.select_related("employee", "recorded_by").order_by(
+        "-period_month", "employee__username"
+    )
+    page_obj, querystring = paginate(request, salary_records, per_page=25)
+    return render(
+        request,
+        "payroll/salary_history.html",
+        {
+            "salary_records": page_obj,
+            "page_obj": page_obj,
+            "querystring": querystring,
+            "current_period_month": _current_period_month(),
+        },
+    )
+
+
+@login_required(login_url="login")
+def salary_bonuses(request):
+    denied = _manager_only(request)
+    if denied:
+        return denied
+
+    employees = staff_users()
+    if request.method == "POST":
+        employee_ids = request.POST.getlist("bonus_employees")
+        period_month = request.POST.get("bonus_month", "").strip()
+        bonus_name = request.POST.get("bonus_name", "").strip()
+        amount_raw = request.POST.get("bonus_amount", "0").strip()
+        reason = request.POST.get("bonus_reason", "").strip()
+        selected_employees = employees.filter(pk__in=employee_ids)
+        errors = []
+        amount = Decimal("0.00")
+
+        if not employee_ids:
+            errors.append("Please select at least one employee for the bonus.")
+        elif selected_employees.count() != len(set(employee_ids)):
+            errors.append("Please select valid employees for the bonus.")
+        try:
+            validate_period_month(period_month)
+        except ValidationError as exc:
+            errors.extend(exc.messages)
+        if not bonus_name:
+            errors.append("Bonus name is required.")
+        try:
+            amount = Decimal(amount_raw or "0")
+            if amount <= 0:
+                errors.append("Bonus amount must be greater than zero.")
+        except (InvalidOperation, ValueError):
+            errors.append("Please enter a valid bonus amount.")
+
+        if errors:
+            for error in errors:
+                messages.error(request, error)
+        else:
+            bonuses = [
+                SalaryBonus(
+                    employee=employee,
+                    period_month=period_month,
+                    bonus_name=bonus_name,
+                    amount=amount,
+                    reason=reason,
+                    granted_by=request.user,
+                )
+                for employee in selected_employees
+            ]
+            SalaryBonus.objects.bulk_create(bonuses)
+            messages.success(request, f"Bonus granted to {len(bonuses)} employee(s). Prepare payroll to include it.")
+            return redirect("salary_bonuses")
+
+    bonuses = SalaryBonus.objects.select_related("employee", "granted_by").order_by(
+        "-period_month", "employee__username", "-granted_at"
+    )
+    page_obj, querystring = paginate(request, bonuses, per_page=20)
+    return render(
+        request,
+        "payroll/salary_bonuses.html",
+        {
+            "employees": employees,
+            "bonuses": page_obj,
+            "page_obj": page_obj,
+            "querystring": querystring,
+            "current_period_month": _current_period_month(),
+        },
+    )
 
 
 @login_required(login_url="login")
@@ -329,7 +326,12 @@ def edit_salary(request, pk):
         edit_reason = request.POST.get("edit_reason", "").strip()
 
         errors = []
-        values = {"gross_salary": Decimal("0.00"), "advances_deducted": Decimal("0.00"), "bonus_amount": Decimal("0.00"), "net_pay": Decimal("0.00")}
+        values = {
+            "gross_salary": Decimal("0.00"),
+            "advances_deducted": Decimal("0.00"),
+            "bonus_amount": Decimal("0.00"),
+            "net_pay": Decimal("0.00"),
+        }
         for field_name, raw_value, label in [
             ("gross_salary", gross_raw, "gross salary"),
             ("advances_deducted", advances_raw, "advances deducted"),
@@ -340,7 +342,7 @@ def edit_salary(request, pk):
                 value = Decimal(raw_value or "0")
                 if value < 0:
                     errors.append(f"{label.title()} cannot be negative.")
-                values[field_name] = _money(value)
+                values[field_name] = money(value)
             except (InvalidOperation, ValueError):
                 errors.append(f"Please enter a valid {label}.")
 
@@ -413,7 +415,9 @@ def edit_salary(request, pk):
             )
             SalaryPaymentEditLog.objects.create(salary=salary, edited_by=request.user, reason=edit_reason)
             messages.success(request, f"Salary updated for {salary.employee.display_name}.")
-            return redirect("salaries")
+            if salary.status == SalaryPayment.Status.PENDING:
+                return redirect("pending_salaries", period_month=salary.period_month)
+            return redirect("salary_history")
 
     return render(
         request,

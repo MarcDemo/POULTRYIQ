@@ -1,0 +1,118 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container-fluid">
+    <div class="page-header-row mb-4">
+        <div>
+            <h2 class="mb-1"><i class="bi bi-cash-stack me-2"></i>Cash Flow</h2>
+            <small class="text-muted">Cash and bank movements from posted journal entries</small>
+        </div>
+        <a href="{% url 'reports' %}" class="btn btn-secondary">
+            <i class="bi bi-arrow-left me-2"></i>Back to Reports center
+        </a>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-body">
+            <form method="GET" class="row g-3">
+                <div class="col-md-3">
+                    <label class="form-label">From Date</label>
+                    <input type="date" name="start_date" class="form-control" value="{{ start_date }}">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">To Date</label>
+                    <input type="date" name="end_date" class="form-control" value="{{ end_date }}">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">&nbsp;</label>
+                    <button type="submit" class="btn btn-primary w-100">Filter</button>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">&nbsp;</label>
+                    <a href="{% url 'cash_flow' %}" class="btn btn-outline-secondary w-100">Clear</a>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">&nbsp;</label>
+                    <button type="button" class="btn btn-outline-info w-100" onclick="window.print()">
+                        <i class="bi bi-printer me-2"></i>Print
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <div class="text-muted small">Cash In</div>
+                    <h4 class="mb-0">{{ cash_flow_data.totals.cash_in|floatformat:2 }}</h4>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <div class="text-muted small">Cash Out</div>
+                    <h4 class="mb-0">{{ cash_flow_data.totals.cash_out|floatformat:2 }}</h4>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <div class="text-muted small">Net Cash Flow</div>
+                    <h4 class="mb-0">{{ cash_flow_data.totals.net_cash_flow|floatformat:2 }}</h4>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Date</th>
+                        <th>Reference</th>
+                        <th>Description</th>
+                        <th>Cash Account</th>
+                        <th class="text-end">Amount</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for section_key, section in cash_flow_data.sections.items %}
+                    <tr class="table-primary fw-bold">
+                        <td colspan="5">{{ section.label }}</td>
+                    </tr>
+                    {% for row in section.rows %}
+                    <tr>
+                        <td>{{ row.date|date:"M d, Y" }}</td>
+                        <td><code>{{ row.reference }}</code></td>
+                        <td>{{ row.description }}</td>
+                        <td>{{ row.account }}</td>
+                        <td class="text-end">{{ row.amount|floatformat:2 }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="5" class="text-center text-muted py-4">No {{ section.label|lower }} movements.</td>
+                    </tr>
+                    {% endfor %}
+                    <tr class="table-light fw-bold">
+                        <td colspan="4">Total {{ section.label }}</td>
+                        <td class="text-end">{{ section.total|floatformat:2 }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<style>
+    @media print {
+        .page-header-row, .card:first-of-type, .btn { display: none; }
+        body { font-size: 11pt; }
+        table { font-size: 10pt; }
+    }
+</style>
+{% endblock %}

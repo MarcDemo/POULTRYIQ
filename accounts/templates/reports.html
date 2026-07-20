@@ -945,42 +945,19 @@
             <h4 id="accounting-links-title">Accounting Reports</h4>
         </div>
         <div class="accounting-links__grid">
-            <a class="accounting-link-card" href="{% url 'chart_of_accounts' %}">
+            {% for statement_card in accounting_statement_cards %}
+            <a class="accounting-link-card" href="{{ statement_card.url }}">
                 <span class="accounting-link-card__icon">
-                    <i class="bi bi-graph-up-arrow"></i>
+                    <i class="bi {{ statement_card.icon }}"></i>
                 </span>
                 <span class="accounting-link-card__body">
-                    <strong>P&amp;L</strong>
-                    <span class="accounting-link-card__text">Profit and loss</span>
+                    <strong>{{ statement_card.short_name }}</strong>
+                    <span class="accounting-link-card__text">{{ statement_card.description }}</span>
                 </span>
             </a>
-            <a class="accounting-link-card" href="{% url 'balance_sheet' %}">
-                <span class="accounting-link-card__icon">
-                    <i class="bi bi-bank"></i>
-                </span>
-                <span class="accounting-link-card__body">
-                    <strong>BS</strong>
-                    <span class="accounting-link-card__text">Balance sheet</span>
-                </span>
-            </a>
-            <a class="accounting-link-card" href="#">
-                <span class="accounting-link-card__icon">
-                    <i class="bi bi-list-check"></i>
-                </span>
-                <span class="accounting-link-card__body">
-                    <strong>TB</strong>
-                    <span class="accounting-link-card__text">Trial balance</span>
-                </span>
-            </a>
-            <a class="accounting-link-card" href="#">
-                <span class="accounting-link-card__icon">
-                    <i class="bi bi-cash-stack"></i>
-                </span>
-                <span class="accounting-link-card__body">
-                    <strong>Cash Flow</strong>
-                    <span class="accounting-link-card__text">Cash movement</span>
-                </span>
-            </a>
+            {% empty %}
+            <div class="text-muted">No active accounting statements have been created.</div>
+            {% endfor %}
         </div>
     </section>
 
