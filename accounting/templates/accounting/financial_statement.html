@@ -1,0 +1,116 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container-fluid">
+    <div class="page-header-row mb-4">
+        <div>
+            <h2 class="mb-1"><i class="bi bi-file-earmark-spreadsheet me-2"></i>{{ statement.name }}</h2>
+            <small class="text-muted">Generated from posted journal entries and the account natures selected in admin</small>
+        </div>
+        <a href="{% url 'reports' %}" class="btn btn-secondary">
+            <i class="bi bi-arrow-left me-2"></i>Back to Reports center
+        </a>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-body">
+            <form method="GET" class="row g-3">
+                <div class="col-md-3">
+                    <label class="form-label">From Date</label>
+                    <input type="date" name="start_date" class="form-control" value="{{ start_date }}">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">To Date</label>
+                    <input type="date" name="end_date" class="form-control" value="{{ end_date }}">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">&nbsp;</label>
+                    <button type="submit" class="btn btn-primary w-100">Filter</button>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">&nbsp;</label>
+                    <a href="{% url 'financial_statement' statement.code %}" class="btn btn-outline-secondary w-100">Clear</a>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">&nbsp;</label>
+                    <button type="button" class="btn btn-outline-info w-100" onclick="window.print()">
+                        <i class="bi bi-printer me-2"></i>Print
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th width="12%">Code</th>
+                        <th width="34%">Account</th>
+                        <th width="20%">Type</th>
+                        <th width="11%" class="text-end">Debit</th>
+                        <th width="11%" class="text-end">Credit</th>
+                        <th width="12%" class="text-end">Balance</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for group in statement_data.groups %}
+                    <tr class="table-primary fw-bold">
+                        <td colspan="6">{{ group.label|upper }}</td>
+                    </tr>
+                    {% for type_group in group.type_groups %}
+                    <tr class="table-light fw-semibold">
+                        <td colspan="6">{{ type_group.label }}</td>
+                    </tr>
+                    {% for account in type_group.accounts %}
+                    <tr>
+                        <td><code>{{ account.code }}</code></td>
+                        <td>{{ account.account_name }}</td>
+                        <td>{{ account.account_type }}</td>
+                        <td class="text-end">{{ account.debit|floatformat:2 }}</td>
+                        <td class="text-end">{{ account.credit|floatformat:2 }}</td>
+                        <td class="text-end">{{ account.normal_balance|floatformat:2 }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" class="text-center text-muted py-4">No accounts in this type.</td>
+                    </tr>
+                    {% endfor %}
+                    <tr class="table-light fw-bold">
+                        <td colspan="3">Total {{ type_group.label }}</td>
+                        <td class="text-end">{{ type_group.debit|floatformat:2 }}</td>
+                        <td class="text-end">{{ type_group.credit|floatformat:2 }}</td>
+                        <td class="text-end">{{ type_group.normal_balance|floatformat:2 }}</td>
+                    </tr>
+                    {% endfor %}
+                    <tr class="table-info fw-bold">
+                        <td colspan="3">Total {{ group.label }}</td>
+                        <td class="text-end">{{ group.debit|floatformat:2 }}</td>
+                        <td class="text-end">{{ group.credit|floatformat:2 }}</td>
+                        <td class="text-end">{{ group.normal_balance|floatformat:2 }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" class="text-center text-muted py-4">No account natures have been selected for this statement.</td>
+                    </tr>
+                    {% endfor %}
+                    <tr class="table-primary fw-bold">
+                        <td colspan="3">Statement Totals</td>
+                        <td class="text-end">{{ statement_data.totals.debit|floatformat:2 }}</td>
+                        <td class="text-end">{{ statement_data.totals.credit|floatformat:2 }}</td>
+                        <td class="text-end">{{ statement_data.totals.normal_balance|floatformat:2 }}</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<style>
+    @media print {
+        .page-header-row, .card:first-of-type, .btn { display: none; }
+        body { font-size: 11pt; }
+        table { font-size: 10pt; }
+    }
+</style>
+{% endblock %}

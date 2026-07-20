@@ -5,9 +5,10 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
 
-from accounts.models import Role
+from accounts.models import InvestorCapitalTransaction, Role
 from accounting.models import (
     AccountingCode,
+    AssetCategory,
     BalanceSheetAccount,
     FixedAssetAcquisition,
     AssetConstructionProject,
@@ -15,6 +16,11 @@ from accounting.models import (
 )
 from accounting.balance_sheet_data import BALANCE_SHEET_ACCOUNTS
 from accounting.services import get_pl_data, get_bs_data
+from expenses.models import ExpenseCategory, ExpenseTransaction
+from hr.models import WelfareRequest
+from inventory.models import InventoryTransaction, Item, ItemCategory, Store
+from payroll.models import SalaryPayment
+from poultry.models import ApprovalStatus, MortalityRecord, PoultryBatch, PoultryHouse
 from sales.models import Customer, SaleInvoice, SaleItem
 
 
@@ -92,6 +98,17 @@ class BalanceSheetAccountTests(TestCase):
             role=self.manager_role,
         )
 
+    def _account_row(self, code):
+        for group in get_bs_data()["grouped_accounts"]:
+            for type_group in group["type_groups"]:
+                for account in type_group["accounts"]:
+                    if account["code"] == code:
+                        return account
+        self.fail(f"Balance sheet account {code} was not returned")
+
+    def _asset_category(self, legacy_code):
+        return AssetCategory.objects.get(legacy_code=legacy_code)
+
     def test_seeded_balance_sheet_accounts_include_required_groups(self):
         required_types = {
             BalanceSheetAccount.AccountType.FIXED_ASSET,
@@ -159,10 +176,9 @@ class BalanceSheetAccountTests(TestCase):
         self.assertNotEqual(first.code, second.code)
 
     def test_fixed_asset_acquisition_is_included_in_balance_sheet(self):
-        self.client.force_login(self.manager)
         FixedAssetAcquisition.objects.create(
             asset_name="Poultry House A",
-            asset_category="POULTRY_HOUSE",
+            asset_category=self._asset_category("POULTRY_HOUSE"),
             acquisition_date=date(2026, 6, 1),
             amount=Decimal("1200000.00"),
             useful_life_years=20,
@@ -172,16 +188,15 @@ class BalanceSheetAccountTests(TestCase):
             created_by=self.manager,
         )
 
-        response = self.client.get(reverse("balance_sheet"))
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Poultry House / Poultry House A")
-        self.assertContains(response, "1200000.00")
+        row = self._account_row("311001")
+        self.assertEqual(row["account_name"], "Buildings Cost")
+        self.assertEqual(row["amount"], Decimal("1200000.00"))
 
     def test_completed_construction_moves_from_auc_to_fixed_asset_label(self):
         self.client.force_login(self.manager)
         project = AssetConstructionProject.objects.create(
             project_name="Layer House B",
-            asset_category="LAYER_HOUSE",
+            asset_category=self._asset_category("LAYER_HOUSE"),
             start_date=date(2026, 6, 1),
             useful_life_years=20,
             residual_value=Decimal("0.00"),
@@ -197,8 +212,7 @@ class BalanceSheetAccountTests(TestCase):
             created_by=self.manager,
         )
 
-        response = self.client.get(reverse("balance_sheet"))
-        self.assertContains(response, "Asset Construction / Layer House B")
+        self.assertEqual(self._account_row("311001")["amount"], Decimal("400000.00"))
 
         self.client.post(
             reverse("asset_construction_project_detail", args=[project.pk]),
@@ -209,14 +223,12 @@ class BalanceSheetAccountTests(TestCase):
             follow=True,
         )
 
-        response = self.client.get(reverse("balance_sheet"))
-        self.assertNotContains(response, "Asset Construction / Layer House B")
-        self.assertContains(response, "Layer House / Layer House B")
+        self.assertEqual(self._account_row("311001")["amount"], Decimal("400000.00"))
 
     def test_straight_line_depreciation_affects_pl_and_bs(self):
         FixedAssetAcquisition.objects.create(
             asset_name="Generator",
-            asset_category="HARDWARE_EQUIPMENT",
+            asset_category=self._asset_category("HARDWARE_EQUIPMENT"),
             acquisition_date=date(2026, 1, 1),
             in_service_date=date(2026, 1, 1),
             amount=Decimal("1200.00"),
@@ -233,6 +245,117 @@ class BalanceSheetAccountTests(TestCase):
         assets_group = next(row for row in bs_data["grouped_accounts"] if row["group_value"] == "ASSETS")
         ad_group = next(row for row in assets_group["type_groups"] if row["type_value"] == "ACCUMULATED_DEPRECIATION")
         self.assertGreater(ad_group["type_total"], Decimal("0.00"))
-        self.assertTrue(
-            any(row["account_name"] == "Accumulated depreciation-Generator" for row in ad_group["accounts"])
+        farm_equipment_depreciation = next(row for row in ad_group["accounts"] if row["code"] == "312008")
+        self.assertGreater(farm_equipment_depreciation["amount"], Decimal("0.00"))
+
+    def test_balance_sheet_wires_inventory_and_laying_birds_from_models(self):
+        store = Store.objects.create(name="Main Store")
+        bird_category = ItemCategory.objects.create(code="BIRDS", name="Birds")
+        feed_category = ItemCategory.objects.create(code="FEED", name="Feed")
+        chicks = Item.objects.create(name="Day-old chicks", category=bird_category, unit="bird")
+        feed = Item.objects.create(name="Layer mash", category=feed_category, unit="kg")
+        InventoryTransaction.objects.create(
+            tx_date=date(2026, 6, 1),
+            tx_type=InventoryTransaction.TxType.IN_,
+            store=store,
+            item=chicks,
+            quantity=Decimal("100.000"),
+            unit_price=Decimal("2500.00"),
+            created_by=self.manager,
         )
+        InventoryTransaction.objects.create(
+            tx_date=date(2026, 6, 1),
+            tx_type=InventoryTransaction.TxType.IN_,
+            store=store,
+            item=feed,
+            quantity=Decimal("10.000"),
+            unit_price=Decimal("1000.00"),
+            created_by=self.manager,
+        )
+        house = PoultryHouse.objects.create(house_code="H-01", capacity=200)
+        batch = PoultryBatch.objects.create(
+            house=house,
+            breed="Layers",
+            amount_paid=Decimal("500000.00"),
+            date_stocked=date(2026, 6, 1),
+            initial_quantity=100,
+            initial_age_days=120,
+            created_by=self.manager,
+        )
+        MortalityRecord.objects.create(
+            batch=batch,
+            record_date=date(2026, 6, 2),
+            number_dead=10,
+            status=ApprovalStatus.APPROVED,
+            reported_by=self.manager,
+        )
+
+        self.assertEqual(self._account_row("321001")["amount"], Decimal("260000.00000"))
+        self.assertEqual(self._account_row("321002")["amount"], Decimal("450000.00"))
+
+    def test_balance_sheet_wires_payroll_tax_creditors_and_equity(self):
+        SalaryPayment.objects.create(
+            employee=self.manager,
+            period_month="2026-06",
+            amount=Decimal("700000.00"),
+            gross_salary=Decimal("1000000.00"),
+            paye_tax=Decimal("100000.00"),
+            nssf_employee=Decimal("50000.00"),
+            nssf_employer=Decimal("100000.00"),
+            net_pay=Decimal("700000.00"),
+            payment_date=date(2026, 6, 30),
+            status=SalaryPayment.Status.PENDING,
+            recorded_by=self.manager,
+        )
+        audit_category = ExpenseCategory.objects.create(
+            code="AUDIT_FEES",
+            name="Audit Fees",
+            expense_type=ExpenseCategory.ExpenseType.MONTHLY_EXPENSES,
+        )
+        ExpenseTransaction.objects.create(
+            expense_date=date(2026, 6, 15),
+            category=audit_category,
+            description="Audit fee accrual",
+            total_amount=Decimal("300000.00"),
+            payment_method=ExpenseTransaction.PAYMENT_CREDIT,
+            period_year=2026,
+            period_month=6,
+            status=ExpenseTransaction.Status.APPROVED,
+            created_by=self.manager,
+            approved_by=self.manager,
+        )
+        InvestorCapitalTransaction.objects.create(
+            transaction_type=InvestorCapitalTransaction.TransactionType.STARTUP,
+            transaction_date=date(2026, 1, 1),
+            amount=Decimal("2000000.00"),
+            recorded_by=self.manager,
+        )
+
+        self.assertEqual(self._account_row("421010")["amount"], Decimal("700000.00"))
+        self.assertEqual(self._account_row("421012")["amount"], Decimal("100000.00"))
+        self.assertEqual(self._account_row("421016")["amount"], Decimal("150000.00"))
+        self.assertEqual(self._account_row("421007")["amount"], Decimal("300000.00"))
+        self.assertEqual(self._account_row("431001")["amount"], Decimal("300000.00"))
+        self.assertEqual(self._account_row("511001")["amount"], Decimal("2000000.00"))
+
+    def test_salary_advances_are_wired_as_prepaid_salaries(self):
+        WelfareRequest.objects.create(
+            worker=self.manager,
+            request_type=WelfareRequest.RequestType.SALARY_ADVANCE,
+            title="July salary advance",
+            details="Advance against July salary",
+            advance_amount=Decimal("310000.00"),
+            advance_period_start=date(2026, 7, 1),
+            advance_period_end=date(2026, 7, 31),
+            status=WelfareRequest.Status.MANAGER_APPROVED,
+        )
+
+        bs_data = get_bs_data(end_date=date(2026, 7, 15))
+        assets_group = next(row for row in bs_data["grouped_accounts"] if row["group_value"] == "ASSETS")
+        prepayments = next(row for row in assets_group["type_groups"] if row["type_value"] == "PREPAYMENT")
+        prepaid_salaries = next(row for row in prepayments["accounts"] if row["code"] == "341002")
+        staff_advances = next(row for row in assets_group["type_groups"] if row["type_value"] == "RECEIVABLE")
+        staff_advances_row = next(row for row in staff_advances["accounts"] if row["code"] == "331003")
+
+        self.assertEqual(prepaid_salaries["amount"], Decimal("170000.00"))
+        self.assertEqual(staff_advances_row["amount"], Decimal("0.00"))

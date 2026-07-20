@@ -55,16 +55,14 @@
                                 <input type="hidden" name="type" value="expense">
                                 
                                 <div class="row mb-3">
-                                    <div class="col-md-6">
-                                        <label class="form-label">Date <span class="text-danger">*</span></label>
-                                        <input type="date" name="date" class="form-control" required>
-                                    </div>
-                                    <div class="col-md-6">
-                                        <label class="form-label">Category <span class="text-danger">*</span></label>
-                                        <select name="category" class="form-select" id="expense-category" required>
-                                            <option value="">-- Select Category --</option>
-                                            {% for cat in expense_categories %}
-                                                <option value="{{ cat.id }}">{{ cat.name }}</option>
+                                    <div class="col-md-12">
+                                        <label class="form-label">Expense <span class="text-danger">*</span></label>
+                                        <select name="account" class="form-select" id="expense-account" required>
+                                            <option value="">-- Select Account --</option>
+                                            {% for account in expense_accounts %}
+                                                {% if account.account_type.legacy_code == "EXPENSES" %}
+                                                    <option value="{{ account.id }}" data-name="{{ account.account_name }}">{{ account.account_name }}</option>
+                                                {% endif %}
                                             {% endfor %}
                                         </select>
                                     </div>
@@ -78,6 +76,17 @@
                                 <div class="mb-3">
                                     <label class="form-label">Amount <span class="text-danger">*</span></label>
                                     <input type="number" name="amount" step="0.01" class="form-control" required>
+                                </div>
+
+                                <div class="row mb-3 d-none" id="expense-prepayment-period">
+                                    <div class="col-md-6">
+                                        <label class="form-label">Prepayment Start <span class="text-danger">*</span></label>
+                                        <input type="date" name="prepayment_start_date" class="form-control">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">Prepayment End <span class="text-danger">*</span></label>
+                                        <input type="date" name="prepayment_end_date" class="form-control">
+                                    </div>
                                 </div>
                                 
                                 <div class="mb-3">
@@ -128,11 +137,7 @@
                                 <input type="hidden" name="type" value="purchase">
                                 
                                 <div class="row mb-3">
-                                    <div class="col-md-6">
-                                        <label class="form-label">Date <span class="text-danger">*</span></label>
-                                        <input type="date" name="date" class="form-control" required>
-                                    </div>
-                                    <div class="col-md-6">
+                                    <div class="col-md-12">
                                         <label class="form-label">Supplier <span class="text-danger">*</span></label>
                                         <select name="supplier" class="form-select" id="supplier-select" required>
                                             <option value="">-- Select Supplier --</option>
@@ -146,35 +151,27 @@
                                     </div>
                                 </div>
 
-                                <div class="row mb-3">
-                                    <div class="col-md-12">
-                                        <label class="form-label">Category <span class="text-danger">*</span></label>
-                                        <select name="inventory_category" class="form-select" id="purchase-category" required disabled>
-                                            <option value="">-- Select Category --</option>
-                                            {% for cat in inventory_categories %}
-                                                <option value="{{ cat.code }}">{{ cat.name }}</option>
-                                            {% endfor %}
-                                        </select>
-                                    </div>
-                                </div>
-
                                 <div class="mb-3">
-                                    <label class="form-label">Item <span class="text-danger">*</span></label>
-                                    <select name="item" class="form-select" id="purchase-item" required disabled>
-                                        <option value="">-- Select Item --</option>
+                                    <label class="form-label">Product / Account <span class="text-danger">*</span></label>
+                                    <select name="supplier_product" class="form-select" id="purchase-account" required disabled>
+                                        <option value="">-- Select Supplier First --</option>
                                     </select>
                                 </div>
 
                                 <div class="row mb-3">
-                                    <div class="col-md-4">
+                                    <div class="col-md-3">
                                         <label class="form-label">Quantity <span class="text-danger">*</span></label>
                                         <input type="number" name="quantity" id="purchase-quantity" step="0.001" min="0.001" class="form-control" required>
                                     </div>
-                                    <div class="col-md-4">
+                                    <div class="col-md-3">
+                                        <label class="form-label">Unit</label>
+                                        <input type="text" name="unit" id="purchase-unit" class="form-control" value="unit">
+                                    </div>
+                                    <div class="col-md-3">
                                         <label class="form-label">Unit Price <span class="text-danger">*</span></label>
                                         <input type="number" name="unit_price" id="purchase-unit-price" step="0.01" min="0" class="form-control" required>
                                     </div>
-                                    <div class="col-md-4">
+                                    <div class="col-md-3">
                                         <label class="form-label">Total Amount</label>
                                         <input type="number" name="amount" id="purchase-total" step="0.01" class="form-control" readonly value="0.00">
                                     </div>
@@ -313,19 +310,23 @@
     }
 </style>
 
-{{ supplier_category_map|json_script:"supplier-category-map-data" }}
+{{ supplier_account_map|json_script:"supplier-account-map-data" }}
 {{ supplier_payment_terms|json_script:"supplier-payment-terms-data" }}
-{{ items_by_category|json_script:"items-by-category-data" }}
 
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         const expenseTab = document.getElementById('expenses-tab');
         const purchasesTab = document.getElementById('purchases-tab');
         const salariesTab = document.getElementById('salaries-tab');
+        const expenseAccountSelect = document.getElementById('expense-account');
+        const expenseDescriptionInput = document.querySelector('#expenses-panel textarea[name="description"]');
+        const expensePrepaymentPeriod = document.getElementById('expense-prepayment-period');
+        const expensePrepaymentStartInput = expensePrepaymentPeriod ? expensePrepaymentPeriod.querySelector('input[name="prepayment_start_date"]') : null;
+        const expensePrepaymentEndInput = expensePrepaymentPeriod ? expensePrepaymentPeriod.querySelector('input[name="prepayment_end_date"]') : null;
         const supplierSelect = document.getElementById('supplier-select');
-        const categorySelect = document.getElementById('purchase-category');
-        const itemSelect = document.getElementById('purchase-item');
+        const purchaseAccountSelect = document.getElementById('purchase-account');
         const quantityInput = document.getElementById('purchase-quantity');
+        const unitInput = document.getElementById('purchase-unit');
         const unitPriceInput = document.getElementById('purchase-unit-price');
         const totalInput = document.getElementById('purchase-total');
         const purchasePaymentSelect = document.querySelector('#purchases-panel select[name="payment_method"]');
@@ -338,13 +339,8 @@
         const purchaseCreditPaidUpfrontInput = document.getElementById('purchase-credit-paid-upfront');
         const purchaseGracePeriodInput = document.getElementById('purchase-credit-grace-period-days');
         const purchaseCreditPeriodInput = document.getElementById('purchase-credit-period');
-        const supplierCategoryMap = JSON.parse(document.getElementById('supplier-category-map-data').textContent);
+        const supplierAccountMap = JSON.parse(document.getElementById('supplier-account-map-data').textContent);
         const supplierPaymentTerms = JSON.parse(document.getElementById('supplier-payment-terms-data').textContent);
-        const itemsByCategory = JSON.parse(document.getElementById('items-by-category-data').textContent);
-        const allCategoryOptions = Array.from(categorySelect.options).map(option => ({
-            value: option.value,
-            text: option.textContent
-        }));
         
         [expenseTab, purchasesTab, salariesTab].forEach(tab => {
             tab.addEventListener('shown.bs.tab', function(e) {
@@ -361,22 +357,23 @@
             select.disabled = disabled;
         }
 
-        function updatePurchaseCategories() {
+        function updatePurchaseAccounts() {
             const supplierId = supplierSelect.value;
-            const allowedCategoryIds = supplierCategoryMap[supplierId] || [];
-            resetSelect(categorySelect, '-- Select Category --', !supplierId || allowedCategoryIds.length === 0);
-            resetSelect(itemSelect, '-- Select Item --');
+            const accounts = supplierAccountMap[supplierId] || [];
+            resetSelect(purchaseAccountSelect, '-- Select Product / Account --', !supplierId || accounts.length === 0);
+            accounts.forEach(account => {
+                const option = document.createElement('option');
+                option.value = account.id;
+                option.textContent = `${account.name} - ${account.account} (${account.unit})`;
+                option.dataset.unit = account.unit || 'unit';
+                purchaseAccountSelect.appendChild(option);
+            });
+            syncPurchaseUnit();
+        }
 
-            if (!supplierId) return;
-
-            allCategoryOptions
-                .filter(option => option.value && allowedCategoryIds.includes(option.value))
-                .forEach(optionData => {
-                    const option = document.createElement('option');
-                    option.value = optionData.value;
-                    option.textContent = optionData.text;
-                    categorySelect.appendChild(option);
-                });
+        function syncPurchaseUnit() {
+            const selected = purchaseAccountSelect.selectedOptions[0];
+            unitInput.value = selected && selected.dataset.unit ? selected.dataset.unit : 'unit';
         }
 
         function togglePurchasePaymentTerms() {
@@ -415,36 +412,43 @@
             togglePurchasePaymentTerms();
         }
 
-        function updatePurchaseItems() {
-            const categoryId = categorySelect.value;
-            const items = itemsByCategory[categoryId] || [];
-            resetSelect(itemSelect, '-- Select Item --', !categoryId || items.length === 0);
-
-            items.forEach(item => {
-                const option = document.createElement('option');
-                option.value = item.id;
-                option.textContent = `${item.name} (${item.unit})`;
-                itemSelect.appendChild(option);
-            });
-        }
-
         function updatePurchaseTotal() {
             const quantity = parseFloat(quantityInput.value || '0') || 0;
             const unitPrice = parseFloat(unitPriceInput.value || '0') || 0;
             totalInput.value = (quantity * unitPrice).toFixed(2);
         }
 
+        function syncExpensePrepaymentPeriod() {
+            if (!expenseAccountSelect || !expensePrepaymentPeriod) return;
+            const selected = expenseAccountSelect.selectedOptions[0];
+            const text = [
+                selected ? selected.dataset.name : '',
+                expenseDescriptionInput ? expenseDescriptionInput.value : ''
+            ].join(' ').toLowerCase();
+            const isPrepayment = text.includes('rent') || text.includes('electric') || text.includes('umeme') || text.includes('power') || text.includes('water');
+            expensePrepaymentPeriod.classList.toggle('d-none', !isPrepayment);
+            if (expensePrepaymentStartInput) expensePrepaymentStartInput.required = isPrepayment;
+            if (expensePrepaymentEndInput) expensePrepaymentEndInput.required = isPrepayment;
+            if (!isPrepayment) {
+                if (expensePrepaymentStartInput) expensePrepaymentStartInput.value = '';
+                if (expensePrepaymentEndInput) expensePrepaymentEndInput.value = '';
+            }
+        }
+
         supplierSelect.addEventListener('change', function () {
-            updatePurchaseCategories();
+            updatePurchaseAccounts();
             applySupplierPaymentTerms();
         });
-        categorySelect.addEventListener('change', updatePurchaseItems);
+        if (expenseAccountSelect) expenseAccountSelect.addEventListener('change', syncExpensePrepaymentPeriod);
+        if (expenseDescriptionInput) expenseDescriptionInput.addEventListener('input', syncExpensePrepaymentPeriod);
         quantityInput.addEventListener('input', updatePurchaseTotal);
+        purchaseAccountSelect.addEventListener('change', syncPurchaseUnit);
         unitPriceInput.addEventListener('input', updatePurchaseTotal);
         purchasePaymentSelect.addEventListener('change', togglePurchasePaymentTerms);
-        updatePurchaseCategories();
+        updatePurchaseAccounts();
         updatePurchaseTotal();
         togglePurchasePaymentTerms();
+        syncExpensePrepaymentPeriod();
     });
 </script>
 {% endblock %}

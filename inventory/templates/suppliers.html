@@ -103,28 +103,59 @@
     <label class="form-label">
         <i class="bi bi-box me-1"></i>Products Supplied
     </label>
-    <div class="input-group mb-2">
-        <span class="input-group-text"><i class="bi bi-search"></i></span>
-        <input class="form-control" id="product_search" type="search" placeholder="Search products, e.g. maize bran, vaccine, drinkers">
-    </div>
-    <div class="border rounded-3 p-2" style="max-height: 260px; overflow-y: auto;">
-        {% for group in purchase_catalog %}
-            <div class="supplier-product-group fw-semibold small text-muted mt-2{% if forloop.first %} mt-0{% endif %}" data-category="{{ group.name|lower }}">
-                {{ group.name }}
-            </div>
-            {% for item in group.items %}
-                <div class="form-check supplier-product-option" data-product="{{ item.name|lower }}" data-category="{{ group.name|lower }}">
-                    <input class="form-check-input" type="checkbox" name="products" value="{{ item.name }}" id="product_{{ group.code }}_{{ forloop.counter }}">
-                    <label class="form-check-label" for="product_{{ group.code }}_{{ forloop.counter }}">
-                        {{ item.name }} <span class="text-muted">({{ item.unit }})</span>
-                    </label>
+    {% if product_groups %}
+        <div class="input-group mb-2">
+            <span class="input-group-text"><i class="bi bi-search"></i></span>
+            <input class="form-control" id="product_search" type="search" placeholder="Search products or categories">
+        </div>
+        <div class="border rounded-3 p-2" style="max-height: 260px; overflow-y: auto;">
+            {% for group in product_groups %}
+                <div class="supplier-product-group fw-semibold small text-muted mt-2{% if forloop.first %} mt-0{% endif %}" data-category="{{ group.account.account_name|lower }}">
+                    {{ group.account.account_name }}
                 </div>
+                {% for product in group.products %}
+                    <div class="form-check supplier-product-option" data-product="{{ product.name|lower }}" data-category="{{ group.account.account_name|lower }}">
+                        <input class="form-check-input" type="checkbox" name="supplied_products" value="{{ product.id }}" id="product_{{ group.account.id }}_{{ product.id }}" {% if product.id|stringformat:"s" in request.POST.supplied_products %}checked{% endif %}>
+                        <label class="form-check-label" for="product_{{ group.account.id }}_{{ product.id }}">
+                            {{ product.name }} <span class="text-muted">({{ product.unit }})</span>
+                        </label>
+                    </div>
+                {% endfor %}
             {% endfor %}
-        {% empty %}
-            <div class="text-muted small">No inventory items available yet. Add items in Inventory first.</div>
-        {% endfor %}
+        </div>
+    {% elif product_accounts %}
+        <div class="border rounded-3 p-2 text-muted small">No products recorded, contact the admin.</div>
+    {% else %}
+        <div class="border rounded-3 p-2 text-muted small">No supplier categories have been enabled by admin yet.</div>
+    {% endif %}
+    <div class="form-check mt-2">
+        <input class="form-check-input" type="checkbox" name="use_other_supplied_product" id="use_other_supplied_product" {% if request.POST.use_other_supplied_product %}checked{% endif %}>
+        <label class="form-check-label" for="use_other_supplied_product">Other</label>
     </div>
-    <div class="form-text">Selected products control purchase options. Inventory items are created when products are bought.</div>
+    <div class="mt-2" id="otherSuppliedProductWrapper" style="display:none;">
+        <div class="row g-2">
+            <div class="col-md-5">
+                <label class="form-label small" for="other_product_account">Category</label>
+                <select class="form-select" id="other_product_account" name="other_product_account">
+                    <option value="">-- Select category --</option>
+                    {% for account in product_accounts %}
+                        <option value="{{ account.id }}" {% if request.POST.other_product_account == account.id|stringformat:"s" %}selected{% endif %}>
+                            {{ account.account_name }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-5">
+                <label class="form-label small" for="other_product_name">Product</label>
+                <input class="form-control" id="other_product_name" name="other_product_name" value="{{ request.POST.other_product_name|default:'' }}" placeholder="Enter product name">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small" for="other_product_unit">Unit</label>
+                <input class="form-control" id="other_product_unit" name="other_product_unit" value="{{ request.POST.other_product_unit|default:'unit' }}">
+            </div>
+        </div>
+    </div>
+    <div class="form-text">Selected products control what appears for this supplier during purchases.</div>
 </div>
 
 <div class="d-grid">
@@ -154,7 +185,7 @@
 <th>TIN</th>
 <th>Phone</th>
 <th>Location</th>
-<th>Product</th>
+<th>Products / Accounts</th>
 <th>Payment</th>
 <th>Credit Terms</th>
 <th>Actions</th>
@@ -169,7 +200,18 @@
 <td>{{ supplier.tin_number|default:"-" }}</td>
 <td>{{ supplier.phone|default:"-" }}</td>
 <td>{{ supplier.location|default:"-" }}</td>
-<td>{{ supplier.product|default:"-" }}</td>
+<td>
+    {% for product in supplier.visible_supplied_products %}
+        <span class="badge bg-light text-dark border">{{ product.name }}</span>
+    {% empty %}
+    {% endfor %}
+    {% if supplier.other_supplied_products %}
+        <span class="badge bg-light text-dark border">{{ supplier.other_supplied_products }}</span>
+    {% endif %}
+    {% if not supplier.visible_supplied_products and not supplier.other_supplied_products %}
+        {{ supplier.product|default:"-" }}
+    {% endif %}
+</td>
 <td>{{ supplier.get_preferred_payment_method_display }}</td>
 <td>
     {% if supplier.preferred_payment_method == "Credit" %}
@@ -220,6 +262,11 @@
     const productSearch = document.getElementById('product_search');
     const productOptions = Array.from(document.querySelectorAll('.supplier-product-option'));
     const productGroups = Array.from(document.querySelectorAll('.supplier-product-group'));
+    const otherProductCheck = document.getElementById('use_other_supplied_product');
+    const otherProductWrapper = document.getElementById('otherSuppliedProductWrapper');
+    const otherProductAccount = document.getElementById('other_product_account');
+    const otherProductName = document.getElementById('other_product_name');
+    const otherProductUnit = document.getElementById('other_product_unit');
     const paymentSelect = document.getElementById('preferred_payment_method');
     const creditTerms = document.getElementById('supplier_credit_terms');
     const bankTerms = document.getElementById('supplier_bank_terms');
@@ -257,6 +304,28 @@
     if (paymentSelect) {
         paymentSelect.addEventListener('change', toggleSupplierPaymentTerms);
         toggleSupplierPaymentTerms();
+    }
+
+    function toggleOtherProductInput() {
+        const isOther = otherProductCheck && otherProductCheck.checked;
+        if (otherProductWrapper) otherProductWrapper.style.display = isOther ? '' : 'none';
+        if (otherProductAccount) {
+            otherProductAccount.required = !!isOther;
+            if (!isOther) otherProductAccount.value = '';
+        }
+        if (otherProductName) {
+            otherProductName.required = !!isOther;
+            if (!isOther) otherProductName.value = '';
+        }
+        if (otherProductUnit) {
+            otherProductUnit.required = !!isOther;
+            if (!isOther) otherProductUnit.value = 'unit';
+        }
+    }
+
+    if (otherProductCheck) {
+        otherProductCheck.addEventListener('change', toggleOtherProductInput);
+        toggleOtherProductInput();
     }
 
     if (productSearch) {

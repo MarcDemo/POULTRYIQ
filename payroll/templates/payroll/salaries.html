@@ -1,11 +1,21 @@
 {% extends 'base.html' %}
 {% block content %}
 <div class="container-fluid">
-    <div class="page-header-row mb-4">
-        <h2 class="mb-1">
-            <i class="bi bi-wallet2 me-2"></i>Salary Management
-        </h2>
-        <small class="text-muted">Record and manage employee salaries</small>
+    <div class="page-header-row mb-4 d-flex justify-content-between align-items-start flex-wrap gap-2">
+        <div>
+            <h2 class="mb-1">
+                <i class="bi bi-wallet2 me-2"></i>Pending Salaries
+            </h2>
+            <small class="text-muted">Pending payroll for {{ period_month }}</small>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+            <a class="btn btn-outline-primary" href="{% url 'salary_bonuses' %}">
+                <i class="bi bi-gift me-1"></i>Bonuses
+            </a>
+            <a class="btn btn-outline-secondary" href="{% url 'salary_history' %}">
+                <i class="bi bi-clock-history me-1"></i>History
+            </a>
+        </div>
     </div>
 
     {% if messages %}
@@ -27,7 +37,7 @@
                         <input type="hidden" name="action" value="generate_monthly">
                         <div class="mb-3">
                             <label class="form-label">Payroll Month</label>
-                            <input type="month" name="batch_month" class="form-control" required>
+                            <input type="month" name="batch_month" class="form-control" value="{{ period_month }}" required>
                         </div>
                         <button type="submit" class="btn btn-success w-100">
                             <i class="bi bi-people me-1"></i>Prepare All Salaries
@@ -39,37 +49,14 @@
         <div class="col-lg-6 col-xl-4">
             <div class="card h-100">
                 <div class="card-body">
-                    <h5 class="card-title">Grant Bonus</h5>
-                    <form method="POST">
-                        {% csrf_token %}
-                        <input type="hidden" name="action" value="grant_bonus">
-                        <div class="mb-3">
-                            <label class="form-label">Employee</label>
-                            <select name="bonus_employee" class="form-select" required>
-                                <option value="">Select employee</option>
-                                {% for employee in employees %}
-                                    <option value="{{ employee.pk }}">{{ employee.display_name }}</option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                        <div class="row g-2">
-                            <div class="col-md-6">
-                                <label class="form-label">Month</label>
-                                <input type="month" name="bonus_month" class="form-control" required>
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label">Amount</label>
-                                <input type="number" name="bonus_amount" class="form-control" min="0.01" step="0.01" required>
-                            </div>
-                        </div>
-                        <div class="mt-3">
-                            <label class="form-label">Reason</label>
-                            <textarea name="bonus_reason" class="form-control" rows="2" required></textarea>
-                        </div>
-                        <button type="submit" class="btn btn-primary w-100 mt-3">
-                            <i class="bi bi-gift me-1"></i>Grant Bonus
-                        </button>
-                    </form>
+                    <h5 class="card-title">Open Another Month</h5>
+                    <div class="mb-3">
+                        <label class="form-label">Pending Salary Month</label>
+                        <input type="month" id="pending-month-picker" class="form-control" value="{{ period_month }}">
+                    </div>
+                    <button type="button" class="btn btn-outline-primary w-100" id="open-month-btn">
+                        <i class="bi bi-calendar-month me-1"></i>Open Pending Page
+                    </button>
                 </div>
             </div>
         </div>
@@ -77,18 +64,21 @@
 
     <div class="row">
         <div class="col-12">
+            {% if hide_current_pending %}
+                <div class="alert alert-info">
+                    Current month salaries will appear as pending from {{ pending_visible_from }}.
+                </div>
+            {% endif %}
             <div class="card">
                 <form method="POST" id="salary-pay-form">
                     {% csrf_token %}
                     <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
-                        <div><i class="bi bi-table me-2"></i>Salary Records</div>
+                        <div><i class="bi bi-table me-2"></i>{{ period_month }} Pending Salaries</div>
                         <div class="d-flex gap-2 flex-wrap">
                             <button type="submit" name="action" value="pay_selected" class="btn btn-sm btn-success" id="pay-selected-btn" disabled>
                                 <i class="bi bi-check2-circle me-1"></i>Pay Selected
                             </button>
-                            <button type="submit" name="action" value="pay_all" class="btn btn-sm btn-outline-success">
-                                <i class="bi bi-check2-all me-1"></i>Pay All Pending
-                            </button>
+                            
                         </div>
                     </div>
                     <div class="table-responsive">
@@ -99,15 +89,13 @@
                                         <input class="form-check-input" type="checkbox" id="select-all-salaries" aria-label="Select all pending salaries">
                                     </th>
                                     <th>Employee</th>
-                                    <th>Month</th>
                                     <th>Gross</th>
                                     <th>PAYE</th>
-                                <th>NSSF</th>
-                                <th>Advances</th>
-                                <th>Bonus</th>
-                                <th>Net Pay</th>
+                                    <th>NSSF</th>
+                                    <th>Advances</th>
+                                    <th>Bonus</th>
+                                    <th>Net Pay</th>
                                     <th>Pay Date</th>
-                                    <th>Status</th>
                                     <th>Recorded By</th>
                                     <th>Action</th>
                                 </tr>
@@ -116,12 +104,9 @@
                                 {% for record in salary_records %}
                                     <tr>
                                         <td>
-                                            {% if record.status == 'PENDING' %}
-                                                <input class="form-check-input salary-select" type="checkbox" name="salary_ids" value="{{ record.pk }}" aria-label="Select {{ record.employee.display_name }} {{ record.period_month }}">
-                                            {% endif %}
+                                            <input class="form-check-input salary-select" type="checkbox" name="salary_ids" value="{{ record.pk }}" aria-label="Select {{ record.employee.display_name }} {{ record.period_month }}">
                                         </td>
                                         <td>{{ record.employee.get_full_name|default:record.employee.username }}</td>
-                                        <td>{{ record.period_month }}</td>
                                         <td>{{ record.gross_salary|floatformat:0 }}</td>
                                         <td>{{ record.paye_tax|floatformat:0 }}</td>
                                         <td>
@@ -132,12 +117,7 @@
                                         <td>{{ record.bonus_amount|floatformat:0 }}</td>
                                         <td><strong>{{ record.net_pay|default:record.amount|floatformat:0 }}</strong></td>
                                         <td>{{ record.payment_date|default:"-" }}</td>
-                                        <td>
-                                            <span class="badge {% if record.status == 'PAID' %}bg-success{% else %}bg-warning{% endif %}">
-                                                {{ record.get_status_display }}
-                                            </span>
-                                        </td>
-                                        <td>{{ record.recorded_by.username }}</td>
+                                        <td>{{ record.recorded_by.username|default:"-" }}</td>
                                         <td>
                                             <a class="btn btn-sm btn-warning" href="{% url 'edit_salary' record.pk %}">
                                                 <i class="bi bi-pencil-square me-1"></i>Edit
@@ -146,7 +126,7 @@
                                     </tr>
                                 {% empty %}
                                     <tr>
-                                        <td colspan="13" class="text-center text-muted">No salary records yet</td>
+                                        <td colspan="11" class="text-center text-muted">No pending salary records for {{ period_month }}</td>
                                     </tr>
                                 {% endfor %}
                             </tbody>
@@ -159,31 +139,19 @@
             <nav aria-label="Page navigation" class="mt-4">
                 <ul class="pagination justify-content-center">
                     {% if page_obj.has_previous %}
-                        <li class="page-item">
-                            <a class="page-link" href="?page=1">First</a>
-                        </li>
-                        <li class="page-item">
-                            <a class="page-link" href="?page={{ page_obj.previous_page_number }}">Previous</a>
-                        </li>
+                        <li class="page-item"><a class="page-link" href="?page=1">First</a></li>
+                        <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}">Previous</a></li>
                     {% endif %}
-
                     {% for num in page_obj.paginator.page_range %}
                         {% if page_obj.number == num %}
                             <li class="page-item active"><span class="page-link">{{ num }}</span></li>
                         {% else %}
-                            <li class="page-item">
-                                <a class="page-link" href="?page={{ num }}">{{ num }}</a>
-                            </li>
+                            <li class="page-item"><a class="page-link" href="?page={{ num }}">{{ num }}</a></li>
                         {% endif %}
                     {% endfor %}
-
                     {% if page_obj.has_next %}
-                        <li class="page-item">
-                            <a class="page-link" href="?page={{ page_obj.next_page_number }}">Next</a>
-                        </li>
-                        <li class="page-item">
-                            <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}">Last</a>
-                        </li>
+                        <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}">Next</a></li>
+                        <li class="page-item"><a class="page-link" href="?page={{ page_obj.paginator.num_pages }}">Last</a></li>
                     {% endif %}
                 </ul>
             </nav>
@@ -196,6 +164,8 @@ document.addEventListener('DOMContentLoaded', function () {
     const selectAll = document.getElementById('select-all-salaries');
     const paySelected = document.getElementById('pay-selected-btn');
     const checkboxes = Array.from(document.querySelectorAll('.salary-select'));
+    const monthPicker = document.getElementById('pending-month-picker');
+    const openMonth = document.getElementById('open-month-btn');
 
     function syncPayButton() {
         const checkedCount = checkboxes.filter(function (checkbox) { return checkbox.checked; }).length;
@@ -213,6 +183,14 @@ document.addEventListener('DOMContentLoaded', function () {
                 checkbox.checked = selectAll.checked;
             });
             syncPayButton();
+        });
+    }
+
+    if (openMonth) {
+        openMonth.addEventListener('click', function () {
+            if (monthPicker.value) {
+                window.location.href = '/payroll/salaries/' + monthPicker.value + '/pending/';
+            }
         });
     }
 

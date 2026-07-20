@@ -36,8 +36,15 @@
                             <label class="form-label">Category <span class="text-danger">*</span></label>
                             <select name="asset_category" id="fa-category" class="form-select" required>
                                 <option value="">-- Select Category --</option>
-                                {% for value, label in asset_categories %}
-                                <option value="{{ value }}">{{ label }}</option>
+                                {% for category in asset_categories %}
+                                <option
+                                    value="{{ category.id }}"
+                                    data-is-land="{% if category.is_land %}1{% else %}0{% endif %}"
+                                    data-is-depreciable="{% if category.is_depreciable %}1{% else %}0{% endif %}"
+                                    data-useful-life="{{ category.useful_life_years }}"
+                                >
+                                    {{ category.name }}
+                                </option>
                                 {% endfor %}
                             </select>
                         </div>
@@ -125,15 +132,20 @@
         const nameInput = document.getElementById("fa-asset-name");
         const depreciable = document.getElementById("is_depreciable");
         const life = document.getElementById("useful_life_years");
-        const NON_DEPRECIABLE = new Set(["LAND"]);
 
         function syncForm() {
-            const val = category.value;
-            const hasCategory = val !== "";
+            const selected = category.selectedOptions[0];
+            const hasCategory = category.value !== "";
+            const isLand = selected && selected.dataset.isLand === "1";
+            const isDepreciable = selected && selected.dataset.isDepreciable === "1";
             nameWrap.classList.toggle("d-none", !hasCategory);
             nameInput.required = hasCategory;
 
-            if (NON_DEPRECIABLE.has(val)) {
+            if (hasCategory && selected.dataset.usefulLife) {
+                life.value = selected.dataset.usefulLife;
+            }
+
+            if (isLand || !isDepreciable) {
                 depreciable.checked = false;
                 depreciable.disabled = true;
             } else {

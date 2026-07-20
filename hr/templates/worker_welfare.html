@@ -73,9 +73,21 @@
                                 <input type="date" class="form-control" name="leave_end">
                             </div>
                         </div>
-                        <div class="mb-3 d-none" id="advanceField">
-                            <label class="form-label">Advance Amount (UGX)</label>
-                            <input type="number" class="form-control" name="advance_amount" min="0" step="1000">
+                        <div class="d-none" id="advanceField">
+                            <div class="mb-3">
+                                <label class="form-label">Advance Amount (UGX)</label>
+                                <input type="number" class="form-control" name="advance_amount" min="0" step="1000">
+                            </div>
+                            <div class="row g-2">
+                                <div class="col-sm-6 mb-3">
+                                    <label class="form-label">Advance Period Start</label>
+                                    <input type="date" class="form-control" name="advance_period_start">
+                                </div>
+                                <div class="col-sm-6 mb-3">
+                                    <label class="form-label">Advance Period End</label>
+                                    <input type="date" class="form-control" name="advance_period_end">
+                                </div>
+                            </div>
                         </div>
                         <div class="mb-3">
                             <label class="form-label">Details</label>
@@ -169,6 +181,10 @@
         const type = requestType.value;
         leaveFields.classList.toggle('d-none', type !== 'LEAVE');
         advanceField.classList.toggle('d-none', type !== 'SALARY_ADVANCE');
+        advanceField.querySelectorAll('input').forEach(input => {
+            input.required = type === 'SALARY_ADVANCE';
+            if (type !== 'SALARY_ADVANCE') input.value = '';
+        });
     }
     if (requestType) {
         requestType.addEventListener('change', syncFields);

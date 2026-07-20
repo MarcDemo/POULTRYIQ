@@ -107,7 +107,8 @@ class SalaryBonus(models.Model):
         decimal_places=2,
         validators=[MinValueValidator(Decimal("0.00"))],
     )
-    reason = models.TextField()
+    bonus_name = models.CharField(max_length=120, default="Bonus")
+    reason = models.TextField(blank=True)
     granted_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.PROTECT,

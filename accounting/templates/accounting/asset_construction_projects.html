@@ -40,8 +40,15 @@
                             <label class="form-label">Destination Category</label>
                             <select name="asset_category" class="form-select" required>
                                 <option value="">Select...</option>
-                                {% for value, label in asset_categories %}
-                                <option value="{{ value }}">{{ label }}</option>
+                                {% for category in asset_categories %}
+                                <option
+                                    value="{{ category.id }}"
+                                    data-is-land="{% if category.is_land %}1{% else %}0{% endif %}"
+                                    data-is-depreciable="{% if category.is_depreciable %}1{% else %}0{% endif %}"
+                                    data-useful-life="{{ category.useful_life_years }}"
+                                >
+                                    {{ category.name }}
+                                </option>
                                 {% endfor %}
                             </select>
                         </div>
@@ -129,8 +136,13 @@
         const life = document.getElementById("project_useful_life_years");
 
         function syncProjectDepreciationFields() {
-            const isLand = category && category.value === "LAND";
-            if (isLand) {
+            const selected = category ? category.selectedOptions[0] : null;
+            const isLand = selected && selected.dataset.isLand === "1";
+            const isDepreciable = selected && selected.dataset.isDepreciable === "1";
+            if (selected && selected.dataset.usefulLife) {
+                life.value = selected.dataset.usefulLife;
+            }
+            if (isLand || !isDepreciable) {
                 depreciable.checked = false;
                 depreciable.disabled = true;
             } else {
