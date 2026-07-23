@@ -3,6 +3,7 @@ from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import DecimalField, Q, Sum, Value
 from django.db.models.functions import Coalesce
@@ -11,11 +12,13 @@ from django.shortcuts import get_object_or_404, redirect, render
 from inventory.models import InventoryTransaction
 from poultry.models import ApprovalStatus, egg_collection
 from poultryiq.pagination import paginate
-from accounting.models import AccountingCode
+from accounting.models import AccountingCode, ChartOfAccount
+from accounting.services import account_by_system_code, payment_account_for_method, post_customer_payment, post_sale, post_sale_delivery
 from .models import Customer, CustomerPayment, ReceivableLedger, SaleInvoice, SaleItem
 
 
 EGGS_PER_TRAY = Decimal("30")
+WHT_RATE = Decimal("0.06")
 
 
 PRODUCTS = {
@@ -23,6 +26,11 @@ PRODUCTS = {
         "label": "Eggs",
         "unit": "trays",
         "sold_filter": Q(product_name__iexact="Eggs"),
+    },
+    "damaged_eggs": {
+        "label": "Damaged Eggs",
+        "unit": "eggs",
+        "sold_filter": Q(product_name__iexact="Damaged Eggs"),
     },
     "manure": {
         "label": "Manure",
@@ -36,6 +44,13 @@ PRODUCTS = {
         "inventory_filter": Q(item__category__code__iexact="OFF_LAYER"),
         "sold_filter": Q(product_name__iexact="Off Layer Birds"),
     },
+}
+
+SALE_ACCOUNT_SYSTEM_CODES = {
+    "eggs": "SALE_EGGS",
+    "manure": "SALE_MANURE",
+    "off_layers": "SALE_OFFLAYERS",
+    "damaged_eggs": "SALE_DAMAGED_EGGS",
 }
 
 
@@ -59,6 +74,13 @@ def _eggs_collected_net():
         broken=Coalesce(Sum("eggs_rejected"), Value(0)),
     )
     return Decimal(totals["eggs"] - totals["broken"])
+
+
+def _damaged_eggs_collected():
+    total = egg_collection.objects.filter(status=ApprovalStatus.APPROVED).aggregate(
+        broken=Coalesce(Sum("eggs_rejected"), Value(0)),
+    )["broken"]
+    return Decimal(total or 0)
 
 
 def _sold_qty(sold_filter):
@@ -175,6 +197,21 @@ def _build_product_stock():
         "available_value": (eggs_available * eggs_price).quantize(Decimal("0.01")),
     }
 
+    damaged_source = _damaged_eggs_collected()
+    damaged_sold = _sold_qty(PRODUCTS["damaged_eggs"]["sold_filter"])
+    damaged_available = max(damaged_source - damaged_sold, Decimal("0.000"))
+    damaged_price = _latest_unit_price(PRODUCTS["damaged_eggs"]["sold_filter"])
+    stock["damaged_eggs"] = {
+        "key": "damaged_eggs",
+        "label": PRODUCTS["damaged_eggs"]["label"],
+        "unit": PRODUCTS["damaged_eggs"]["unit"],
+        "source_qty": damaged_source,
+        "sold_qty": damaged_sold,
+        "available_qty": damaged_available,
+        "suggested_price": damaged_price,
+        "available_value": (damaged_available * damaged_price).quantize(Decimal("0.01")),
+    }
+
     for key in ("manure", "off_layers"):
         cfg = PRODUCTS[key]
         source = _stock_from_inventory(cfg["inventory_filter"])
@@ -229,6 +266,205 @@ def _pending_orders_metrics(queryset):
     }
 
 
+def _payment_method_from_post(raw_value):
+    return {
+        "CASH": Customer.PaymentMethod.CASH,
+        "MOBILE MONEY": Customer.PaymentMethod.MOMO,
+        "MOMO": Customer.PaymentMethod.MOMO,
+        "BANK": Customer.PaymentMethod.BANK,
+        "CREDIT": Customer.PaymentMethod.CREDIT,
+    }.get((raw_value or "").strip().upper(), Customer.PaymentMethod.CASH)
+
+
+def _customer_form_data(request):
+    return {
+        "name": request.POST.get("name", "").strip(),
+        "contact_person": request.POST.get("contact_person", "").strip(),
+        "phone_number": request.POST.get("phone_number", "").strip(),
+        "email": request.POST.get("email", "").strip(),
+        "address": request.POST.get("address", "").strip(),
+        "preferred_payment_method": _payment_method_from_post(request.POST.get("preferred_payment_method", "CASH")),
+        "momo_receiving_number": request.POST.get("momo_receiving_number", "").strip(),
+        "bank_account_number": request.POST.get("bank_account_number", "").strip(),
+        "credit_repayment_plan": request.POST.get("credit_repayment_plan", "").strip(),
+        "allow_credit": request.POST.get("allow_credit") == "on",
+        "pay_wht": request.POST.get("pay_wht") == "on",
+        "credit_limit": request.POST.get("credit_limit", "0").strip(),
+        "credit_days": request.POST.get("credit_days", "0").strip(),
+        "is_active": request.POST.get("is_active", "on") == "on",
+    }
+
+
+def _validate_customer_form(form_data, customer=None):
+    errors = []
+    credit_limit = Decimal("0.00")
+    credit_days = 0
+
+    if not form_data["name"]:
+        errors.append("Customer name is required.")
+    else:
+        duplicate_qs = Customer.objects.filter(name__iexact=form_data["name"])
+        if customer:
+            duplicate_qs = duplicate_qs.exclude(pk=customer.pk)
+        if duplicate_qs.exists():
+            errors.append("A customer with this name already exists.")
+
+    try:
+        credit_limit = Decimal(form_data["credit_limit"] or "0")
+        if credit_limit < 0:
+            errors.append("Credit limit cannot be negative.")
+    except (InvalidOperation, ValueError):
+        errors.append("Please enter a valid credit limit.")
+
+    try:
+        credit_days = int(form_data["credit_days"] or "0")
+        if credit_days < 0:
+            errors.append("Credit days cannot be negative.")
+    except ValueError:
+        errors.append("Please enter valid credit days.")
+
+    if form_data["preferred_payment_method"] == Customer.PaymentMethod.MOMO and not form_data["momo_receiving_number"]:
+        errors.append("MoMo number is required for mobile money customers.")
+    if form_data["preferred_payment_method"] == Customer.PaymentMethod.BANK and not form_data["bank_account_number"]:
+        errors.append("Bank account number is required for bank customers.")
+    if form_data["preferred_payment_method"] == Customer.PaymentMethod.CREDIT and not form_data["credit_repayment_plan"]:
+        errors.append("Credit repayment plan is required for credit customers.")
+
+    return errors, credit_limit, credit_days
+
+
+def _save_customer_from_form(form_data, credit_limit, credit_days, customer=None):
+    customer = customer or Customer()
+    customer.name = form_data["name"]
+    customer.contact_person = form_data["contact_person"]
+    customer.phone_number = form_data["phone_number"]
+    customer.email = form_data["email"]
+    customer.address = form_data["address"]
+    customer.preferred_payment_method = form_data["preferred_payment_method"]
+    customer.momo_receiving_number = form_data["momo_receiving_number"]
+    customer.bank_account_number = form_data["bank_account_number"]
+    customer.credit_repayment_plan = form_data["credit_repayment_plan"]
+    customer.allow_credit = form_data["allow_credit"]
+    customer.pay_wht = form_data["pay_wht"]
+    customer.credit_limit = credit_limit
+    customer.credit_days = credit_days
+    customer.is_active = form_data["is_active"]
+    customer.save()
+    return customer
+
+
+@login_required(login_url="login")
+def customers(request):
+    customers_qs = Customer.objects.annotate(
+        outstanding_balance=Coalesce(
+            Sum("invoices__receivable__balance"),
+            Value(Decimal("0.00")),
+            output_field=DecimalField(max_digits=14, decimal_places=2),
+        )
+    ).order_by("name")
+    query = request.GET.get("q", "").strip()
+    if query:
+        customers_qs = customers_qs.filter(
+            Q(name__icontains=query)
+            | Q(contact_person__icontains=query)
+            | Q(phone_number__icontains=query)
+            | Q(email__icontains=query)
+        )
+
+    if request.method == "POST":
+        form_data = _customer_form_data(request)
+        customer_id = request.POST.get("customer_id", "").strip()
+        customer = Customer.objects.filter(pk=customer_id).first() if customer_id else None
+        errors, credit_limit, credit_days = _validate_customer_form(form_data, customer=customer)
+
+        if errors:
+            for error in errors:
+                messages.error(request, error)
+        else:
+            customer = _save_customer_from_form(form_data, credit_limit, credit_days, customer=customer)
+            messages.success(request, f"Customer profile saved for {customer.name}.")
+            return redirect("customer_profile", pk=customer.pk)
+    else:
+        form_data = {
+            "preferred_payment_method": Customer.PaymentMethod.CASH,
+            "allow_credit": True,
+            "pay_wht": False,
+            "credit_limit": "0.00",
+            "credit_days": "0",
+            "is_active": True,
+        }
+
+    page_obj, querystring = paginate(request, customers_qs, per_page=20)
+    return render(
+        request,
+        "customers.html",
+        {
+            "customers": page_obj,
+            "page_obj": page_obj,
+            "querystring": querystring,
+            "q": query,
+            "form_data": form_data,
+            "payment_method_choices": Customer.PaymentMethod.choices,
+        },
+    )
+
+
+@login_required(login_url="login")
+def customer_profile(request, pk):
+    customer = get_object_or_404(Customer, pk=pk)
+    if request.method == "POST":
+        form_data = _customer_form_data(request)
+        errors, credit_limit, credit_days = _validate_customer_form(form_data, customer=customer)
+        if errors:
+            for error in errors:
+                messages.error(request, error)
+        else:
+            customer = _save_customer_from_form(form_data, credit_limit, credit_days, customer=customer)
+            messages.success(request, f"Customer profile updated for {customer.name}.")
+            return redirect("customer_profile", pk=customer.pk)
+    else:
+        form_data = {
+            "name": customer.name,
+            "contact_person": customer.contact_person,
+            "phone_number": customer.phone_number,
+            "email": customer.email,
+            "address": customer.address,
+            "preferred_payment_method": customer.preferred_payment_method,
+            "momo_receiving_number": customer.momo_receiving_number,
+            "bank_account_number": customer.bank_account_number,
+            "credit_repayment_plan": customer.credit_repayment_plan,
+            "allow_credit": customer.allow_credit,
+            "pay_wht": customer.pay_wht,
+            "credit_limit": customer.credit_limit,
+            "credit_days": customer.credit_days,
+            "is_active": customer.is_active,
+        }
+
+    invoices = (
+        customer.invoices.select_related("receivable", "created_by")
+        .prefetch_related("items")
+        .order_by("-invoice_date", "-invoice_id")[:20]
+    )
+    payments = customer.payments.select_related("invoice", "received_by").order_by("-payment_date", "-payment_id")[:20]
+    totals = customer.invoices.aggregate(
+        sales=Coalesce(Sum("total_amount"), Value(Decimal("0.00")), output_field=DecimalField(max_digits=14, decimal_places=2)),
+        paid=Coalesce(Sum("receivable__amount_paid"), Value(Decimal("0.00")), output_field=DecimalField(max_digits=14, decimal_places=2)),
+        balance=Coalesce(Sum("receivable__balance"), Value(Decimal("0.00")), output_field=DecimalField(max_digits=14, decimal_places=2)),
+    )
+    return render(
+        request,
+        "customer_profile.html",
+        {
+            "customer": customer,
+            "form_data": form_data,
+            "payment_method_choices": Customer.PaymentMethod.choices,
+            "invoices": invoices,
+            "payments": payments,
+            "totals": totals,
+        },
+    )
+
+
 @login_required(login_url="login")
 def sales(request):
     stock = _build_product_stock()
@@ -250,6 +486,8 @@ def sales(request):
 
         if not customer_name:
             errors.append("Customer name is required.")
+        elif not Customer.objects.filter(name__iexact=customer_name, is_active=True).exists():
+            errors.append("Please select a valid active customer.")
 
         if product_key not in stock:
             errors.append("Please select a valid product.")
@@ -278,14 +516,7 @@ def sales(request):
             deposit = Decimal("0")
             errors.append("Please provide a valid deposit.")
 
-        payment_method = CustomerPayment.Method.CASH
-        payment_map = {
-            "CASH": CustomerPayment.Method.CASH,
-            "MOBILE MONEY": CustomerPayment.Method.MOMO,
-            "MOMO": CustomerPayment.Method.MOMO,
-            "BANK": CustomerPayment.Method.BANK,
-        }
-        payment_method = payment_map.get(payment_method_raw, CustomerPayment.Method.CASH)
+        payment_method = _payment_method_from_post(payment_method_raw)
 
         delivery_date = None
         if sale_type == "booking" and delivery_date_raw:
@@ -306,22 +537,47 @@ def sales(request):
             today = date.today()
             line_total = (quantity * unit_price).quantize(Decimal("0.01"))
             amount_paid = deposit
-            balance = (line_total - amount_paid).quantize(Decimal("0.01"))
-            if balance <= 0:
-                invoice_status = SaleInvoice.Status.PAID
-            elif sale_type == "booking" and amount_paid == 0:
-                invoice_status = SaleInvoice.Status.DRAFT
-            else:
-                invoice_status = SaleInvoice.Status.ISSUED
+            product_name = stock[product_key]["label"]
+            sale_account = account_by_system_code(SALE_ACCOUNT_SYSTEM_CODES.get(product_key, ""))
+            if not sale_account:
+                messages.error(request, f"The built-in sales account for {product_name} is missing.")
+                return redirect("sales")
+            payment_aliases = {
+                "CASH": "Cash",
+                "MOMO": "Mobile Money",
+                "BANK": "Bank",
+            }
+            payment_label = payment_aliases.get(payment_method, payment_method)
+            if amount_paid > 0 and not payment_account_for_method(payment_method):
+                messages.error(request, f"The built-in {payment_label} payment account is missing.")
+                return redirect("sales")
+            if line_total > amount_paid and not ChartOfAccount.objects.filter(account_type__legacy_code="RECEIVABLE", is_active=True).exists():
+                messages.error(request, "No receivable account is configured for unpaid or partially paid sales.")
+                return redirect("sales")
+
+            customer = Customer.objects.filter(name__iexact=customer_name).first()
+            wht_amount = (line_total * WHT_RATE).quantize(Decimal("0.01")) if customer and customer.pay_wht else Decimal("0.00")
+            customer_amount_due = (line_total - wht_amount).quantize(Decimal("0.01"))
+            if amount_paid > customer_amount_due:
+                messages.error(
+                    request,
+                    f"Amount paid cannot exceed {customer_amount_due} because this customer has withholding tax.",
+                )
+                return redirect("sales")
 
             with transaction.atomic():
-                customer = Customer.objects.filter(name__iexact=customer_name).first()
                 if customer:
                     if phone and customer.phone_number != phone:
                         customer.phone_number = phone
                         customer.save(update_fields=["phone_number"])
+
+                balance = (customer_amount_due - amount_paid).quantize(Decimal("0.01"))
+                if balance <= 0:
+                    invoice_status = SaleInvoice.Status.PAID
+                elif sale_type == "booking" and amount_paid == 0:
+                    invoice_status = SaleInvoice.Status.DRAFT
                 else:
-                    customer = Customer.objects.create(name=customer_name, phone_number=phone)
+                    invoice_status = SaleInvoice.Status.ISSUED
 
                 invoice = SaleInvoice.objects.create(
                     invoice_no=_next_invoice_no(today),
@@ -331,6 +587,8 @@ def sales(request):
                     subtotal=line_total,
                     discount_amount=Decimal("0.00"),
                     total_amount=line_total,
+                    wht_amount=wht_amount,
+                    payment_method=payment_method,
                     status=invoice_status,
                     delivery_status=(
                         SaleInvoice.DeliveryStatus.DELIVERED
@@ -343,7 +601,8 @@ def sales(request):
 
                 sale_item = SaleItem.objects.create(
                     invoice=invoice,
-                    product_name=stock[product_key]["label"],
+                    account=sale_account,
+                    product_name=product_name,
                     quantity=quantity,
                     unit=stock[product_key]["unit"],
                     unit_price=unit_price,
@@ -351,7 +610,6 @@ def sales(request):
                 )
                 
                 # Generate accounting code for this sale
-                product_name = stock[product_key]["label"]
                 account_name = f"sale_of_{product_name.lower()}"
                 
                 # Determine prefix based on product type
@@ -362,16 +620,16 @@ def sales(request):
                 else:
                     prefix = "SE"  # Default to Eggs
                 
-                AccountingCode.create_or_get_accounting_code(
-                    prefix=prefix,
-                    account_type='REVENUE',
-                    account_name=account_name,
+                AccountingCode.create_for(
+                    account=sale_account,
                     content_object=sale_item,
+                    description=f"{product_name} sale",
                 )
+                post_sale(sale_item, amount_paid=amount_paid, created_by=request.user)
 
                 ReceivableLedger.objects.create(
                     invoice=invoice,
-                    amount_due=line_total,
+                    amount_due=customer_amount_due,
                     amount_paid=amount_paid,
                     balance=balance,
                     last_payment_date=today if amount_paid > 0 else None,
@@ -400,9 +658,19 @@ def sales(request):
     )
 
     context = {
-        "stock_cards": [stock["eggs"], stock["manure"], stock["off_layers"]],
+        "stock_cards": [stock["eggs"], stock["damaged_eggs"], stock["manure"], stock["off_layers"]],
         "recent_sales": recent_sales,
         "pending_orders_preview": pending_orders[:5],
+        "customers": Customer.objects.filter(is_active=True).order_by("name"),
+        "customer_payment_defaults": {
+            customer.name: {
+                "phone": customer.phone_number,
+                "preferred_payment_method": customer.preferred_payment_method,
+                "pay_wht": customer.pay_wht,
+            }
+            for customer in Customer.objects.filter(is_active=True).order_by("name")
+        },
+        "payment_method_choices": Customer.PaymentMethod.choices,
         **_pending_orders_metrics(pending_orders),
     }
     return render(request, "sales.html", context)
@@ -465,24 +733,29 @@ def orders(request):
                     messages.error(request, "No receivable record found for this order.")
                     return redirect("orders")
 
-                with transaction.atomic():
-                    receivable.amount_paid = (receivable.amount_paid + payment_amount).quantize(Decimal("0.01"))
-                    receivable.balance = (receivable.amount_due - receivable.amount_paid).quantize(Decimal("0.01"))
-                    receivable.last_payment_date = date.today()
-                    receivable.save(update_fields=["amount_paid", "balance", "last_payment_date"])
+                try:
+                    with transaction.atomic():
+                        receivable.amount_paid = (receivable.amount_paid + payment_amount).quantize(Decimal("0.01"))
+                        receivable.balance = (receivable.amount_due - receivable.amount_paid).quantize(Decimal("0.01"))
+                        receivable.last_payment_date = date.today()
+                        receivable.save(update_fields=["amount_paid", "balance", "last_payment_date"])
 
-                    CustomerPayment.objects.create(
-                        invoice=invoice,
-                        customer=invoice.customer,
-                        payment_date=date.today(),
-                        method=payment_method,
-                        amount=payment_amount,
-                        reference=payment_reference,
-                        notes=payment_notes,
-                        received_by=request.user,
-                    )
+                        payment = CustomerPayment.objects.create(
+                            invoice=invoice,
+                            customer=invoice.customer,
+                            payment_date=date.today(),
+                            method=payment_method,
+                            amount=payment_amount,
+                            reference=payment_reference,
+                            notes=payment_notes,
+                            received_by=request.user,
+                        )
+                        post_customer_payment(payment, created_by=request.user)
 
-                    _refresh_invoice_financial_status(invoice, receivable)
+                        _refresh_invoice_financial_status(invoice, receivable)
+                except ValidationError as exc:
+                    messages.error(request, "; ".join(exc.messages) if hasattr(exc, "messages") else str(exc))
+                    return redirect("orders")
 
                 if receivable.balance <= 0:
                     messages.success(request, f"Payment received. Order {invoice.invoice_no} is now fully paid.")
@@ -504,8 +777,14 @@ def orders(request):
                     else:
                         if receivable:
                             _refresh_invoice_financial_status(invoice, receivable)
-                        invoice.delivery_status = SaleInvoice.DeliveryStatus.DELIVERED
-                        invoice.save(update_fields=["delivery_status"])
+                        try:
+                            with transaction.atomic():
+                                post_sale_delivery(invoice, created_by=request.user)
+                                invoice.delivery_status = SaleInvoice.DeliveryStatus.DELIVERED
+                                invoice.save(update_fields=["delivery_status"])
+                        except ValidationError as exc:
+                            messages.error(request, "; ".join(exc.messages) if hasattr(exc, "messages") else str(exc))
+                            return redirect("orders")
                         messages.success(request, f"Order {invoice.invoice_no} marked as delivered.")
 
             elif action == "cancel":

@@ -6,6 +6,52 @@ from django.core.validators import MinValueValidator
 # Create your models here.
 
 
+class StaffProfile(models.Model):
+    class EmploymentStatus(models.TextChoices):
+        ACTIVE = "ACTIVE", "Active"
+        INACTIVE = "INACTIVE", "Inactive"
+        ON_LEAVE = "ON_LEAVE", "On Leave"
+
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="staff_profile")
+    profile_photo = models.ImageField(upload_to="staff_profiles/", blank=True)
+    age = models.PositiveSmallIntegerField(null=True, blank=True)
+    job_title = models.CharField(max_length=100, blank=True)
+    employee_number = models.CharField(max_length=40, blank=True, db_index=True)
+    tin_number = models.CharField(max_length=50, blank=True)
+    nssf_number = models.CharField(max_length=50, blank=True)
+    national_id = models.CharField(max_length=50, blank=True)
+    next_of_kin_name = models.CharField(max_length=150, blank=True)
+    next_of_kin_contact = models.CharField(max_length=50, blank=True)
+    physical_address = models.CharField(max_length=200, blank=True)
+    emergency_contact = models.CharField(max_length=50, blank=True)
+    monthly_salary = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=Decimal("0.00"),
+        validators=[MinValueValidator(Decimal("0.00"))],
+    )
+    pay_nssf = models.BooleanField(default=True)
+    pay_paye = models.BooleanField(default=True)
+    employment_status = models.CharField(
+        max_length=12,
+        choices=EmploymentStatus.choices,
+        default=EmploymentStatus.ACTIVE,
+        db_index=True,
+    )
+    hire_date = models.DateField(null=True, blank=True)
+    notes = models.TextField(blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["user__first_name", "user__username"]
+        indexes = [
+            models.Index(fields=["employment_status"], name="hr_staffpro_employm_9cf0ba_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.user.display_name} profile"
+
+
 
 class Worker(models.Model):
     """
@@ -161,6 +207,8 @@ class WelfareRequest(models.Model):
         blank=True,
         validators=[MinValueValidator(Decimal("0.00"))],
     )
+    advance_period_start = models.DateField(null=True, blank=True, db_index=True)
+    advance_period_end = models.DateField(null=True, blank=True, db_index=True)
     currency = models.CharField(max_length=10, default="UGX")
 
     status = models.CharField(
@@ -188,6 +236,13 @@ class WelfareRequest(models.Model):
     )
     manager_notes = models.TextField(blank=True)
     manager_reviewed_at = models.DateTimeField(null=True, blank=True)
+    salary_payment = models.ForeignKey(
+        "payroll.SalaryPayment",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="deducted_advances",
+    )
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

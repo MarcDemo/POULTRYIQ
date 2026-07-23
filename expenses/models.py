@@ -18,6 +18,13 @@ class ExpenseCategory(models.Model):
 
     code = models.CharField(max_length=30, unique=True)  # e.g. FEED
     name = models.CharField(max_length=100)             # e.g. Feed & Nutrition
+    account = models.ForeignKey(
+        "accounting.ChartOfAccount",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="expense_categories",
+    )
     expense_type = models.CharField(
         max_length=20,
         choices=ExpenseType.choices,
@@ -50,6 +57,13 @@ class ExpenseTransaction(models.Model):
 
     expense_date = models.DateField(db_index=True)
     category = models.ForeignKey(ExpenseCategory, on_delete=models.PROTECT, related_name="expenses")
+    account = models.ForeignKey(
+        "accounting.ChartOfAccount",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="expense_transactions",
+    )
 
     description = models.CharField(max_length=255)  # e.g. "Maize bran purchase - 50kg bags"
     reference_no = models.CharField(max_length=80, blank=True, db_index=True)  # receipt/invoice number
@@ -78,14 +92,26 @@ class ExpenseTransaction(models.Model):
     PAYMENT_CASH = "Cash"
     PAYMENT_MOBILE = "Mobile Money"
     PAYMENT_BANK = "Bank"
+    PAYMENT_CREDIT = "Credit"
     PAYMENT_CHECK = "Check"
     PAYMENT_METHOD_CHOICES = [
         (PAYMENT_CASH, "Cash"),
         (PAYMENT_MOBILE, "Mobile Money"),
         (PAYMENT_BANK, "Bank"),
+        (PAYMENT_CREDIT, "Credit"),
         (PAYMENT_CHECK, "Check"),
     ]
     payment_method = models.CharField(max_length=30, choices=PAYMENT_METHOD_CHOICES, default=PAYMENT_CASH, blank=True)
+
+    class PrepaymentType(models.TextChoices):
+        ELECTRICITY = "ELECTRICITY", "Prepaid Electricity"
+        RENT = "RENT", "Prepaid Rent"
+        WATER = "WATER", "Prepaid Water"
+
+    is_prepayment = models.BooleanField(default=False, db_index=True)
+    prepayment_type = models.CharField(max_length=20, choices=PrepaymentType.choices, blank=True, db_index=True)
+    prepayment_start_date = models.DateField(null=True, blank=True, db_index=True)
+    prepayment_end_date = models.DateField(null=True, blank=True, db_index=True)
 
     # Period (fast monthly reporting)
     period_year = models.PositiveSmallIntegerField(db_index=True)

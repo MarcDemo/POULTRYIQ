@@ -45,20 +45,6 @@ PURCHASE_CATALOG = [
         ],
     },
     {
-        "code": "EQUIPMENT",
-        "name": "Equipment",
-        "items": [
-            {"name": "Feeders", "unit": "piece"},
-            {"name": "Drinkers", "unit": "piece"},
-            {"name": "Egg trays", "unit": "piece"},
-            {"name": "Egg crates", "unit": "piece"},
-            {"name": "Heat lamps", "unit": "piece"},
-            {"name": "Brooder guards", "unit": "piece"},
-            {"name": "Weighing scale", "unit": "piece"},
-            {"name": "Sprayer", "unit": "piece"},
-        ],
-    },
-    {
         "code": "CONSUMABLE",
         "name": "Consumables",
         "items": [

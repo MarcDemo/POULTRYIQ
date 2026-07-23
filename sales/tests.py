@@ -8,6 +8,7 @@ from django.urls import reverse
 from inventory.models import InventoryTransaction, Item, ItemCategory, Store
 from poultry.models import ApprovalStatus, PoultryBatch, PoultryHouse, egg_collection
 from accounting.models import AccountingCode
+from accounting.services import get_bs_data
 from sales.models import Customer, CustomerPayment, ReceivableLedger, SaleInvoice, SaleItem
 
 
@@ -114,7 +115,19 @@ class SalesPageTests(TestCase):
 		self.assertEqual(cards["off_layers"]["source_qty"], Decimal("20.000"))
 		self.assertEqual(cards["off_layers"]["available_qty"], Decimal("20.000"))
 
+	def test_sales_page_uses_customer_dropdown_from_db(self):
+		Customer.objects.create(name="Dropdown Buyer", is_active=True)
+		Customer.objects.create(name="Inactive Buyer", is_active=False)
+		self.client.force_login(self.user)
+
+		response = self.client.get(reverse("sales"))
+
+		self.assertContains(response, '<select class="form-select" name="customer" id="customerName" required>', html=False)
+		self.assertContains(response, '<option value="Dropdown Buyer">Dropdown Buyer</option>', html=False)
+		self.assertNotContains(response, '<option value="Inactive Buyer">Inactive Buyer</option>', html=False)
+
 	def test_post_sale_creates_invoice_item_ledger_and_payment(self):
+		Customer.objects.create(name="City Buyer")
 		self.client.force_login(self.user)
 
 		response = self.client.post(
@@ -157,7 +170,108 @@ class SalesPageTests(TestCase):
 			).exists()
 		)
 
+	def test_customer_profile_can_save_payment_preferences(self):
+		self.client.force_login(self.user)
+
+		response = self.client.post(
+			reverse("customers"),
+			{
+				"name": "Regular Buyer",
+				"contact_person": "Amina",
+				"phone_number": "0700000111",
+				"email": "amina@example.com",
+				"address": "Kampala",
+				"preferred_payment_method": "MOMO",
+				"momo_receiving_number": "0777000111",
+				"allow_credit": "on",
+				"pay_wht": "on",
+				"credit_limit": "500000",
+				"credit_days": "14",
+				"is_active": "on",
+			},
+		)
+
+		customer = Customer.objects.get(name="Regular Buyer")
+		self.assertRedirects(response, reverse("customer_profile", args=[customer.pk]))
+		self.assertEqual(customer.preferred_payment_method, Customer.PaymentMethod.MOMO)
+		self.assertEqual(customer.momo_receiving_number, "0777000111")
+		self.assertTrue(customer.pay_wht)
+		self.assertEqual(customer.credit_limit, Decimal("500000.00"))
+		self.assertEqual(customer.credit_days, 14)
+
+	def test_wht_customer_sale_records_wht_receivable_on_balance_sheet(self):
+		Customer.objects.create(
+			name="WHT Buyer",
+			phone_number="0700999888",
+			pay_wht=True,
+		)
+		self.client.force_login(self.user)
+
+		response = self.client.post(
+			reverse("sales"),
+			{
+				"customer": "WHT Buyer",
+				"phone": "0700999888",
+				"product": "eggs",
+				"quantity": "1",
+				"price": "10000",
+				"deposit": "0",
+				"payment_method": "CASH",
+				"sale_type": "instant",
+			},
+			follow=True,
+		)
+
+		self.assertEqual(response.status_code, 200)
+		invoice = SaleInvoice.objects.order_by("-invoice_id").first()
+		ledger = ReceivableLedger.objects.get(invoice=invoice)
+
+		self.assertEqual(invoice.customer.name, "WHT Buyer")
+		self.assertEqual(invoice.total_amount, Decimal("10000.00"))
+		self.assertEqual(invoice.wht_amount, Decimal("600.00"))
+		self.assertEqual(ledger.amount_due, Decimal("9400.00"))
+		self.assertEqual(ledger.balance, Decimal("9400.00"))
+
+		bs_data = get_bs_data()
+		assets_group = next(row for row in bs_data["grouped_accounts"] if row["group_value"] == "ASSETS")
+		receivables = next(row for row in assets_group["type_groups"] if row["type_value"] == "RECEIVABLE")
+		wht_row = next(row for row in receivables["accounts"] if row["code"] == "331004")
+
+		self.assertEqual(wht_row["account_name"], "WHT Receivable")
+		self.assertEqual(wht_row["amount"], Decimal("600.00"))
+
+	def test_sale_method_can_override_customer_default_payment_method(self):
+		Customer.objects.create(
+			name="Profile Buyer",
+			phone_number="0700444555",
+			preferred_payment_method=Customer.PaymentMethod.MOMO,
+			momo_receiving_number="0777444555",
+		)
+		self.client.force_login(self.user)
+
+		response = self.client.post(
+			reverse("sales"),
+			{
+				"customer": "Profile Buyer",
+				"phone": "0700444555",
+				"product": "eggs",
+				"quantity": "1",
+				"price": "5000",
+				"deposit": "5000",
+				"payment_method": "BANK",
+				"sale_type": "instant",
+			},
+			follow=True,
+		)
+
+		self.assertEqual(response.status_code, 200)
+		invoice = SaleInvoice.objects.order_by("-invoice_id").first()
+		payment = CustomerPayment.objects.get(invoice=invoice)
+		self.assertEqual(invoice.payment_method, Customer.PaymentMethod.BANK)
+		self.assertEqual(payment.method, CustomerPayment.Method.BANK)
+
 	def test_post_off_layer_sale_uses_off_layer_accounting_prefix(self):
+		Customer.objects.create(name="Bird Buyer")
 		self.client.force_login(self.user)
 
 		response = self.client.post(
@@ -190,6 +304,7 @@ class SalesPageTests(TestCase):
 		)
 
 	def test_post_sale_overpayment_creates_negative_balance(self):
+		Customer.objects.create(name="Credit Buyer")
 		self.client.force_login(self.user)
 
 		response = self.client.post(
@@ -220,6 +335,7 @@ class SalesPageTests(TestCase):
 		self.assertEqual(payment.amount, Decimal("3000.00"))
 
 	def test_booking_without_payment_is_saved_as_draft(self):
+		Customer.objects.create(name="Booking Buyer")
 		self.client.force_login(self.user)
 
 		response = self.client.post(

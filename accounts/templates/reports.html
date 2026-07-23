@@ -158,6 +158,7 @@
 </style>
 
 <div class="container-fluid">
+    
     <div class="reports-header">
         <div>
             <h1 class="reports-title">Reports Center</h1>
@@ -609,6 +610,81 @@
         margin-top: .15rem;
     }
 
+    .accounting-links {
+        background: #fff;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        margin-bottom: 1.25rem;
+        padding: 1rem;
+    }
+
+    .accounting-links__header {
+        align-items: center;
+        display: flex;
+        justify-content: space-between;
+        gap: 1rem;
+        margin-bottom: .9rem;
+    }
+
+    .accounting-links__header h4 {
+        font-size: 1rem;
+        font-weight: 800;
+        margin: 0;
+        text-transform: uppercase;
+    }
+
+    .accounting-links__grid {
+        display: grid;
+        gap: .75rem;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .accounting-link-card {
+        align-items: center;
+        background: #f8faf9;
+        border: 1px solid #e1e8e4;
+        border-radius: 8px;
+        color: #1f2933;
+        display: flex;
+        gap: .75rem;
+        min-height: 4.75rem;
+        padding: .85rem;
+        text-decoration: none;
+        transition: border-color .2s ease, box-shadow .2s ease, transform .2s ease;
+    }
+
+    .accounting-link-card:hover {
+        border-color: #208447;
+        box-shadow: 0 8px 18px rgba(31, 41, 51, .1);
+        color: #166534;
+        transform: translateY(-2px);
+    }
+
+    .accounting-link-card__icon {
+        align-items: center;
+        background: #e9f7ef;
+        border-radius: 8px;
+        color: #166534;
+        display: inline-flex;
+        flex: 0 0 2.35rem;
+        height: 2.35rem;
+        justify-content: center;
+        width: 2.35rem;
+    }
+
+    .accounting-link-card strong {
+        display: block;
+        font-size: .95rem;
+        line-height: 1.2;
+    }
+
+    .accounting-link-card__text {
+        color: #6b7280;
+        display: block;
+        font-size: .8rem;
+        margin-top: .15rem;
+    }
+
     .report-card-link {
         color: inherit;
         display: block;
@@ -834,17 +910,57 @@
             justify-content: flex-start;
         }
 
+        .accounting-link-card {
+            min-height: 4.5rem;
+        }
+
+        .accounting-links__grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
         .report-stat-grid {
             grid-template-columns: repeat(2, minmax(0, 1fr));
         }
     }
 
     @media (max-width: 576px) {
+        .accounting-links__header {
+            align-items: flex-start;
+            flex-direction: column;
+        }
+
+        .accounting-links__grid {
+            grid-template-columns: 1fr;
+        }
+
         .report-stat-grid {
             grid-template-columns: 1fr;
         }
     }
 </style>
+
+
+    <section class="accounting-links" aria-labelledby="accounting-links-title">
+        <div class="accounting-links__header">
+            <h4 id="accounting-links-title">Accounting Reports</h4>
+        </div>
+        <div class="accounting-links__grid">
+            {% for statement_card in accounting_statement_cards %}
+            <a class="accounting-link-card" href="{{ statement_card.url }}">
+                <span class="accounting-link-card__icon">
+                    <i class="bi {{ statement_card.icon }}"></i>
+                </span>
+                <span class="accounting-link-card__body">
+                    <strong>{{ statement_card.short_name }}</strong>
+                    <span class="accounting-link-card__text">{{ statement_card.description }}</span>
+                </span>
+            </a>
+            {% empty %}
+            <div class="text-muted">No active accounting statements have been created.</div>
+            {% endfor %}
+        </div>
+    </section>
+
 
 <div class="container-fluid reports-center">
     <div class="reports-header">
