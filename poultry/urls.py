@@ -6,6 +6,7 @@ urlpatterns = [
     path('birds/', views.birds, name='birds'),
     path('record_feed/', views.record_feed, name='record_feed'),
     path('feed-mixtures/', views.feed_mixtures, name='feed_mixtures'),
+    path('feed-formulas/<int:pk>/archive/', views.archive_feed_formula, name='archive_feed_formula'),
     path('record_egg/', views.record_egg, name='record_egg'),
     path('record_cleaning/', views.record_cleaning, name='record_cleaning'),
     path('workersdash/', views.workersdash, name='workersdash'),
@@ -21,5 +22,7 @@ urlpatterns = [
     path('eggrec/', views.eggrec, name='eggrec'),
     path('feedrec/', views.feedrec, name='feedrec'),
     path('investor/', views.investor, name='investor'),
+    path('investor/analysis/', views.investor_analysis, name='investor_analysis'),
+    path('investor/targets/', views.investor_targets, name='investor_targets'),
     path('add_batch/', views.add_batch, name='add_batch'),
 ]

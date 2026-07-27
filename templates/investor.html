@@ -3,6 +3,10 @@
 
 {% block title %}Investor Panel - PoultryIQ{% endblock %}
 
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/investor-builder.css' %}">
+{% endblock %}
+
 {% block content %}
 <style>
     .investor-panel {
@@ -1165,216 +1169,224 @@
         </div>
     </section>
 
-    <section class="builder-shell" id="investorBuilder" data-builder-mode-state="guided" data-guide-step="theme" hidden>
-        <div class="builder-topbar">
-            <div class="builder-title">
-                <i class="bi bi-bar-chart-steps"></i>
-                <h2>Investor Analysis Builder</h2>
+    <section class="analysis-builder-v2" id="investorBuilderV2"
+             data-analysis-url="{% url 'investor_analysis' %}"
+             data-targets-url="{% url 'investor_targets' %}"
+             data-can-edit-targets="{{ request.user.is_investor|yesno:'1,0' }}" hidden>
+        {% csrf_token %}
+        <header class="analysis-builder-head">
+            <div>
+                <span class="analysis-eyebrow">Decision workspace</span>
+                <h2><i class="bi bi-bar-chart-steps"></i> Investor Analysis Builder</h2>
+                <p>Evidence-led analysis with previous-period and farm-target comparisons.</p>
             </div>
-            <div class="builder-mode" role="group" aria-label="Builder mode">
-                <button type="button" class="is-active" data-builder-mode="guided">
-                    <i class="bi bi-magic me-1"></i>Guided
+            <div class="analysis-head-actions">
+                {% if request.user.is_investor %}
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="analysisTargetsButton">
+                    <i class="bi bi-bullseye me-1"></i>KPI targets
                 </button>
-                <button type="button" data-builder-mode="advanced">
-                    <i class="bi bi-sliders me-1"></i>Advanced
-                </button>
-            </div>
-        </div>
-
-        <div class="builder-stepper" id="builderStepper" aria-label="Builder process guide">
-            <button type="button" class="builder-step is-active" data-guide-step-target="theme">
-                <span class="builder-step-number">1</span>
-                <span>Theme</span>
-            </button>
-            <button type="button" class="builder-step" data-guide-step-target="question">
-                <span class="builder-step-number">2</span>
-                <span>Question</span>
-            </button>
-            <button type="button" class="builder-step" data-guide-step-target="indicators">
-                <span class="builder-step-number">3</span>
-                <span>Indicators</span>
-            </button>
-            <button type="button" class="builder-step" data-guide-step-target="locations">
-                <span class="builder-step-number">4</span>
-                <span>Location</span>
-            </button>
-            <button type="button" class="builder-step" data-guide-step-target="time">
-                <span class="builder-step-number">5</span>
-                <span>Time range</span>
-            </button>
-            <button type="button" class="builder-step" data-guide-step-target="generate">
-                <span class="builder-step-number">6</span>
-                <span>Generate</span>
-            </button>
-        </div>
-
-        <div class="builder-presets" id="builderPresets" data-guide-panel="question">
-            {% for preset in builder_data.presets %}
-            <button type="button" class="builder-preset" data-preset-key="{{ preset.key }}" data-preset-theme="{{ preset.theme }}">
-                <span>{{ preset.label }}</span>
-                <small>{{ preset.description }}</small>
-            </button>
-            {% endfor %}
-        </div>
-
-        <div class="builder-layout">
-            <aside class="builder-rail is-guide-visible" data-guide-panel="theme indicators">
-                <div class="builder-search" data-guide-panel="indicators">
-                    <i class="bi bi-search"></i>
-                    <input type="search" class="form-control" id="builderSearch" placeholder="Search indicators">
+                {% endif %}
+                <div class="analysis-mode-switch" role="group" aria-label="Analysis mode">
+                    <button type="button" class="is-active" data-analysis-mode="guided">
+                        <i class="bi bi-magic"></i>Guided
+                    </button>
+                    <button type="button" data-analysis-mode="analyst">
+                        <i class="bi bi-sliders"></i>Analyst
+                    </button>
                 </div>
+            </div>
+        </header>
 
-                <div class="builder-theme-list is-guide-visible" id="builderThemes" data-guide-panel="theme">
-                    <button type="button" class="builder-theme is-active" data-theme-key="all">
-                        <span><i class="bi bi-grid"></i>All indicators</span>
-                        <small>{{ builder_data.indicators|length }}</small>
-                    </button>
-                    {% for theme in builder_data.themes %}
-                    <button type="button" class="builder-theme" data-theme-key="{{ theme.key }}">
-                        <span><i class="{{ theme.icon }}"></i>{{ theme.label }}</span>
-                        <small>{{ theme.count }}</small>
-                    </button>
+        <div class="analysis-status d-none" id="analysisStatus" role="status" aria-live="polite"></div>
+
+        <div class="analysis-guided-stepper" id="analysisStepper" aria-label="Guided analysis progress">
+            <button type="button" class="is-active" data-analysis-step-target="question"><span>1</span>Business question</button>
+            <button type="button" data-analysis-step-target="scope"><span>2</span>Scope &amp; period</button>
+            <button type="button" data-analysis-step-target="report"><span>3</span>Decision report</button>
+        </div>
+
+        <section class="analysis-panel" data-analysis-panel="question">
+            <div class="analysis-panel-heading">
+                <div><span>Step 1 of 3</span><h3>What decision do you need to make?</h3></div>
+                <p>Selecting a question automatically chooses compatible indicators and report sections.</p>
+            </div>
+            <div class="analysis-question-grid">
+                {% for question in builder_catalog.questions %}
+                <button type="button" class="analysis-question" data-question-key="{{ question.key }}">
+                    <i class="{{ question.icon }}"></i>
+                    <span><strong>{{ question.label }}</strong><small>{{ question.description }}</small></span>
+                    <i class="bi bi-chevron-right"></i>
+                </button>
+                {% endfor %}
+            </div>
+            <div class="analysis-nav">
+                <span></span>
+                <button type="button" class="btn btn-primary" id="analysisQuestionNext" disabled>
+                    Continue <i class="bi bi-arrow-right ms-1"></i>
+                </button>
+            </div>
+        </section>
+
+        <section class="analysis-panel d-none" data-analysis-panel="scope">
+            <div class="analysis-panel-heading">
+                <div><span>Step 2 of 3</span><h3>Define scope and period</h3></div>
+                <p>Scope filters the records; breakdown controls how the result is organized.</p>
+            </div>
+            <div class="analysis-control-grid">
+                <div>
+                    <label class="form-label" for="analysisScopeType">Report scope</label>
+                    <select class="form-select" id="analysisScopeType">
+                        <option value="farm">Whole farm</option>
+                        <option value="house">One poultry house</option>
+                        <option value="batch">One flock batch</option>
+                    </select>
+                </div>
+                <div class="d-none" id="analysisHouseWrap">
+                    <label class="form-label" for="analysisHouse">Poultry house</label>
+                    <select class="form-select" id="analysisHouse">
+                        <option value="">Select house</option>
+                        {% for house in builder_houses %}
+                        <option value="{{ house.pk }}">{{ house.house_code }}{% if house.name %} - {{ house.name }}{% endif %}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="d-none" id="analysisBatchWrap">
+                    <label class="form-label" for="analysisBatch">Flock batch</label>
+                    <select class="form-select" id="analysisBatch">
+                        <option value="">Select batch</option>
+                        {% for batch in builder_batches %}
+                        <option value="{{ batch.pk }}">{{ batch.batch_code }} / {{ batch.house.house_code }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label" for="analysisGroupBy">Time grouping</label>
+                    <select class="form-select" id="analysisGroupBy">
+                        <option value="day">Daily</option>
+                        <option value="week">Weekly</option>
+                        <option value="month" selected>Monthly</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label" for="analysisStartDate">Start date</label>
+                    <input type="date" class="form-control" id="analysisStartDate" value="{{ start_date|date:'Y-m-d' }}">
+                </div>
+                <div>
+                    <label class="form-label" for="analysisEndDate">End date</label>
+                    <input type="date" class="form-control" id="analysisEndDate" value="{{ end_date|date:'Y-m-d' }}">
+                </div>
+            </div>
+            <div class="analysis-date-presets" aria-label="Date shortcuts">
+                <button type="button" data-date-preset="month">This month</button>
+                <button type="button" data-date-preset="quarter">This quarter</button>
+                <button type="button" data-date-preset="year">Year to date</button>
+            </div>
+            <div class="analysis-nav">
+                <button type="button" class="btn btn-outline-secondary" id="analysisScopeBack"><i class="bi bi-arrow-left me-1"></i>Back</button>
+                <button type="button" class="btn btn-primary" id="analysisScopeGenerate">
+                    Generate report <i class="bi bi-lightning-charge ms-1"></i>
+                </button>
+            </div>
+        </section>
+
+        <section class="analysis-analyst d-none" data-analysis-panel="analyst">
+            <aside class="analysis-catalogue">
+                <div class="analysis-search"><i class="bi bi-search"></i><input type="search" id="analysisMetricSearch" placeholder="Search indicators"></div>
+                <div class="analysis-theme-tabs">
+                    <button type="button" class="is-active" data-analysis-theme="all">All</button>
+                    {% for theme in builder_catalog.themes %}
+                    <button type="button" data-analysis-theme="{{ theme.key }}">{{ theme.label }} <span>{{ theme.count }}</span></button>
                     {% endfor %}
                 </div>
-
-                <div class="indicator-list" id="builderIndicatorList" data-guide-panel="indicators">
-                    {% for indicator in builder_data.indicators %}
-                    <label class="indicator-option"
-                           data-indicator-key="{{ indicator.key }}"
-                           data-theme="{{ indicator.theme }}"
-                           data-featured="{{ indicator.featured|yesno:'1,0' }}"
-                           data-search="{{ indicator.label|lower }} {{ indicator.unit|lower }}">
-                        <input type="checkbox" value="{{ indicator.key }}">
-                        <span>
-                            <strong><i class="{{ indicator.icon }} me-1"></i>{{ indicator.label }}</strong>
-                            <span>{{ indicator.unit }}</span>
-                        </span>
+                <div class="analysis-metric-list" id="analysisMetricList">
+                    {% for metric in builder_catalog.metrics %}
+                    <label class="analysis-metric" data-theme="{{ metric.theme }}" data-search="{{ metric.label|lower }} {{ metric.unit|lower }}">
+                        <input type="checkbox" value="{{ metric.key }}">
+                        <span><strong>{{ metric.label }}</strong><small>{{ metric.definition }} · {{ metric.unit }}</small></span>
                     </label>
                     {% endfor %}
                 </div>
+                <small class="analysis-selection-count" id="analysisSelectionCount">0 of 6 selected</small>
             </aside>
-
-            <div class="builder-workspace">
-                <div class="builder-guide-note" id="builderGuideNote">
-                    <strong>Choose a theme</strong>
-                    <span>Start with the analysis area the investor wants to understand.</span>
-                </div>
-
-                <div class="builder-controlbar" data-guide-panel="locations generate">
+            <div class="analysis-analyst-controls">
+                <h3>Configure analysis</h3>
+                <p class="text-muted">Only breakdowns shared by every selected indicator are available.</p>
+                <div class="analysis-control-grid">
                     <div>
-                        <label class="form-label" for="builderDimension">Location / selection</label>
-                        <select class="form-select" id="builderDimension">
-                            {% for dimension in builder_data.dimensions %}
-                            <option value="{{ dimension.key }}">{{ dimension.label }}</option>
-                            {% endfor %}
+                        <label class="form-label" for="analysisDimension">Break down by</label>
+                        <select class="form-select" id="analysisDimension"></select>
+                    </div>
+                    <div>
+                        <label class="form-label" for="analysisView">Visualization</label>
+                        <select class="form-select" id="analysisView">
+                            <option value="bar">Bar chart</option>
+                            <option value="line">Line chart</option>
+                            <option value="area">Area chart</option>
+                            <option value="pie">Pie chart</option>
+                            <option value="table">Table</option>
                         </select>
                     </div>
                 </div>
-
-                <div class="builder-timebar" data-guide-panel="time generate">
-                    <div>
-                        <label class="form-label" for="builderStartDate">Start date</label>
-                        <input type="date" class="form-control" id="builderStartDate" value="{{ start_date|date:'Y-m-d' }}">
-                    </div>
-                    <div>
-                        <label class="form-label" for="builderEndDate">End date</label>
-                        <input type="date" class="form-control" id="builderEndDate" value="{{ end_date|date:'Y-m-d' }}">
-                    </div>
+                <div class="analysis-analyst-scope-note">
+                    <i class="bi bi-info-circle"></i>
+                    Analyst mode uses the scope and date controls above. Configure them, then return here to generate.
                 </div>
-
-                <div class="builder-visualbar" data-guide-panel="generate">
-                    <div>
-                        <label class="form-label">Visualization</label>
-                        <div class="builder-view" id="builderViewMode" role="group" aria-label="Builder view">
-                            <button type="button" class="is-active" data-view-mode="bar" title="Bar chart"><i class="bi bi-bar-chart"></i></button>
-                            <button type="button" data-view-mode="line" title="Line chart"><i class="bi bi-graph-up"></i></button>
-                            <button type="button" data-view-mode="area" title="Area chart"><i class="bi bi-activity"></i></button>
-                            <button type="button" data-view-mode="pie" title="Pie chart"><i class="bi bi-pie-chart"></i></button>
-                            <button type="button" data-view-mode="table" title="Table"><i class="bi bi-table"></i></button>
-                        </div>
-                    </div>
-                    <div class="builder-actions">
-                        <button type="button" class="btn btn-primary" id="builderGenerate">
-                            <i class="bi bi-lightning-charge me-1"></i>Generate
-                        </button>
-                        <button type="button" class="btn btn-outline-secondary" id="builderExportCsv">
-                            <i class="bi bi-filetype-csv me-1"></i>CSV
-                        </button>
-                        <button type="button" class="btn btn-outline-secondary" id="builderExportImage">
-                            <i class="bi bi-image me-1"></i>Image
-                        </button>
-                        <button type="button" class="btn btn-outline-secondary" id="builderFullscreen">
-                            <i class="bi bi-fullscreen"></i>
-                        </button>
-                    </div>
+                <div class="analysis-analyst-actions">
+                    <button type="button" class="btn btn-outline-secondary" id="analysisEditScope">Edit scope &amp; period</button>
+                    <button type="button" class="btn btn-primary" id="analysisAnalystGenerate" disabled>Generate analysis</button>
                 </div>
+            </div>
+        </section>
 
-                <div class="builder-summarybar" data-guide-panel="generate">
-                    <div class="builder-summary-item">
-                        <span>Indicators</span>
-                        <strong id="builderIndicatorCount">0 selected</strong>
-                    </div>
-                    <div class="builder-summary-item">
-                        <span>Breakdown</span>
-                        <strong id="builderBreakdownLabel">Monthly trend</strong>
-                    </div>
-                    <div class="builder-summary-item">
-                        <span>Rows</span>
-                        <strong id="builderRowCount">0</strong>
-                    </div>
-                    <div class="builder-summary-item">
-                        <span>Range</span>
-                        <strong id="builderRangeLabel">{{ start_date|date:"d M Y" }} - {{ end_date|date:"d M Y" }}</strong>
-                    </div>
+        <section class="analysis-report d-none" data-analysis-panel="report" id="analysisReport">
+            <header class="analysis-report-head">
+                <div>
+                    <span class="analysis-eyebrow">Generated decision report</span>
+                    <h3 id="analysisReportTitle">Investor analysis</h3>
+                    <p id="analysisReportMeta"></p>
                 </div>
-
-                <div class="builder-selected" id="builderSelectedChips" data-guide-panel="generate"></div>
-
-                <div class="builder-output" id="builderOutput" data-guide-panel="generate">
-                    <div class="builder-output-head">
-                        <div>
-                            <h3 id="builderChartTitle">Custom farm indicators</h3>
-                            <span id="builderChartSubtitle">Generated from PoultryIQ farm records</span>
-                        </div>
-                        <span id="builderGeneratedMeta">Ready</span>
-                    </div>
-                    <div class="builder-result-brief" id="builderResultBrief">
-                        <div>
-                            <span>Summary</span>
-                            <strong id="builderResultSummary">Choose indicators to generate an investor view.</strong>
-                        </div>
-                        <div>
-                            <span>Key finding</span>
-                            <strong id="builderResultFinding">The strongest signal will appear here.</strong>
-                        </div>
-                        <div>
-                            <span>Recommendation</span>
-                            <strong id="builderResultRecommendation">Select a business question to guide the analysis.</strong>
-                        </div>
-                    </div>
-                    <div class="builder-chart-wrap" id="builderChartWrap">
-                        <canvas id="builderChart"></canvas>
-                    </div>
-                    <div class="builder-table-wrap" id="builderTableWrap">
-                        <table class="table table-sm align-middle mb-0" id="builderTable">
-                            <thead></thead>
-                            <tbody></tbody>
-                        </table>
-                    </div>
-                    <div class="builder-empty d-none" id="builderEmpty">No indicators selected.</div>
+                <div class="analysis-report-actions">
+                    <button type="button" class="btn btn-outline-secondary btn-sm" id="analysisCsv"><i class="bi bi-filetype-csv"></i> CSV</button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" id="analysisPng"><i class="bi bi-image"></i> PNG</button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" id="analysisPrint"><i class="bi bi-printer"></i> Print / PDF</button>
                 </div>
+            </header>
+            <div class="analysis-coverage" id="analysisCoverage"></div>
+            <div class="analysis-kpi-grid" id="analysisKpis"></div>
+            <div class="analysis-highlights d-none" id="analysisHighlights"></div>
+            <div class="analysis-section-list" id="analysisSections"></div>
+            <div class="analysis-detail-table table-responsive" id="analysisDetailTable"></div>
+            <div class="analysis-nav analysis-report-nav">
+                <button type="button" class="btn btn-outline-secondary" id="analysisReportBack"><i class="bi bi-arrow-left me-1"></i>Edit analysis</button>
+                <span id="analysisGeneratedAt"></span>
+            </div>
+        </section>
+    </section>
 
-                <div class="builder-guide-nav is-guide-visible" id="builderGuideNav">
-                    <button type="button" class="btn btn-outline-secondary" id="builderStepBack">
-                        <i class="bi bi-arrow-left me-1"></i>Back
-                    </button>
-                    <button type="button" class="btn btn-primary" id="builderStepNext">
-                        Continue <i class="bi bi-arrow-right ms-1"></i>
-                    </button>
+    <div class="modal fade" id="analysisTargetsModal" tabindex="-1" aria-labelledby="analysisTargetsTitle" aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <div><h5 class="modal-title" id="analysisTargetsTitle">Farm KPI targets</h5><small class="text-muted">New values retain effective-date history.</small></div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="analysisTargetForm" class="analysis-target-form">
+                        <div><label class="form-label" for="analysisTargetMetric">Indicator</label><select class="form-select" id="analysisTargetMetric">
+                            {% for metric in builder_catalog.targetMetrics %}
+                            <option value="{{ metric.key }}">{{ metric.label }} · {{ metric.unit }}</option>
+                            {% endfor %}
+                        </select></div>
+                        <div><label class="form-label" for="analysisTargetValue">Target value</label><input type="number" step="0.0001" class="form-control" id="analysisTargetValue" required></div>
+                        <div><label class="form-label" for="analysisTargetDate">Effective from</label><input type="date" class="form-control" id="analysisTargetDate" value="{{ today|date:'Y-m-d' }}" required></div>
+                        <button type="submit" class="btn btn-primary">Add target version</button>
+                    </form>
+                    <div id="analysisTargetStatus" class="mt-3" role="status"></div>
+                    <div class="table-responsive mt-3"><table class="table align-middle"><thead><tr><th>Indicator</th><th>Rule</th><th>Value</th><th>Effective period</th><th>Set by</th></tr></thead><tbody id="analysisTargetHistory"></tbody></table></div>
                 </div>
             </div>
         </div>
-    </section>
+    </div>
 
     <div class="investor-grid">
         <div id="builderCardMount">
@@ -1615,8 +1627,9 @@
 
 {{ chart_data|json_script:"investor-chart-data" }}
 {{ financial_chart_data|json_script:"investor-financial-data" }}
-{{ builder_data|json_script:"investor-builder-data" }}
+{{ builder_catalog|json_script:"investor-builder-catalog" }}
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="{% static 'js/investor.js' %}"></script>
+<script src="{% static 'js/investor-builder.js' %}"></script>
 {% endblock %}

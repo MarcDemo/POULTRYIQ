@@ -1,3 +1,5 @@
+import json
+
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -5,10 +7,12 @@ from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import Avg, Count, DecimalField, Max, Q, Sum, Value
 from django.db.models.functions import Coalesce
+from django.http import JsonResponse
 from django.utils.timezone import is_naive, localdate, localtime, make_aware, now
+from django.views.decorators.http import require_http_methods, require_POST
 from datetime import date, timedelta
 from datetime import datetime
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 from accounts.decorators import worker_required, supervisor_required
 from accounts.models import InvestorCapitalTransaction, User
@@ -29,15 +33,29 @@ from .models import (
     PoultryHouse,
     egg_collection,
     FeedRecord,
+    FeedFormulaTemplate,
+    FeedFormulaIngredient,
     FeedMixture,
     FeedMixtureAllocation,
     FeedMixtureIngredient,
+    FlockStage,
+    InvestorKpiTarget,
+    flock_stage_for_age_days,
     CleaningRecord,
     CleaningPhoto,
     MortalityRecord,
     ApprovalStatus,
 )
 from .forms import PoultryBatchForm
+from .services.investor_analysis import (
+    DIMENSIONS as INVESTOR_DIMENSIONS,
+    GUIDED_QUESTIONS,
+    METRIC_CATALOG,
+    build_report,
+    catalogue_payload,
+    create_target_version,
+    target_payload,
+)
 
 
 def _batch_cycle_stage(batch):
@@ -412,10 +430,16 @@ def _mixtures_for_worker_batches(batches):
     return (
         FeedMixture.objects.filter(
             mix_date=date.today(),
-            allocations__house__in=batches.values("house"),
+        )
+        .filter(
+            Q(allocations__batch__in=batches)
+            | Q(
+                allocations__batch__isnull=True,
+                allocations__house__in=batches.values("house"),
+            )
         )
         .select_related("mixed_by")
-        .prefetch_related("allocations__house", "ingredients")
+        .prefetch_related("allocations__house", "allocations__batch", "ingredients")
         .distinct()
         .order_by("-created_at")
     )
@@ -427,6 +451,44 @@ def _stock_for_item(item):
     stock_out = transactions.filter(tx_type=InventoryTransaction.TxType.OUT).aggregate(total=Sum("quantity"))["total"] or Decimal("0.000")
     adjustments = transactions.filter(tx_type=InventoryTransaction.TxType.ADJUST).aggregate(total=Sum("quantity"))["total"] or Decimal("0.000")
     return stock_in - stock_out + adjustments
+
+
+def scale_formula_ingredients(formula, target_weight_kg):
+    """Return persisted-ready ingredient lines scaled to an exact two-decimal total."""
+    target_weight_kg = Decimal(target_weight_kg).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    reference_weight = Decimal(formula.reference_weight_kg)
+    if target_weight_kg <= 0 or reference_weight <= 0:
+        return []
+
+    formula_lines = list(formula.ingredients.select_related("item").order_by("sort_order", "formula_ingredient_id"))
+    if not formula_lines:
+        return []
+
+    scale = target_weight_kg / reference_weight
+    scaled = [
+        {
+            "item": line.item,
+            "feed_type": FeedRecord.FeedType.OTHER,
+            "ingredient_name": line.item.name,
+            "quantity_kg": (line.quantity_kg * scale).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP),
+        }
+        for line in formula_lines
+    ]
+    scaled = [line for line in scaled if line["quantity_kg"] > 0]
+    if not scaled:
+        return []
+
+    scaled_total = sum((line["quantity_kg"] for line in scaled), Decimal("0.00"))
+    scaled[-1]["quantity_kg"] += target_weight_kg - scaled_total
+    return scaled
+
+
+def _batch_formula_stage(batch):
+    return flock_stage_for_age_days(batch.current_age_days)
+
+
+def _stage_label(stage):
+    return dict(FlockStage.choices).get(stage, stage)
 
 
 def _build_investor_builder_data(start_date, end_date, group_by):
@@ -1649,12 +1711,12 @@ def record_feed(request):
         if not selected_batch:
             errors.append("Please select a valid batch from your assigned houses.")
         elif feed_mixture_id:
-            selected_mixture = available_mixtures.filter(
-                pk=feed_mixture_id,
-                allocations__house=selected_batch.house,
+            selected_mixture = available_mixtures.filter(pk=feed_mixture_id).filter(
+                Q(allocations__batch=selected_batch)
+                | Q(allocations__batch__isnull=True, allocations__house=selected_batch.house)
             ).first()
             if not selected_mixture:
-                errors.append("Please select a mixture assigned to this house.")
+                errors.append("Please select a mixture assigned to this flock.")
         else:
             errors.append("Please select a supervisor feed mixture.")
 
@@ -1667,13 +1729,22 @@ def record_feed(request):
             errors.append("Please provide a valid quantity.")
 
         if selected_mixture and selected_batch and quantity_kg is not None:
-            allocation = selected_mixture.allocations.filter(house=selected_batch.house).first()
+            allocation = selected_mixture.allocations.filter(batch=selected_batch).first()
+            if allocation is None:
+                allocation = selected_mixture.allocations.filter(
+                    batch__isnull=True,
+                    house=selected_batch.house,
+                ).first()
             allocated_kg = allocation.quantity_kg if allocation else Decimal("0.00")
-            already_recorded_kg = FeedRecord.objects.filter(
+            recorded_feed = FeedRecord.objects.filter(
                 feed_mixture=selected_mixture,
-                batch__house=selected_batch.house,
                 record_date=record_date or date.today(),
-            ).exclude(status=ApprovalStatus.REJECTED).aggregate(total=Sum("quantity_kg"))["total"] or Decimal("0.00")
+            ).exclude(status=ApprovalStatus.REJECTED)
+            if allocation and allocation.batch_id:
+                recorded_feed = recorded_feed.filter(batch=selected_batch)
+            else:
+                recorded_feed = recorded_feed.filter(batch__house=selected_batch.house)
+            already_recorded_kg = recorded_feed.aggregate(total=Sum("quantity_kg"))["total"] or Decimal("0.00")
             if already_recorded_kg + quantity_kg > allocated_kg:
                 remaining_kg = max(allocated_kg - already_recorded_kg, Decimal("0.00"))
                 errors.append(
@@ -1820,7 +1891,20 @@ def record_egg(request):
 
 @supervisor_required
 def feed_mixtures(request):
-    houses = PoultryHouse.objects.filter(is_active=True).order_by("house_code")
+    role_code = _role_code(request.user)
+    batches = PoultryBatch.objects.filter(
+        status=PoultryBatch.Status.ACTIVE,
+        house__is_active=True,
+    ).select_related("house").order_by("house__house_code", "batch_code")
+    if role_code == "SUPERVISOR":
+        batches = batches.filter(house__in=request.user.houses.all())
+    batches = list(batches)
+    batch_by_id = {str(batch.pk): batch for batch in batches}
+    for batch in batches:
+        batch.formula_stage = _batch_formula_stage(batch)
+        batch.formula_stage_label = _stage_label(batch.formula_stage)
+        batch.age_weeks = batch.current_age_days // 7
+
     store, _ = Store.objects.get_or_create(
         name="Main Store",
         defaults={"location_note": "Primary farm store", "is_active": True},
@@ -1834,24 +1918,42 @@ def feed_mixtures(request):
     for item in feed_items:
         item.available_kg = feed_item_stock.get(item.pk, Decimal("0.000"))
 
+    formula_templates = list(
+        FeedFormulaTemplate.objects.filter(is_active=True)
+        .select_related("created_by")
+        .prefetch_related("ingredients__item__category")
+        .order_by("-is_system", "concentration_percent", "name", "flock_stage")
+    )
+    formula_by_id = {str(formula.pk): formula for formula in formula_templates}
+
     if request.method == "POST":
         name = request.POST.get("name", "").strip()
         mix_date_raw = request.POST.get("mix_date", "").strip()
+        primary_batch_id = request.POST.get("primary_batch", "").strip()
+        formula_id = request.POST.get("formula_template", "").strip()
+        target_weight_raw = request.POST.get("target_weight_kg", "").strip()
         total_weight_raw = request.POST.get("total_weight_kg", "").strip()
         notes = request.POST.get("notes", "").strip()
+        save_custom = request.POST.get("save_custom") == "on"
+        custom_formula_name = request.POST.get("custom_formula_name", "").strip()
         ingredient_items = request.POST.getlist("ingredient_item")
         ingredient_quantities = request.POST.getlist("ingredient_quantity")
-        allocation_houses = request.POST.getlist("allocation_house")
+        allocation_batches = request.POST.getlist("allocation_batch")
         allocation_quantities = request.POST.getlist("allocation_quantity")
 
         errors = []
         ingredients = []
         allocations = []
         ingredient_totals_by_item = {}
+        selected_formula = None
+        primary_batch = batch_by_id.get(primary_batch_id)
+        flock_stage = _batch_formula_stage(primary_batch) if primary_batch else ""
+        target_weight_kg = None
         total_weight_kg = None
+        saved_formula_name = ""
 
-        if not name:
-            errors.append("Please name this mixture.")
+        if not primary_batch:
+            errors.append("Please select a valid active flock from your assigned houses.")
 
         try:
             mix_date = date.fromisoformat(mix_date_raw)
@@ -1863,73 +1965,128 @@ def feed_mixtures(request):
             errors.append("Feed mixtures can only be recorded for today.")
 
         try:
-            total_weight_kg = Decimal(total_weight_raw)
+            target_weight_kg = Decimal(target_weight_raw).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+            if target_weight_kg <= 0:
+                errors.append("Planned mixture kg must be greater than zero.")
+        except (InvalidOperation, ValueError):
+            errors.append("Please enter a valid planned mixture weight.")
+
+        try:
+            total_weight_kg = Decimal(total_weight_raw).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
             if total_weight_kg <= 0:
                 errors.append("Total weighed kg must be greater than zero.")
         except (InvalidOperation, ValueError):
             errors.append("Please enter the total weighed kg after mixing.")
 
-        for item_id, quantity_raw in zip(ingredient_items, ingredient_quantities):
+        if formula_id and formula_id != "custom":
+            selected_formula = formula_by_id.get(formula_id)
+            if not selected_formula:
+                errors.append("Please select an active feed formula.")
+            elif primary_batch and selected_formula.flock_stage != flock_stage:
+                errors.append("The selected formula does not match this flock's current age stage.")
+            elif target_weight_kg is not None:
+                ingredients = scale_formula_ingredients(selected_formula, target_weight_kg)
+                if not ingredients:
+                    errors.append("The selected formula has no usable ingredients.")
+                for ingredient in ingredients:
+                    item = ingredient["item"]
+                    if not item.is_active or item.category.code.upper() != "FEED":
+                        errors.append(f"{item.name} is not an active feed inventory item.")
+        elif formula_id == "custom":
+            seen_item_ids = set()
+            for item_id, quantity_raw in zip(ingredient_items, ingredient_quantities):
+                quantity_raw = quantity_raw.strip()
+                if not item_id and not quantity_raw:
+                    continue
+                item = next((candidate for candidate in feed_items if str(candidate.pk) == item_id), None)
+                if not item:
+                    errors.append("Please select a valid active feed stock item.")
+                    continue
+                if item.pk in seen_item_ids:
+                    errors.append(f"{item.name} can only appear once in a custom formula.")
+                    continue
+                seen_item_ids.add(item.pk)
+                try:
+                    quantity_kg = Decimal(quantity_raw).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+                    if quantity_kg <= 0:
+                        errors.append("Ingredient kg must be greater than zero.")
+                        continue
+                except (InvalidOperation, ValueError):
+                    errors.append("Please enter valid ingredient kg values.")
+                    continue
+                ingredients.append({
+                    "item": item,
+                    "feed_type": FeedRecord.FeedType.OTHER,
+                    "ingredient_name": item.name,
+                    "quantity_kg": quantity_kg,
+                })
+            if save_custom:
+                if not custom_formula_name:
+                    errors.append("Name the custom formula before saving it for reuse.")
+                elif primary_batch and FeedFormulaTemplate.objects.filter(
+                    name__iexact=custom_formula_name,
+                    flock_stage=flock_stage,
+                    is_active=True,
+                ).exists():
+                    errors.append("An active formula with this name already exists for the flock stage.")
+                else:
+                    saved_formula_name = custom_formula_name
+        else:
+            errors.append("Please choose a standard, saved, or custom formula.")
+
+        for batch_id, quantity_raw in zip(allocation_batches, allocation_quantities):
             quantity_raw = quantity_raw.strip()
-            if not item_id and not quantity_raw:
+            if not batch_id and not quantity_raw:
                 continue
-            item = Item.objects.filter(pk=item_id, is_active=True, category__code__iexact="FEED").first()
-            if not item:
-                errors.append("Please select a valid feed stock item.")
+            batch = batch_by_id.get(batch_id)
+            if not batch:
+                errors.append("Please select valid active flocks for distribution.")
+                continue
+            if primary_batch and _batch_formula_stage(batch) != flock_stage:
+                errors.append(f"{batch.batch_code} is not in the same feed stage as the primary flock.")
                 continue
             try:
-                quantity_kg = Decimal(quantity_raw)
+                quantity_kg = Decimal(quantity_raw).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
                 if quantity_kg <= 0:
-                    errors.append("Ingredient kg must be greater than zero.")
+                    errors.append("Flock allocation kg must be greater than zero.")
                     continue
             except (InvalidOperation, ValueError):
-                errors.append("Please enter valid ingredient kg values.")
+                errors.append("Please enter valid flock allocation kg values.")
                 continue
-            available_kg = feed_item_stock.get(item.pk, Decimal("0.000"))
-            if quantity_kg > available_kg:
-                errors.append(f"Only {available_kg} kg of {item.name} is available in stock.")
-            ingredient_totals_by_item[item.pk] = ingredient_totals_by_item.get(item.pk, Decimal("0.00")) + quantity_kg
-            ingredients.append({
-                "item": item,
-                "feed_type": FeedRecord.FeedType.OTHER,
-                "ingredient_name": item.name,
-                "quantity_kg": quantity_kg,
-            })
+            allocations.append({"batch": batch, "house": batch.house, "quantity_kg": quantity_kg})
 
-        for house_id, quantity_raw in zip(allocation_houses, allocation_quantities):
-            quantity_raw = quantity_raw.strip()
-            if not house_id or not quantity_raw:
-                continue
-            house = houses.filter(pk=house_id).first()
-            if not house:
-                errors.append("Please select valid houses for distribution.")
-                continue
-            try:
-                quantity_kg = Decimal(quantity_raw)
-                if quantity_kg <= 0:
-                    errors.append("House allocation kg must be greater than zero.")
-                    continue
-            except (InvalidOperation, ValueError):
-                errors.append("Please enter valid house allocation kg values.")
-                continue
-            allocations.append({"house": house, "quantity_kg": quantity_kg})
-
-        allocation_house_ids = [item["house"].pk for item in allocations]
-        if len(allocation_house_ids) != len(set(allocation_house_ids)):
-            errors.append("Each house should appear only once in the distribution list.")
+        allocation_batch_ids = [item["batch"].pk for item in allocations]
+        if len(allocation_batch_ids) != len(set(allocation_batch_ids)):
+            errors.append("Each flock should appear only once in the distribution list.")
+        if primary_batch and primary_batch.pk not in allocation_batch_ids:
+            errors.append("The primary flock must be included in the distribution.")
 
         if not ingredients:
             errors.append("Add at least one feed ingredient.")
         if not allocations:
-            errors.append("Assign the mixture to at least one house.")
-        for item in feed_items:
-            requested_kg = ingredient_totals_by_item.get(item.pk, Decimal("0.00"))
-            available_kg = feed_item_stock.get(item.pk, Decimal("0.000"))
-            if requested_kg > available_kg:
-                errors.append(f"Total {item.name} used is {requested_kg} kg, but only {available_kg} kg is available.")
+            errors.append("Assign the mixture to at least one flock.")
+
+        for ingredient in ingredients:
+            item = ingredient["item"]
+            ingredient_totals_by_item[item.pk] = (
+                ingredient_totals_by_item.get(item.pk, Decimal("0.00"))
+                + ingredient["quantity_kg"]
+            )
+        for item_id, requested_kg in ingredient_totals_by_item.items():
+            item = next((candidate for candidate in feed_items if candidate.pk == item_id), None)
+            if item is None and selected_formula:
+                item = next(
+                    (line["item"] for line in ingredients if line["item"].pk == item_id),
+                    None,
+                )
+            available_kg = feed_item_stock.get(item_id, Decimal("0.000"))
+            if item and requested_kg > available_kg:
+                errors.append(f"Only {available_kg} kg of {item.name} is available; {requested_kg} kg is required.")
 
         total_ingredients = sum((item["quantity_kg"] for item in ingredients), Decimal("0.00"))
         total_allocations = sum((item["quantity_kg"] for item in allocations), Decimal("0.00"))
+        if target_weight_kg is not None and total_ingredients != target_weight_kg:
+            errors.append("Ingredient quantities must add up to the planned mixture weight.")
         if total_allocations > total_ingredients:
             errors.append("Total kg assigned to houses cannot be more than the kg mixed.")
         if total_weight_kg is not None and total_weight_kg > total_ingredients:
@@ -1942,9 +2099,38 @@ def feed_mixtures(request):
                 messages.error(request, error)
         else:
             with transaction.atomic():
+                if formula_id == "custom" and save_custom:
+                    selected_formula = FeedFormulaTemplate.objects.create(
+                        name=saved_formula_name,
+                        flock_stage=flock_stage,
+                        reference_weight_kg=target_weight_kg,
+                        source="Farm custom formula",
+                        is_system=False,
+                        is_active=True,
+                        created_by=request.user,
+                    )
+                    FeedFormulaIngredient.objects.bulk_create([
+                        FeedFormulaIngredient(
+                            formula=selected_formula,
+                            item=item["item"],
+                            quantity_kg=item["quantity_kg"],
+                            sort_order=index,
+                        )
+                        for index, item in enumerate(ingredients, start=1)
+                    ])
+
+                formula_name = (
+                    selected_formula.name
+                    if selected_formula
+                    else custom_formula_name or "Custom formula"
+                )
                 mixture = FeedMixture.objects.create(
-                    name=name,
+                    name=name or f"{formula_name} - {_stage_label(flock_stage)}",
                     mix_date=mix_date,
+                    formula_template=selected_formula,
+                    formula_name_snapshot=formula_name,
+                    flock_stage=flock_stage,
+                    planned_weight_kg=total_ingredients,
                     total_weight_kg=total_weight_kg,
                     notes=notes,
                     mixed_by=request.user,
@@ -1972,18 +2158,74 @@ def feed_mixtures(request):
             return redirect("feed_mixtures")
 
     recent_mixtures = (
-        FeedMixture.objects.select_related("mixed_by")
-        .prefetch_related("ingredients", "allocations__house")
+        FeedMixture.objects.select_related("mixed_by", "formula_template")
+        .prefetch_related("ingredients", "allocations__house", "allocations__batch")
         .order_by("-mix_date", "-created_at")[:20]
     )
 
+    formula_payload = []
+    for formula in formula_templates:
+        formula_payload.append({
+            "id": str(formula.pk),
+            "name": formula.name,
+            "stage": formula.flock_stage,
+            "stageLabel": formula.get_flock_stage_display(),
+            "referenceWeight": str(formula.reference_weight_kg),
+            "isSystem": formula.is_system,
+            "ingredients": [
+                {
+                    "itemId": str(line.item_id),
+                    "name": line.item.name,
+                    "quantity": str(line.quantity_kg),
+                    "available": str(feed_item_stock.get(line.item_id, Decimal("0.000"))),
+                }
+                for line in formula.ingredients.all()
+            ],
+        })
+
+    batch_payload = [
+        {
+            "id": str(batch.pk),
+            "houseId": str(batch.house_id),
+            "label": f"{batch.house.house_code} - {batch.batch_code}",
+            "stage": batch.formula_stage,
+            "stageLabel": batch.formula_stage_label,
+            "ageDays": batch.current_age_days,
+        }
+        for batch in batches
+    ]
+
     return render(request, "feed_mixtures.html", {
         "today": date.today(),
-        "houses": houses,
+        "batches": batches,
         "feed_items": feed_items,
         "feed_item_stock": feed_item_stock,
+        "formula_templates": formula_templates,
+        "formula_payload": formula_payload,
+        "batch_payload": batch_payload,
+        "custom_templates": [formula for formula in formula_templates if not formula.is_system],
         "recent_mixtures": recent_mixtures,
     })
+
+
+@supervisor_required
+def archive_feed_formula(request, pk):
+    if request.method != "POST":
+        return redirect("feed_mixtures")
+
+    formula = get_object_or_404(FeedFormulaTemplate, pk=pk)
+    role_code = _role_code(request.user)
+    if formula.is_system:
+        messages.error(request, "System feed formulas cannot be archived.")
+    elif role_code == "SUPERVISOR" and formula.created_by_id != request.user.pk:
+        messages.error(request, "You can only archive custom formulas that you created.")
+    elif not formula.is_active:
+        messages.info(request, "This custom formula is already archived.")
+    else:
+        formula.is_active = False
+        formula.save(update_fields=["is_active"])
+        messages.success(request, f"{formula.name} was archived. Past mixtures were not changed.")
+    return redirect("feed_mixtures")
 
 
 @worker_required
@@ -2470,8 +2712,8 @@ def feedrec(request):
     show_feed_records = role_code in {"MANAGER", "OWNER"}
 
     recent_mixtures = (
-        FeedMixture.objects.select_related("mixed_by")
-        .prefetch_related("ingredients", "allocations__house")
+        FeedMixture.objects.select_related("mixed_by", "formula_template")
+        .prefetch_related("ingredients", "allocations__house", "allocations__batch")
         .order_by("-mix_date", "-created_at")
     )
     mixtures_page_obj, mixtures_querystring = paginate(
@@ -2512,6 +2754,206 @@ def feedrec(request):
     })
 
 
+def _hydrate_legacy_analysis_metrics(report, start_date, end_date, group_by):
+    unresolved = report.get("unresolvedMetricKeys") or []
+    if not unresolved:
+        return report
+
+    previous_range = report["meta"]["previousRange"]
+    previous_start = date.fromisoformat(previous_range["start"])
+    previous_end = date.fromisoformat(previous_range["end"])
+    current_data = _build_investor_builder_data(start_date, end_date, group_by)
+    previous_data = _build_investor_builder_data(previous_start, previous_end, group_by)
+    current_by_key = {item["key"]: item for item in current_data["indicators"]}
+    previous_by_key = {item["key"]: item for item in previous_data["indicators"]}
+    dimension = report["meta"]["dimension"]
+
+    for key in unresolved:
+        metadata = METRIC_CATALOG[key]
+        current = current_by_key.get(key)
+        if current is None:
+            continue
+        previous = previous_by_key.get(key) if metadata["comparisonSupported"] else None
+        value = current.get("summary")
+        previous_value = previous.get("summary") if previous else None
+        absolute_change = None
+        percent_change = None
+        variance_state = "unavailable"
+        if value is not None and previous_value is not None:
+            absolute_change = value - previous_value
+            if previous_value:
+                percent_change = absolute_change / abs(previous_value) * 100
+            if absolute_change == 0 or metadata["performanceDirection"] == "neutral":
+                variance_state = "neutral"
+            elif metadata["performanceDirection"] == "higher":
+                variance_state = "favorable" if absolute_change > 0 else "unfavorable"
+            else:
+                variance_state = "favorable" if absolute_change < 0 else "unfavorable"
+        points = current.get("dimensions", {}).get(
+            dimension,
+            [{"label": "Selected period", "value": value}],
+        )
+        metric = {
+            **metadata,
+            "value": value,
+            "points": points,
+            "records": None,
+            "hasData": any(point.get("value") not in (None, 0) for point in points),
+            "previousValue": previous_value,
+            "absoluteChange": absolute_change,
+            "percentChange": percent_change,
+            "varianceState": variance_state,
+            "target": target_payload(key, value, None),
+        }
+        report["metrics"].append(metric)
+        section = next(
+            (item for item in report["sections"] if item["key"] == metadata["unitGroup"]),
+            None,
+        )
+        if section:
+            section["metricKeys"].append(key)
+        else:
+            report["sections"].append({
+                "key": metadata["unitGroup"],
+                "title": "Additional measures",
+                "metricKeys": [key],
+            })
+    report["unresolvedMetricKeys"] = []
+    report["meta"]["usedLegacyCompatibility"] = True
+    return report
+
+
+@login_required(login_url="login")
+@require_POST
+def investor_analysis(request):
+    try:
+        payload = json.loads(request.body or "{}")
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON request."}, status=400)
+
+    mode = payload.get("mode", "guided")
+    if mode not in {"guided", "analyst"}:
+        return JsonResponse({"error": "Mode must be guided or analyst."}, status=400)
+    question_key = payload.get("questionKey", "")
+    if mode == "guided" and question_key not in GUIDED_QUESTIONS:
+        return JsonResponse({"error": "Select a valid investor question."}, status=400)
+
+    metric_keys = payload.get("metricKeys") or []
+    if mode == "analyst":
+        if not isinstance(metric_keys, list) or not 1 <= len(metric_keys) <= 6:
+            return JsonResponse({"error": "Analyst reports require one to six indicators."}, status=400)
+        if len(metric_keys) != len(set(metric_keys)) or any(key not in METRIC_CATALOG for key in metric_keys):
+            return JsonResponse({"error": "One or more indicators are invalid or duplicated."}, status=400)
+
+    try:
+        start_date = date.fromisoformat(payload.get("startDate", ""))
+        end_date = date.fromisoformat(payload.get("endDate", ""))
+    except (TypeError, ValueError):
+        return JsonResponse({"error": "Provide valid start and end dates."}, status=400)
+    if start_date > end_date:
+        return JsonResponse({"error": "Start date cannot be after end date."}, status=400)
+    if (end_date - start_date).days > 1095:
+        return JsonResponse({"error": "Analysis ranges cannot exceed three years."}, status=400)
+
+    group_by = payload.get("groupBy", "month")
+    if group_by not in {"day", "week", "month"}:
+        return JsonResponse({"error": "Grouping must be day, week, or month."}, status=400)
+    scope_type = payload.get("scopeType", "farm")
+    scope_id = payload.get("scopeId")
+    if scope_type not in {"farm", "house", "batch"}:
+        return JsonResponse({"error": "Scope must be farm, house, or batch."}, status=400)
+    if scope_type == "house" and not PoultryHouse.objects.filter(pk=scope_id).exists():
+        return JsonResponse({"error": "Select a valid poultry house."}, status=400)
+    if scope_type == "batch" and not PoultryBatch.objects.filter(pk=scope_id).exists():
+        return JsonResponse({"error": "Select a valid poultry batch."}, status=400)
+    if scope_type == "farm":
+        scope_id = None
+
+    dimension = payload.get("dimension", "period")
+    if dimension not in INVESTOR_DIMENSIONS:
+        return JsonResponse({"error": "Select a valid breakdown."}, status=400)
+    if mode == "analyst":
+        supported = [set(METRIC_CATALOG[key]["dimensions"]) for key in metric_keys]
+        common_dimensions = set.intersection(*supported)
+        if dimension not in common_dimensions:
+            return JsonResponse(
+                {"error": "The selected indicators do not all support this breakdown."},
+                status=400,
+            )
+
+    report = build_report(
+        mode=mode,
+        question_key=question_key,
+        metric_keys=metric_keys,
+        start_date=start_date,
+        end_date=end_date,
+        group_by=group_by,
+        scope_type=scope_type,
+        scope_id=scope_id,
+        dimension=dimension,
+        requested_view=payload.get("view", "bar"),
+    )
+    report = _hydrate_legacy_analysis_metrics(report, start_date, end_date, group_by)
+    return JsonResponse(report)
+
+
+@login_required(login_url="login")
+@require_http_methods(["GET", "POST"])
+def investor_targets(request):
+    if request.method == "GET":
+        targets = InvestorKpiTarget.objects.select_related("created_by").order_by(
+            "metric_key", "-effective_from"
+        )
+        return JsonResponse({
+            "canEdit": request.user.is_investor,
+            "targets": [
+                {
+                    "id": target.pk,
+                    "metricKey": target.metric_key,
+                    "metricLabel": METRIC_CATALOG.get(target.metric_key, {}).get("label", target.metric_key),
+                    "value": float(target.target_value),
+                    "direction": target.direction,
+                    "effectiveFrom": target.effective_from.isoformat(),
+                    "effectiveTo": target.effective_to.isoformat() if target.effective_to else None,
+                    "createdBy": target.created_by.display_name,
+                    "createdAt": target.created_at.isoformat(),
+                }
+                for target in targets
+            ],
+        })
+
+    if not request.user.is_investor:
+        return JsonResponse({"error": "Only the owner can change investor KPI targets."}, status=403)
+    try:
+        payload = json.loads(request.body or "{}")
+        metric_key = payload.get("metricKey", "")
+        target_value = Decimal(str(payload.get("targetValue", "")))
+        effective_from = date.fromisoformat(payload.get("effectiveFrom", ""))
+    except (json.JSONDecodeError, InvalidOperation, TypeError, ValueError):
+        return JsonResponse({"error": "Provide a valid indicator, target value, and effective date."}, status=400)
+
+    try:
+        with transaction.atomic():
+            target = create_target_version(
+                metric_key=metric_key,
+                target_value=target_value,
+                effective_from=effective_from,
+                user=request.user,
+            )
+    except ValueError as error:
+        return JsonResponse({"error": str(error)}, status=400)
+    return JsonResponse({
+        "target": {
+            "id": target.pk,
+            "metricKey": target.metric_key,
+            "value": float(target.target_value),
+            "direction": target.direction,
+            "effectiveFrom": target.effective_from.isoformat(),
+            "effectiveTo": target.effective_to.isoformat() if target.effective_to else None,
+        }
+    }, status=201)
+
+
 @login_required(login_url="login")
 def investor(request):
     today = date.today()
@@ -2537,12 +2979,15 @@ def investor(request):
     financial_context = _build_investor_financial_context(start_date, end_date, selected_group_by)
 
     context = {
+        "today": today,
         "start_date": start_date,
         "end_date": end_date,
         "selected_report_type": selected_report_type,
         "selected_group_by": selected_group_by,
         "selected_chart_type": selected_chart_type,
-        "builder_data": _build_investor_builder_data(start_date, end_date, selected_group_by),
+        "builder_catalog": catalogue_payload(),
+        "builder_houses": PoultryHouse.objects.order_by("house_code"),
+        "builder_batches": PoultryBatch.objects.select_related("house").order_by("-date_stocked", "batch_code"),
     }
     context.update(financial_context)
     return render(request, 'investor.html', context)

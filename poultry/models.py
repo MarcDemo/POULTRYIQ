@@ -12,6 +12,28 @@ from datetime import date,timedelta
 
 from datetime import date  # 👈 make sure this is at the top
 
+
+class FlockStage(models.TextChoices):
+    CHICK = "CHICK", "Chick (0 - 8 weeks)"
+    GROWER = "GROWER", "Grower (8 - 17 weeks)"
+    PRE_LAY = "PRE_LAY", "Pre-lay (17 - 20 weeks)"
+    LAYER_1 = "LAYER_1", "Layer 1 (20 - 40 weeks)"
+    LAYER_2 = "LAYER_2", "Layer 2 (40 weeks to end)"
+
+
+def flock_stage_for_age_days(age_days):
+    age_days = max(int(age_days or 0), 0)
+    if age_days < 56:
+        return FlockStage.CHICK
+    if age_days < 119:
+        return FlockStage.GROWER
+    if age_days < 140:
+        return FlockStage.PRE_LAY
+    if age_days < 280:
+        return FlockStage.LAYER_1
+    return FlockStage.LAYER_2
+
+
 class PoultryBatch(models.Model):
 
     class Status(models.TextChoices):
@@ -341,10 +363,133 @@ class FeedRecord(models.Model):
         return f"{self.batch.batch_code} feed {self.record_date}: {self.quantity_kg}kg"
 
 
+class InvestorKpiTarget(models.Model):
+    class Direction(models.TextChoices):
+        MINIMUM = "MINIMUM", "At least"
+        MAXIMUM = "MAXIMUM", "At most"
+
+    target_id = models.BigAutoField(primary_key=True)
+    metric_key = models.CharField(max_length=80, db_index=True)
+    target_value = models.DecimalField(max_digits=18, decimal_places=4)
+    direction = models.CharField(max_length=10, choices=Direction.choices)
+    effective_from = models.DateField(db_index=True)
+    effective_to = models.DateField(null=True, blank=True, db_index=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="investor_kpi_targets_created",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["metric_key", "-effective_from", "-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["metric_key", "effective_from"],
+                name="uniq_investor_kpi_target_date",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(effective_to__isnull=True) | models.Q(effective_to__gte=models.F("effective_from")),
+                name="investor_kpi_target_dates_valid",
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["metric_key", "effective_from", "effective_to"],
+                name="poultry_kpi_target_period_idx",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.metric_key}: {self.get_direction_display()} {self.target_value}"
+
+
+class FeedFormulaTemplate(models.Model):
+    formula_id = models.BigAutoField(primary_key=True)
+    name = models.CharField(max_length=120)
+    flock_stage = models.CharField(max_length=20, choices=FlockStage.choices, db_index=True)
+    concentration_percent = models.PositiveSmallIntegerField(null=True, blank=True)
+    reference_weight_kg = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal("0.01"))],
+    )
+    source = models.CharField(max_length=200, blank=True)
+    is_system = models.BooleanField(default=False, db_index=True)
+    is_active = models.BooleanField(default=True, db_index=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="feed_formula_templates_created",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["is_system", "concentration_percent", "name", "flock_stage"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["name", "flock_stage"],
+                condition=models.Q(is_active=True),
+                name="uniq_active_feed_formula_stage",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["is_active", "flock_stage"], name="poultry_ff_active_stage_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.name} - {self.get_flock_stage_display()}"
+
+
+class FeedFormulaIngredient(models.Model):
+    formula_ingredient_id = models.BigAutoField(primary_key=True)
+    formula = models.ForeignKey(
+        FeedFormulaTemplate,
+        on_delete=models.CASCADE,
+        related_name="ingredients",
+    )
+    item = models.ForeignKey(
+        "inventory.Item",
+        on_delete=models.PROTECT,
+        related_name="feed_formula_ingredients",
+    )
+    quantity_kg = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal("0.01"))],
+    )
+    sort_order = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        ordering = ["sort_order", "formula_ingredient_id"]
+        unique_together = ("formula", "item")
+
+    def __str__(self) -> str:
+        return f"{self.formula}: {self.item.name} {self.quantity_kg}kg"
+
+
 class FeedMixture(models.Model):
     mixture_id = models.BigAutoField(primary_key=True)
     name = models.CharField(max_length=120)
     mix_date = models.DateField(db_index=True)
+    formula_template = models.ForeignKey(
+        FeedFormulaTemplate,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="mixtures",
+    )
+    formula_name_snapshot = models.CharField(max_length=120, blank=True)
+    flock_stage = models.CharField(max_length=20, choices=FlockStage.choices, blank=True, db_index=True)
+    planned_weight_kg = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal("0.00"))],
+        null=True,
+        blank=True,
+    )
     total_weight_kg = models.DecimalField(
         max_digits=10,
         decimal_places=2,
@@ -409,6 +554,13 @@ class FeedMixtureAllocation(models.Model):
     allocation_id = models.BigAutoField(primary_key=True)
     mixture = models.ForeignKey(FeedMixture, on_delete=models.CASCADE, related_name="allocations")
     house = models.ForeignKey(PoultryHouse, on_delete=models.PROTECT, related_name="feed_mixture_allocations")
+    batch = models.ForeignKey(
+        PoultryBatch,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="feed_mixture_allocations",
+    )
     quantity_kg = models.DecimalField(
         max_digits=10,
         decimal_places=2,
@@ -417,10 +569,17 @@ class FeedMixtureAllocation(models.Model):
 
     class Meta:
         ordering = ["house__house_code", "allocation_id"]
-        unique_together = ("mixture", "house")
+        constraints = [
+            models.UniqueConstraint(
+                fields=["mixture", "batch"],
+                condition=models.Q(batch__isnull=False),
+                name="uniq_feed_mix_batch_alloc",
+            ),
+        ]
 
     def __str__(self) -> str:
-        return f"{self.mixture.name} -> {self.house.house_code}: {self.quantity_kg}kg"
+        target = self.batch.batch_code if self.batch_id else self.house.house_code
+        return f"{self.mixture.name} -> {target}: {self.quantity_kg}kg"
 
 
 class CleaningRecord(models.Model):

@@ -42,7 +42,9 @@
                             <select id="feed_mixture" name="feed_mixture" class="form-select" required>
                                 <option value="">-- Choose supervisor mixture --</option>
                                 {% for mixture in feed_mixtures %}
-                                <option value="{{ mixture.pk }}" data-houses="{% for allocation in mixture.allocations.all %}{{ allocation.house_id }} {% endfor %}">
+                                <option value="{{ mixture.pk }}"
+                                        data-batches="{% for allocation in mixture.allocations.all %}{% if allocation.batch_id %}{{ allocation.batch_id }} {% endif %}{% endfor %}"
+                                        data-legacy-houses="{% for allocation in mixture.allocations.all %}{% if not allocation.batch_id %}{{ allocation.house_id }} {% endif %}{% endfor %}">
                                     {{ mixture.name }} - mixed by {{ mixture.mixed_by.get_full_name|default:mixture.mixed_by.username }}
                                 </option>
                                 {% endfor %}
@@ -144,14 +146,18 @@ const mixtureSelect = document.getElementById('feed_mixture');
 function filterMixturesForHouse() {
     if (!batchSelect || !mixtureSelect) return;
 
+    const selectedBatch = batchSelect.value || '';
     const selectedHouse = batchSelect.selectedOptions[0]?.dataset.house || '';
     Array.from(mixtureSelect.options).forEach((option) => {
         if (!option.value) {
             option.hidden = false;
             return;
         }
-        const houses = option.dataset.houses || '';
-        option.hidden = selectedHouse ? !houses.split(/\s+/).includes(selectedHouse) : false;
+        const assignedBatches = (option.dataset.batches || '').split(/\s+/);
+        const legacyHouses = (option.dataset.legacyHouses || '').split(/\s+/);
+        option.hidden = selectedBatch
+            ? !assignedBatches.includes(selectedBatch) && !legacyHouses.includes(selectedHouse)
+            : false;
     });
 
     if (mixtureSelect.selectedOptions[0]?.hidden) {

@@ -1,5 +1,10 @@
+import json
+
+from django.db import connection
 from django.test import TestCase
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
+from django.db.models import Sum
 from datetime import date
 from decimal import Decimal
 
@@ -7,12 +12,33 @@ from accounts.models import Role, User
 from accounting.models import AccountingCode
 from accounting.services import get_pl_data
 from expenses.models import ExpenseAllocation, ExpenseCategory, ExpenseTransaction
-from inventory.models import Supplier
+from inventory.models import InventoryTransaction, Item, Store, Supplier
 from sales.models import Customer, CustomerPayment, ReceivableLedger, SaleInvoice, SaleItem
 
 from .forms import PoultryBatchForm
-from .models import ApprovalStatus, FeedRecord, PoultryBatch, PoultryHouse, egg_collection
-from .views import _build_investor_builder_data
+from .models import (
+    ApprovalStatus,
+    FeedFormulaTemplate,
+    FeedMixture,
+    FeedMixtureAllocation,
+    FeedRecord,
+    FlockStage,
+    InvestorKpiTarget,
+    PoultryBatch,
+    PoultryHouse,
+    egg_collection,
+    flock_stage_for_age_days,
+)
+from .services.investor_analysis import (
+    GUIDED_QUESTIONS,
+    METRIC_CATALOG,
+    TARGET_DIRECTIONS,
+    active_targets,
+    create_target_version,
+    previous_period,
+    target_payload,
+)
+from .views import _build_investor_builder_data, scale_formula_ingredients
 
 
 class PoultryAdminTests(TestCase):
@@ -415,3 +441,719 @@ class InvestorFinancialDashboardTests(TestCase):
         self.assertIn("Cost per saleable egg", {indicator["label"] for indicator in builder_data["indicators"]})
         self.assertTrue({"cost_per_egg", "batch_profit", "feed_cost", "labour_cost"}.issubset(indicator_keys))
         self.assertTrue({"Profitability", "Cash Flow", "Cost of Production"}.issubset(theme_labels))
+
+
+class InvestorAnalysisCatalogueTests(TestCase):
+    def test_catalogue_and_guided_recipes_reference_valid_metadata(self):
+        self.assertEqual(len(METRIC_CATALOG), 68)
+        self.assertEqual(len(GUIDED_QUESTIONS), 6)
+        self.assertEqual(
+            set(TARGET_DIRECTIONS),
+            {
+                "profit_margin",
+                "expense_ratio",
+                "collection_rate",
+                "cost_per_egg",
+                "feed_cost_per_egg",
+                "feed_per_egg",
+                "revenue_per_egg",
+                "egg_rejection_rate",
+                "mortality_rate",
+                "house_utilization",
+            },
+        )
+        for question in GUIDED_QUESTIONS.values():
+            self.assertTrue(question["metrics"])
+            self.assertTrue(set(question["metrics"]).issubset(METRIC_CATALOG))
+            for metric_key in question["metrics"]:
+                self.assertIn(question["dimension"], METRIC_CATALOG[metric_key]["dimensions"])
+        for key, metric in METRIC_CATALOG.items():
+            self.assertEqual(metric["key"], key)
+            self.assertTrue(metric["definition"])
+            self.assertTrue(metric["source"])
+            self.assertTrue(metric["dimensions"])
+
+    def test_previous_period_is_inclusive_and_equal_length(self):
+        current_start = date(2026, 2, 1)
+        current_end = date(2026, 2, 28)
+        previous_start, previous_end = previous_period(current_start, current_end)
+
+        self.assertEqual(previous_start, date(2026, 1, 4))
+        self.assertEqual(previous_end, date(2026, 1, 31))
+        self.assertEqual(
+            (current_end - current_start).days,
+            (previous_end - previous_start).days,
+        )
+
+
+class InvestorKpiTargetTests(TestCase):
+    def setUp(self):
+        self.owner_role = Role.objects.create(code=Role.RoleCode.OWNER, name="Owner")
+        self.manager_role = Role.objects.create(code=Role.RoleCode.MANAGER, name="Manager")
+        self.owner = User.objects.create_user(username="target-owner", password="pass", role=self.owner_role)
+        self.manager = User.objects.create_user(username="target-manager", password="pass", role=self.manager_role)
+
+    def test_target_versions_close_intervals_without_overlap(self):
+        create_target_version(
+            metric_key="profit_margin",
+            target_value=Decimal("20"),
+            effective_from=date(2026, 1, 1),
+            user=self.owner,
+        )
+        create_target_version(
+            metric_key="profit_margin",
+            target_value=Decimal("30"),
+            effective_from=date(2026, 7, 1),
+            user=self.owner,
+        )
+        create_target_version(
+            metric_key="profit_margin",
+            target_value=Decimal("25"),
+            effective_from=date(2026, 4, 1),
+            user=self.owner,
+        )
+
+        targets = list(InvestorKpiTarget.objects.filter(metric_key="profit_margin").order_by("effective_from"))
+        self.assertEqual(
+            [(target.effective_from, target.effective_to) for target in targets],
+            [
+                (date(2026, 1, 1), date(2026, 3, 31)),
+                (date(2026, 4, 1), date(2026, 6, 30)),
+                (date(2026, 7, 1), None),
+            ],
+        )
+        self.assertEqual(
+            active_targets(date(2026, 5, 1), ["profit_margin"])["profit_margin"].target_value,
+            Decimal("25.0000"),
+        )
+
+    def test_only_owner_can_mutate_targets(self):
+        payload = {
+            "metricKey": "mortality_rate",
+            "targetValue": "3.5",
+            "effectiveFrom": "2026-01-01",
+        }
+        self.client.force_login(self.manager)
+        denied = self.client.post(
+            reverse("investor_targets"),
+            json.dumps(payload),
+            content_type="application/json",
+        )
+        self.assertEqual(denied.status_code, 403)
+        self.assertFalse(InvestorKpiTarget.objects.exists())
+
+        self.client.force_login(self.owner)
+        created = self.client.post(
+            reverse("investor_targets"),
+            json.dumps(payload),
+            content_type="application/json",
+        )
+        self.assertEqual(created.status_code, 201)
+        target = InvestorKpiTarget.objects.get()
+        self.assertEqual(target.direction, InvestorKpiTarget.Direction.MAXIMUM)
+        self.assertEqual(target.target_value, Decimal("3.5000"))
+
+    def test_minimum_and_maximum_target_evaluation(self):
+        minimum = create_target_version(
+            metric_key="profit_margin",
+            target_value=Decimal("20"),
+            effective_from=date(2026, 1, 1),
+            user=self.owner,
+        )
+        maximum = create_target_version(
+            metric_key="mortality_rate",
+            target_value=Decimal("4"),
+            effective_from=date(2026, 1, 1),
+            user=self.owner,
+        )
+
+        self.assertEqual(target_payload("profit_margin", Decimal("22"), minimum)["status"], "met")
+        self.assertEqual(target_payload("profit_margin", Decimal("18"), minimum)["status"], "missed")
+        self.assertEqual(target_payload("mortality_rate", Decimal("3"), maximum)["status"], "met")
+        self.assertEqual(target_payload("mortality_rate", Decimal("5"), maximum)["status"], "missed")
+
+
+class InvestorAnalysisEndpointTests(TestCase):
+    def setUp(self):
+        self.manager_role = Role.objects.create(code=Role.RoleCode.MANAGER, name="Manager")
+        self.user = User.objects.create_user(
+            username="analysis-manager",
+            password="StrongPass1",
+            role=self.manager_role,
+        )
+        self.house = PoultryHouse.objects.create(
+            house_code="AN-HSE-01",
+            name="Analysis House",
+            capacity=500,
+        )
+        self.batch = PoultryBatch.objects.create(
+            batch_code="AN-BATCH-01",
+            house=self.house,
+            breed="Layers",
+            supplier_name="Supplier",
+            amount_paid=Decimal("0"),
+            date_stocked=date(2026, 1, 1),
+            initial_quantity=200,
+            initial_age_days=120,
+            status=PoultryBatch.Status.ACTIVE,
+            created_by=self.user,
+        )
+        self.customer = Customer.objects.create(name="Analysis Buyer")
+        self.feed_category, _ = ExpenseCategory.objects.get_or_create(code="FEED", defaults={"name": "Feed"})
+
+    def post_analysis(self, payload):
+        return self.client.post(
+            reverse("investor_analysis"),
+            json.dumps(payload),
+            content_type="application/json",
+        )
+
+    def test_endpoint_requires_authentication(self):
+        response = self.post_analysis({
+            "mode": "guided",
+            "questionKey": "loss_drivers",
+            "startDate": "2026-01-01",
+            "endDate": "2026-01-31",
+            "groupBy": "month",
+            "scopeType": "farm",
+            "dimension": "period",
+            "view": "line",
+        })
+        self.assertEqual(response.status_code, 302)
+
+    def test_guided_report_stays_within_query_budget_and_returns_null_ratios(self):
+        self.client.force_login(self.user)
+        with CaptureQueriesContext(connection) as queries:
+            response = self.post_analysis({
+                "mode": "guided",
+                "questionKey": "high_costs",
+                "startDate": "2026-01-01",
+                "endDate": "2026-01-31",
+                "groupBy": "month",
+                "scopeType": "farm",
+                "dimension": "period",
+                "view": "line",
+            })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertLessEqual(len(queries), 60)
+        payload = response.json()
+        values = {metric["key"]: metric["value"] for metric in payload["metrics"]}
+        self.assertIsNone(values["cost_per_egg"])
+        self.assertIsNone(values["feed_cost_per_egg"])
+        self.assertEqual(payload["meta"]["previousRange"], {"start": "2025-12-01", "end": "2025-12-31"})
+
+    def test_batch_scope_prorates_invoice_cash_and_uses_allocated_expenses(self):
+        invoice = SaleInvoice.objects.create(
+            invoice_no="AN-INV-0001",
+            customer=self.customer,
+            invoice_date=date(2026, 1, 10),
+            due_date=date(2026, 1, 20),
+            subtotal=Decimal("1000"),
+            total_amount=Decimal("1000"),
+            status=SaleInvoice.Status.ISSUED,
+            created_by=self.user,
+        )
+        SaleItem.objects.create(
+            invoice=invoice,
+            batch=self.batch,
+            product_name="Eggs",
+            quantity=Decimal("10"),
+            unit="trays",
+            unit_price=Decimal("75"),
+            line_total=Decimal("750"),
+        )
+        SaleItem.objects.create(
+            invoice=invoice,
+            batch=None,
+            product_name="Unallocated produce",
+            quantity=Decimal("1"),
+            unit="lot",
+            unit_price=Decimal("250"),
+            line_total=Decimal("250"),
+        )
+        CustomerPayment.objects.create(
+            invoice=invoice,
+            customer=self.customer,
+            payment_date=date(2026, 1, 12),
+            method=CustomerPayment.Method.CASH,
+            amount=Decimal("800"),
+            received_by=self.user,
+        )
+        ReceivableLedger.objects.create(
+            invoice=invoice,
+            amount_due=Decimal("1000"),
+            amount_paid=Decimal("800"),
+            balance=Decimal("200"),
+        )
+        expense = ExpenseTransaction.objects.create(
+            expense_date=date(2026, 1, 11),
+            category=self.feed_category,
+            description="Scoped expense",
+            total_amount=Decimal("500"),
+            period_year=2026,
+            period_month=1,
+            status=ExpenseTransaction.Status.APPROVED,
+            created_by=self.user,
+        )
+        ExpenseAllocation.objects.create(
+            expense=expense,
+            batch=self.batch,
+            method=ExpenseAllocation.Method.DIRECT,
+            amount_allocated=Decimal("300"),
+        )
+        InvestorKpiTarget.objects.create(
+            metric_key="collection_rate",
+            target_value=Decimal("80"),
+            direction=InvestorKpiTarget.Direction.MINIMUM,
+            effective_from=date(2026, 1, 1),
+            created_by=self.user,
+        )
+        self.client.force_login(self.user)
+        response = self.post_analysis({
+            "mode": "analyst",
+            "metricKeys": ["sales_revenue", "cash_received", "total_expenses", "collection_rate"],
+            "startDate": "2026-01-01",
+            "endDate": "2026-01-31",
+            "groupBy": "month",
+            "scopeType": "batch",
+            "scopeId": self.batch.pk,
+            "dimension": "period",
+            "view": "line",
+        })
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        values = {metric["key"]: metric["value"] for metric in payload["metrics"]}
+        self.assertEqual(values["sales_revenue"], 750.0)
+        self.assertEqual(values["cash_received"], 600.0)
+        self.assertEqual(values["total_expenses"], 300.0)
+        self.assertEqual(values["collection_rate"], 80.0)
+        collection_metric = next(metric for metric in payload["metrics"] if metric["key"] == "collection_rate")
+        self.assertEqual(collection_metric["target"]["status"], "met")
+        self.assertEqual(collection_metric["varianceState"], "unavailable")
+        revenue_metric = next(metric for metric in payload["metrics"] if metric["key"] == "sales_revenue")
+        self.assertEqual(revenue_metric["previousValue"], 0.0)
+        self.assertIsNone(revenue_metric["percentChange"])
+        self.assertEqual(revenue_metric["varianceState"], "favorable")
+        self.assertEqual(payload["coverage"]["revenueAllocationPercent"], 75.0)
+        self.assertEqual(payload["coverage"]["expenseAllocationPercent"], 60.0)
+
+        house_response = self.post_analysis({
+            "mode": "analyst",
+            "metricKeys": ["sales_revenue", "total_expenses"],
+            "startDate": "2026-01-01",
+            "endDate": "2026-01-31",
+            "groupBy": "month",
+            "scopeType": "house",
+            "scopeId": self.house.pk,
+            "dimension": "period",
+            "view": "pie",
+        })
+        self.assertEqual(house_response.status_code, 200)
+        house_payload = house_response.json()
+        house_values = {metric["key"]: metric["value"] for metric in house_payload["metrics"]}
+        self.assertEqual(house_values["sales_revenue"], 750.0)
+        self.assertEqual(house_values["total_expenses"], 300.0)
+        self.assertEqual(house_payload["meta"]["view"], "line")
+        self.assertTrue(house_payload["meta"]["viewAdjustment"])
+
+    def test_invalid_analyst_dimension_and_metric_limit_are_rejected(self):
+        self.client.force_login(self.user)
+        invalid_dimension = self.post_analysis({
+            "mode": "analyst",
+            "metricKeys": ["sales_revenue", "total_expenses"],
+            "startDate": "2026-01-01",
+            "endDate": "2026-01-31",
+            "scopeType": "farm",
+            "groupBy": "month",
+            "dimension": "customer",
+            "view": "bar",
+        })
+        self.assertEqual(invalid_dimension.status_code, 400)
+
+        too_many = self.post_analysis({
+            "mode": "analyst",
+            "metricKeys": list(METRIC_CATALOG)[:7],
+            "startDate": "2026-01-01",
+            "endDate": "2026-01-31",
+            "scopeType": "farm",
+            "groupBy": "month",
+            "dimension": "period",
+            "view": "bar",
+        })
+        self.assertEqual(too_many.status_code, 400)
+
+    def test_investor_page_uses_new_builder_contract(self):
+        self.client.force_login(self.user)
+        response = self.client.get(reverse("investor"))
+
+        self.assertContains(response, 'id="investorBuilderV2"')
+        self.assertContains(response, 'id="investor-builder-catalog"')
+        self.assertNotContains(response, 'id="investor-builder-data"')
+        self.assertContains(response, 'id="analysisCsv"')
+        self.assertContains(response, 'id="analysisPng"')
+        self.assertContains(response, 'id="analysisPrint"')
+        self.assertContains(response, "AI Advisor")
+
+
+class FeedFormulaSeedAndScalingTests(TestCase):
+    stages = [
+        FlockStage.CHICK,
+        FlockStage.GROWER,
+        FlockStage.PRE_LAY,
+        FlockStage.LAYER_1,
+        FlockStage.LAYER_2,
+    ]
+
+    expected = {
+        "Hendrix 5%": {
+            "reference": Decimal("1000.00"),
+            "ingredients": {
+                "Layer Concentrate 5%": [60, 50, 50, 50, 50],
+                "Stock Feed Lime": [20, 20, 90, 95, 100],
+                "Maize": [180, 200, 180, 185, 175],
+                "Maize bran": [520, 530, 490, 500, 525],
+                "Soybean Meal": [120, 100, 100, 95, 90],
+                "Sunflower Meal": [100, 100, 90, 75, 60],
+            },
+        },
+        "Hendrix 10%": {
+            "reference": Decimal("1000.00"),
+            "ingredients": {
+                "Maize bran": [500, 600, 500, 500, 500],
+                "Broken Maize": [210, 170, 215, 210, 200],
+                "Soybean Meal": [140, 25, 40, 105, 60],
+                "Layer Concentrate 10%": [120, 100, 100, 100, 100],
+                "Sunflower Meal": [20, 95, 100, 0, 50],
+                "Stock Feed Lime": [10, 10, 45, 85, 90],
+            },
+        },
+        "Hendrix 20%": {
+            "reference": Decimal("250.00"),
+            "ingredients": {
+                "Layer Concentrate 20%": [50, 50, 50, 50, 50],
+                "Stock Feed Lime": [0, 3, 20, 22, 24],
+                "Maize": [50, 50, 43, 49, 48],
+                "Maize bran": [125, 140, 130, 129, 128],
+                "Sunflower Meal": [25, 7, 7, 0, 0],
+            },
+        },
+    }
+
+    def test_seeded_formula_matrix_matches_supplied_recipes(self):
+        self.assertEqual(FeedFormulaTemplate.objects.filter(is_system=True).count(), 15)
+        for formula_name, expected_formula in self.expected.items():
+            for stage_index, stage in enumerate(self.stages):
+                formula = FeedFormulaTemplate.objects.get(
+                    name=formula_name,
+                    flock_stage=stage,
+                    is_system=True,
+                )
+                self.assertEqual(formula.reference_weight_kg, expected_formula["reference"])
+                actual = {
+                    line.item.name: line.quantity_kg
+                    for line in formula.ingredients.select_related("item")
+                }
+                expected_lines = {
+                    item_name: Decimal(str(quantities[stage_index]))
+                    for item_name, quantities in expected_formula["ingredients"].items()
+                    if quantities[stage_index] > 0
+                }
+                self.assertEqual(actual, expected_lines)
+                self.assertEqual(sum(actual.values(), Decimal("0.00")), expected_formula["reference"])
+
+    def test_stage_boundaries(self):
+        expected = {
+            0: FlockStage.CHICK,
+            55: FlockStage.CHICK,
+            56: FlockStage.GROWER,
+            118: FlockStage.GROWER,
+            119: FlockStage.PRE_LAY,
+            139: FlockStage.PRE_LAY,
+            140: FlockStage.LAYER_1,
+            279: FlockStage.LAYER_1,
+            280: FlockStage.LAYER_2,
+            700: FlockStage.LAYER_2,
+        }
+        for age_days, stage in expected.items():
+            with self.subTest(age_days=age_days):
+                self.assertEqual(flock_stage_for_age_days(age_days), stage)
+
+    def test_scaling_rounds_to_an_exact_target(self):
+        formula = FeedFormulaTemplate.objects.get(name="Hendrix 5%", flock_stage=FlockStage.LAYER_1)
+        lines = scale_formula_ingredients(formula, Decimal("123.47"))
+
+        self.assertEqual(sum((line["quantity_kg"] for line in lines), Decimal("0.00")), Decimal("123.47"))
+        self.assertTrue(all(line["quantity_kg"].as_tuple().exponent >= -2 for line in lines))
+
+
+class FeedFormulaWorkflowTests(TestCase):
+    def setUp(self):
+        self.supervisor_role = Role.objects.create(code=Role.RoleCode.SUPERVISOR, name="Formula Supervisor")
+        self.worker_role = Role.objects.create(code=Role.RoleCode.WORKER, name="Formula Worker")
+        self.manager_role = Role.objects.create(code=Role.RoleCode.MANAGER, name="Formula Manager")
+        self.supervisor = User.objects.create_user(
+            username="formula-supervisor",
+            password="pass1234",
+            role=self.supervisor_role,
+        )
+        self.worker = User.objects.create_user(
+            username="formula-worker",
+            password="pass1234",
+            role=self.worker_role,
+        )
+        self.manager = User.objects.create_user(
+            username="formula-manager",
+            password="pass1234",
+            role=self.manager_role,
+        )
+        self.house = PoultryHouse.objects.create(
+            house_code="FORMULA-H1",
+            name="Formula House",
+            capacity=1000,
+        )
+        self.other_house = PoultryHouse.objects.create(
+            house_code="FORMULA-H2",
+            name="Other House",
+            capacity=1000,
+        )
+        self.supervisor.houses.add(self.house)
+        self.worker.houses.add(self.house)
+        self.batch_a = self._batch("FORMULA-A", self.house, 70)
+        self.batch_b = self._batch("FORMULA-B", self.house, 80)
+        self.chick_batch = self._batch("FORMULA-CHICK", self.house, 20)
+        self.out_of_scope_batch = self._batch("FORMULA-OTHER", self.other_house, 70)
+        self.formula = FeedFormulaTemplate.objects.get(
+            name="Hendrix 5%",
+            flock_stage=FlockStage.GROWER,
+        )
+        self.store = Store.objects.create(name="Formula Test Store")
+        self._receive_formula_stock()
+
+    def _batch(self, code, house, age_days):
+        return PoultryBatch.objects.create(
+            batch_code=code,
+            house=house,
+            breed="Layers",
+            supplier_name="Formula Supplier",
+            date_stocked=date.today(),
+            initial_quantity=200,
+            initial_age_days=age_days,
+            status=PoultryBatch.Status.ACTIVE,
+            created_by=self.manager,
+        )
+
+    def _receive_formula_stock(self):
+        for item in Item.objects.filter(category__code="FEED"):
+            InventoryTransaction.objects.create(
+                tx_date=date.today(),
+                tx_type=InventoryTransaction.TxType.IN_,
+                store=self.store,
+                item=item,
+                quantity=Decimal("2000.000"),
+                created_by=self.manager,
+            )
+
+    def _preset_post(self, **overrides):
+        data = {
+            "name": "Scaled Grower Mix",
+            "mix_date": date.today().isoformat(),
+            "primary_batch": str(self.batch_a.pk),
+            "formula_template": str(self.formula.pk),
+            "target_weight_kg": "100.00",
+            "total_weight_kg": "99.00",
+            "allocation_batch": [str(self.batch_a.pk), str(self.batch_b.pk)],
+            "allocation_quantity": ["60.00", "39.00"],
+            "notes": "Formula workflow test",
+        }
+        data.update(overrides)
+        return data
+
+    def test_supervisor_page_is_scoped_to_assigned_houses(self):
+        self.client.force_login(self.supervisor)
+        response = self.client.get(reverse("feed_mixtures"))
+
+        batch_ids = {batch.pk for batch in response.context["batches"]}
+        self.assertIn(self.batch_a.pk, batch_ids)
+        self.assertNotIn(self.out_of_scope_batch.pk, batch_ids)
+        self.assertContains(response, "Hendrix 5%")
+
+        self.client.force_login(self.manager)
+        manager_response = self.client.get(reverse("feed_mixtures"))
+        manager_batch_ids = {batch.pk for batch in manager_response.context["batches"]}
+        self.assertIn(self.out_of_scope_batch.pk, manager_batch_ids)
+
+    def test_preset_mix_scales_deducts_stock_and_allocates_by_batch(self):
+        self.client.force_login(self.supervisor)
+        response = self.client.post(reverse("feed_mixtures"), self._preset_post())
+
+        self.assertRedirects(response, reverse("feed_mixtures"))
+        mixture = FeedMixture.objects.get(name="Scaled Grower Mix")
+        self.assertEqual(mixture.formula_template, self.formula)
+        self.assertEqual(mixture.formula_name_snapshot, "Hendrix 5%")
+        self.assertEqual(mixture.flock_stage, FlockStage.GROWER)
+        self.assertEqual(mixture.planned_weight_kg, Decimal("100.00"))
+        self.assertEqual(mixture.total_weight_kg, Decimal("99.00"))
+        self.assertEqual(mixture.total_ingredient_kg, Decimal("100.00"))
+        self.assertEqual(
+            set(mixture.allocations.values_list("batch_id", flat=True)),
+            {self.batch_a.pk, self.batch_b.pk},
+        )
+        stock_out = InventoryTransaction.objects.filter(reference=f"MIX-{mixture.pk}")
+        self.assertEqual(stock_out.count(), mixture.ingredients.count())
+        self.assertEqual(
+            stock_out.aggregate(total=Sum("quantity"))["total"],
+            Decimal("100.000"),
+        )
+
+    def test_server_rejects_short_stock_without_partial_writes(self):
+        self.client.force_login(self.supervisor)
+        response = self.client.post(
+            reverse("feed_mixtures"),
+            self._preset_post(
+                target_weight_kg="10000.00",
+                total_weight_kg="10000.00",
+                allocation_quantity=["6000.00", "4000.00"],
+            ),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(FeedMixture.objects.filter(name="Scaled Grower Mix").exists())
+        self.assertFalse(InventoryTransaction.objects.filter(reference__startswith="MIX-").exists())
+        self.assertContains(response, "is available")
+
+    def test_cross_stage_allocation_is_rejected(self):
+        self.client.force_login(self.supervisor)
+        response = self.client.post(
+            reverse("feed_mixtures"),
+            self._preset_post(
+                allocation_batch=[str(self.batch_a.pk), str(self.chick_batch.pk)],
+                allocation_quantity=["50.00", "49.00"],
+            ),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(FeedMixture.objects.filter(name="Scaled Grower Mix").exists())
+        self.assertContains(response, "not in the same feed stage")
+
+    def test_custom_formula_can_be_saved_reused_and_archived(self):
+        maize = Item.objects.get(name="Maize")
+        maize_bran = Item.objects.get(name__iexact="Maize bran")
+        self.client.force_login(self.supervisor)
+        response = self.client.post(
+            reverse("feed_mixtures"),
+            {
+                "name": "Farm Custom Mix",
+                "mix_date": date.today().isoformat(),
+                "primary_batch": str(self.batch_a.pk),
+                "formula_template": "custom",
+                "target_weight_kg": "100.00",
+                "total_weight_kg": "100.00",
+                "ingredient_item": [str(maize.pk), str(maize_bran.pk)],
+                "ingredient_quantity": ["40.00", "60.00"],
+                "allocation_batch": [str(self.batch_a.pk)],
+                "allocation_quantity": ["100.00"],
+                "save_custom": "on",
+                "custom_formula_name": "Farm Grower Formula",
+            },
+        )
+
+        self.assertRedirects(response, reverse("feed_mixtures"))
+        custom = FeedFormulaTemplate.objects.get(name="Farm Grower Formula", is_active=True)
+        self.assertFalse(custom.is_system)
+        self.assertEqual(custom.flock_stage, FlockStage.GROWER)
+        self.assertEqual(custom.reference_weight_kg, Decimal("100.00"))
+        self.assertEqual(custom.ingredients.count(), 2)
+        mixture = FeedMixture.objects.get(name="Farm Custom Mix")
+        self.assertEqual(mixture.formula_template, custom)
+
+        reused = self.client.post(
+            reverse("feed_mixtures"),
+            {
+                "name": "Reused Farm Formula",
+                "mix_date": date.today().isoformat(),
+                "primary_batch": str(self.batch_a.pk),
+                "formula_template": str(custom.pk),
+                "target_weight_kg": "50.00",
+                "total_weight_kg": "50.00",
+                "allocation_batch": [str(self.batch_a.pk)],
+                "allocation_quantity": ["50.00"],
+            },
+        )
+        self.assertRedirects(reused, reverse("feed_mixtures"))
+        reused_mixture = FeedMixture.objects.get(name="Reused Farm Formula")
+        self.assertEqual(reused_mixture.formula_template, custom)
+        self.assertEqual(
+            {
+                line.item.name: line.quantity_kg
+                for line in reused_mixture.ingredients.select_related("item")
+            },
+            {"Maize": Decimal("20.00"), "Maize bran": Decimal("30.00")},
+        )
+
+        archive_response = self.client.post(reverse("archive_feed_formula", args=[custom.pk]))
+        self.assertRedirects(archive_response, reverse("feed_mixtures"))
+        custom.refresh_from_db()
+        self.assertFalse(custom.is_active)
+        mixture.refresh_from_db()
+        self.assertEqual(mixture.formula_template, custom)
+
+    def test_worker_cannot_record_a_batch_specific_mix_against_another_batch(self):
+        self.client.force_login(self.supervisor)
+        data = self._preset_post(
+            total_weight_kg="100.00",
+            allocation_batch=[str(self.batch_a.pk)],
+            allocation_quantity=["100.00"],
+        )
+        self.client.post(reverse("feed_mixtures"), data)
+        mixture = FeedMixture.objects.get(name="Scaled Grower Mix")
+
+        self.client.force_login(self.worker)
+        rejected = self.client.post(
+            reverse("record_feed"),
+            {
+                "batch": str(self.batch_b.pk),
+                "feed_mixture": str(mixture.pk),
+                "quantity": "10.00",
+            },
+        )
+        self.assertEqual(rejected.status_code, 200)
+        self.assertFalse(FeedRecord.objects.filter(feed_mixture=mixture).exists())
+
+        accepted = self.client.post(
+            reverse("record_feed"),
+            {
+                "batch": str(self.batch_a.pk),
+                "feed_mixture": str(mixture.pk),
+                "quantity": "10.00",
+            },
+        )
+        self.assertRedirects(accepted, reverse("record_feed"))
+        self.assertTrue(FeedRecord.objects.filter(feed_mixture=mixture, batch=self.batch_a).exists())
+
+    def test_legacy_house_allocation_remains_available(self):
+        mixture = FeedMixture.objects.create(
+            name="Legacy House Mix",
+            mix_date=date.today(),
+            total_weight_kg=Decimal("20.00"),
+            mixed_by=self.supervisor,
+        )
+        FeedMixtureAllocation.objects.create(
+            mixture=mixture,
+            house=self.house,
+            quantity_kg=Decimal("20.00"),
+        )
+        self.client.force_login(self.worker)
+
+        response = self.client.post(
+            reverse("record_feed"),
+            {
+                "batch": str(self.batch_b.pk),
+                "feed_mixture": str(mixture.pk),
+                "quantity": "5.00",
+            },
+        )
+
+        self.assertRedirects(response, reverse("record_feed"))
+        self.assertTrue(FeedRecord.objects.filter(feed_mixture=mixture, batch=self.batch_b).exists())
