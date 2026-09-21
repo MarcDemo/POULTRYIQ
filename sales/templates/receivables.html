@@ -1,0 +1,63 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-start mb-4 flex-wrap gap-2">
+        <div>
+            <h2 class="mb-1"><i class="bi bi-cash-coin me-2"></i>Accounts Receivable</h2>
+            <small class="text-muted">Open customer credit balances and their settlement history.</small>
+        </div>
+        <a class="btn btn-outline-primary" href="{% url 'customers' %}"><i class="bi bi-people me-1"></i>Customers</a>
+    </div>
+
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                {{ message }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        {% endfor %}
+    {% endif %}
+
+    <div class="row g-3 mb-4">
+        <div class="col-md-4"><div class="card"><div class="card-body"><small class="text-muted">Open receivables</small><h4 class="mb-0">UGX {{ open_total|floatformat:0 }}</h4></div></div></div>
+        <div class="col-md-4"><div class="card border-warning"><div class="card-body"><small class="text-muted">Overdue balances</small><h4 class="mb-0">UGX {{ overdue_total|floatformat:0 }}</h4></div></div></div>
+        <div class="col-md-4"><div class="card border-warning"><div class="card-body"><small class="text-muted">Overdue invoices</small><h4 class="mb-0">{{ overdue_count }}</h4></div></div></div>
+    </div>
+
+    <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <span>Open credit invoices</span>
+            <form method="get" class="d-flex gap-2"><input class="form-control form-control-sm" name="q" value="{{ q }}" placeholder="Invoice, customer, CUST-ID"><button class="btn btn-sm btn-outline-primary">Search</button></form>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead><tr><th>Customer</th><th>Invoice</th><th>Issued</th><th>Due</th><th>Paid</th><th>Balance</th><th>Status</th><th>Receive payment</th></tr></thead>
+                <tbody>
+                    {% for ledger in receivables %}
+                    <tr>
+                        <td><a href="{% url 'customer_profile' ledger.invoice.customer.pk %}">{{ ledger.invoice.customer.display_id }} — {{ ledger.invoice.customer.name }}</a></td>
+                        <td>{{ ledger.invoice.invoice_no }}</td>
+                        <td>{{ ledger.invoice.invoice_date }}</td>
+                        <td>{{ ledger.invoice.due_date|default:"-" }}</td>
+                        <td>UGX {{ ledger.amount_paid|floatformat:0 }}</td>
+                        <td><strong>UGX {{ ledger.balance|floatformat:0 }}</strong></td>
+                        <td>{% if ledger.is_overdue %}<span class="badge text-bg-danger">Overdue</span>{% else %}<span class="badge text-bg-warning">Open</span>{% endif %}</td>
+                        <td>
+                            <form method="post" action="{% url 'record_receivable_payment' ledger.pk %}" class="d-flex flex-wrap gap-1">
+                                {% csrf_token %}
+                                <input class="form-control form-control-sm" type="number" name="payment_amount" min="0.01" max="{{ ledger.balance }}" step="0.01" placeholder="Amount" required>
+                                <select class="form-select form-select-sm" name="payment_method">{% for value, label in payment_method_choices %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select>
+                                <input class="form-control form-control-sm" name="payment_reference" maxlength="80" placeholder="Reference">
+                                <button class="btn btn-sm btn-primary">Save</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="8" class="text-center text-muted py-4">No open receivables.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% include 'partials/pagination.html' %}
+</div>
+{% endblock %}

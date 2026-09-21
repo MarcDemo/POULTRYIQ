@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
@@ -9,7 +9,7 @@ from inventory.models import InventoryTransaction, Item, ItemCategory, Store
 from poultry.models import ApprovalStatus, PoultryBatch, PoultryHouse, egg_collection
 from accounting.models import AccountingCode
 from accounting.services import get_bs_data
-from sales.models import Customer, CustomerPayment, ReceivableLedger, SaleInvoice, SaleItem
+from sales.models import Customer, CustomerPayment, ReceivableEntry, ReceivableLedger, SaleInvoice, SaleItem
 
 
 class SalesPageTests(TestCase):
@@ -116,14 +116,18 @@ class SalesPageTests(TestCase):
 		self.assertEqual(cards["off_layers"]["available_qty"], Decimal("20.000"))
 
 	def test_sales_page_uses_customer_dropdown_from_db(self):
-		Customer.objects.create(name="Dropdown Buyer", is_active=True)
+		customer = Customer.objects.create(name="Dropdown Buyer", is_active=True)
 		Customer.objects.create(name="Inactive Buyer", is_active=False)
 		self.client.force_login(self.user)
 
 		response = self.client.get(reverse("sales"))
 
 		self.assertContains(response, '<select class="form-select" name="customer" id="customerName" required>', html=False)
-		self.assertContains(response, '<option value="Dropdown Buyer">Dropdown Buyer</option>', html=False)
+		self.assertContains(
+			response,
+			f'<option value="{customer.customer_id}">{customer.display_id} — Dropdown Buyer</option>',
+			html=False,
+		)
 		self.assertNotContains(response, '<option value="Inactive Buyer">Inactive Buyer</option>', html=False)
 
 	def test_post_sale_creates_invoice_item_ledger_and_payment(self):
@@ -582,3 +586,120 @@ class SalesPageTests(TestCase):
 		invoice.refresh_from_db()
 		self.assertEqual(invoice.status, SaleInvoice.Status.CANCELLED)
 		self.assertEqual(invoice.delivery_status, SaleInvoice.DeliveryStatus.CANCELLED)
+
+	def test_customer_id_is_searchable_and_displayed(self):
+		customer = Customer.objects.create(name="Identified Buyer")
+		self.client.force_login(self.user)
+
+		response = self.client.get(reverse("customers"), {"q": customer.display_id})
+
+		self.assertContains(response, customer.display_id)
+		self.assertContains(response, "Identified Buyer")
+
+	def test_credit_limit_is_enforced_before_sale_is_saved(self):
+		customer = Customer.objects.create(
+			name="Limited Buyer",
+			allow_credit=True,
+			credit_limit=Decimal("5000.00"),
+			credit_days=14,
+		)
+		self.client.force_login(self.user)
+
+		response = self.client.post(
+			reverse("sales"),
+			{
+				"customer": str(customer.customer_id),
+				"product": "eggs",
+				"quantity": "1",
+				"price": "10000",
+				"deposit": "0",
+				"payment_method": "CASH",
+				"sale_type": "instant",
+			},
+			follow=True,
+		)
+
+		self.assertContains(response, "above its UGX 5,000 credit limit")
+		self.assertFalse(SaleInvoice.objects.filter(customer=customer).exists())
+
+	def test_credit_sale_creates_due_date_and_receivable_history(self):
+		customer = Customer.objects.create(
+			name="Terms Buyer",
+			allow_credit=True,
+			credit_limit=Decimal("20000.00"),
+			credit_days=14,
+		)
+		self.client.force_login(self.user)
+
+		response = self.client.post(
+			reverse("sales"),
+			{
+				"customer": str(customer.customer_id),
+				"product": "eggs",
+				"quantity": "1",
+				"price": "10000",
+				"deposit": "0",
+				"payment_method": "CASH",
+				"sale_type": "instant",
+			},
+		)
+
+		self.assertEqual(response.status_code, 302)
+		invoice = SaleInvoice.objects.filter(customer=customer).latest("invoice_id")
+		ledger = invoice.receivable
+		self.assertEqual(invoice.due_date, date.today() + timedelta(days=14))
+		self.assertEqual(ledger.balance, Decimal("10000.00"))
+		self.assertEqual(ledger.entries.count(), 1)
+		self.assertEqual(ledger.entries.first().entry_type, ReceivableEntry.EntryType.INVOICE)
+
+	def test_receivable_payment_cannot_exceed_open_balance(self):
+		customer = Customer.objects.create(name="No Overpay Buyer")
+		invoice = SaleInvoice.objects.create(
+			invoice_no="INV-2026-9000",
+			customer=customer,
+			invoice_date=date(2026, 5, 9),
+			total_amount=Decimal("1000.00"),
+			status=SaleInvoice.Status.ISSUED,
+			created_by=self.user,
+		)
+		ledger = ReceivableLedger.objects.create(
+			invoice=invoice,
+			amount_due=Decimal("1000.00"),
+			balance=Decimal("1000.00"),
+		)
+		self.client.force_login(self.user)
+
+		response = self.client.post(
+			reverse("record_receivable_payment", args=[ledger.pk]),
+			{"payment_amount": "1001", "payment_method": "CASH"},
+			follow=True,
+		)
+
+		ledger.refresh_from_db()
+		self.assertContains(response, "cannot exceed the outstanding balance")
+		self.assertEqual(ledger.balance, Decimal("1000.00"))
+		self.assertFalse(CustomerPayment.objects.filter(invoice=invoice).exists())
+
+	def test_receivables_register_shows_customer_identifier_and_due_balance(self):
+		customer = Customer.objects.create(name="Register Buyer")
+		invoice = SaleInvoice.objects.create(
+			invoice_no="INV-2026-9001",
+			customer=customer,
+			invoice_date=date(2026, 5, 9),
+			due_date=date(2026, 5, 23),
+			total_amount=Decimal("2500.00"),
+			status=SaleInvoice.Status.ISSUED,
+			created_by=self.user,
+		)
+		ReceivableLedger.objects.create(
+			invoice=invoice,
+			amount_due=Decimal("2500.00"),
+			balance=Decimal("2500.00"),
+		)
+		self.client.force_login(self.user)
+
+		response = self.client.get(reverse("receivables"))
+
+		self.assertContains(response, customer.display_id)
+		self.assertContains(response, "INV-2026-9001")
+		self.assertContains(response, "2,500")

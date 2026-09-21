@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+        <div>
+            <h3 class="mb-1"><i class="bi bi-cash-stack me-2"></i>Salary Advance Register</h3>
+            <small class="text-muted">See who received an advance, why it was issued, and every salary month used to recover it.</small>
+        </div>
+        <a href="{% url 'staff_profiles' %}" class="btn btn-light"><i class="bi bi-people me-1"></i>Staff Profiles</a>
+    </div>
+
+    <form method="get" class="row g-2 mb-4">
+        <div class="col-md-5"><input class="form-control" name="q" value="{{ q }}" placeholder="Search employee ID, employee, or reason"></div>
+        <div class="col-auto"><button class="btn btn-outline-primary"><i class="bi bi-search me-1"></i>Search</button></div>
+        {% if q %}<div class="col-auto"><a href="{% url 'advance_register' %}" class="btn btn-light">Clear</a></div>{% endif %}
+    </form>
+
+    <div class="row g-3 mb-4">
+        <div class="col-md-3"><div class="card h-100"><div class="card-body"><small class="text-muted d-block">Approved</small><h4 class="mb-0">UGX {{ approved_total|floatformat:0 }}</h4></div></div></div>
+        <div class="col-md-3"><div class="card h-100 border-primary"><div class="card-body"><small class="text-muted d-block">Actually Issued</small><h4 class="mb-0">UGX {{ issued_total|floatformat:0 }}</h4></div></div></div>
+        <div class="col-md-3"><div class="card h-100"><div class="card-body"><small class="text-muted d-block">Recovered in Salary</small><h4 class="mb-0">UGX {{ allocated_total|floatformat:0 }}</h4></div></div></div>
+        <div class="col-md-3"><div class="card h-100 border-warning"><div class="card-body"><small class="text-muted d-block">Still Receivable</small><h4 class="mb-0">UGX {{ outstanding_total|floatformat:0 }}</h4></div></div></div>
+    </div>
+
+    <div class="card">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead><tr><th>Employee</th><th>What & Why</th><th>Intended Recovery</th><th>Approval / Issue</th><th>Salary-month Recovery</th><th>Balance / Action</th></tr></thead>
+                <tbody>
+                    {% for advance in advances %}
+                    <tr>
+                        <td>
+                            <strong>{{ advance.worker.display_name }}</strong>
+                            <div class="small text-muted">{{ advance.worker.staff_profile.employee_number|default:advance.worker.username }}</div>
+                        </td>
+                        <td>
+                            <strong>{{ advance.title }}</strong>
+                            <div class="small text-muted">{{ advance.details|truncatechars:120 }}</div>
+                            <div class="mt-1">UGX {{ advance.advance_amount|floatformat:0 }}</div>
+                        </td>
+                        <td>
+                            {% if advance.advance_period_start %}{{ advance.advance_period_start|date:"M Y" }}{% else %}<span class="text-muted">Not stated</span>{% endif %}
+                            {% if advance.advance_period_end and advance.advance_period_end != advance.advance_period_start %}<br>to {{ advance.advance_period_end|date:"M Y" }}{% endif %}
+                        </td>
+                        <td>
+                            <span class="badge {% if advance.status == 'MANAGER_APPROVED' %}bg-success{% elif advance.status == 'MANAGER_REJECTED' or advance.status == 'SUPERVISOR_REJECTED' %}bg-danger{% else %}bg-secondary{% endif %}">{{ advance.get_status_display }}</span>
+                            {% if advance.advance_disbursed_on %}
+                            <div class="small mt-1"><strong>Issued:</strong> {{ advance.advance_disbursed_on|date:"d M Y" }}</div>
+                            <div class="small">{{ advance.get_advance_payment_method_display }} · {{ advance.advance_payment_reference }}</div>
+                            {% if advance.advance_disbursed_by %}<div class="small text-muted">Recorded by {{ advance.advance_disbursed_by.display_name }}</div>{% endif %}
+                            {% if advance.advance_journal_reference %}<div class="small text-muted">Journal {{ advance.advance_journal_reference }}</div>{% endif %}
+                            {% elif advance.status == 'MANAGER_APPROVED' %}
+                            <div class="small text-warning mt-1">Approved but not yet issued</div>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% for allocation in advance.recovery_allocations %}
+                            <div><strong>{{ allocation.salary_payment.period_month }}</strong> — UGX {{ allocation.amount|floatformat:0 }}</div>
+                            {% empty %}
+                                {% if advance.salary_payment %}
+                                <div><strong>{{ advance.salary_payment.period_month }}</strong> — UGX {{ advance.advance_amount|floatformat:0 }}</div>
+                                <div class="small text-muted">Legacy recovery record</div>
+                                {% else %}<span class="text-muted">Not allocated yet</span>{% endif %}
+                            {% endfor %}
+                        </td>
+                        <td>
+                            {% if advance.advance_disbursed_on %}
+                            <div><strong>UGX {{ advance.advance_outstanding_amount|floatformat:0 }}</strong> outstanding</div>
+                            {% elif advance.status == 'MANAGER_APPROVED' %}
+                            <form method="post" action="{% url 'disburse_salary_advance' advance.pk %}" class="d-grid gap-1" style="min-width: 220px;">
+                                {% csrf_token %}
+                                <label class="small text-muted">Actual issue date</label>
+                                <input class="form-control form-control-sm" type="date" name="advance_disbursed_on" max="{{ today|date:'Y-m-d' }}" required>
+                                <select class="form-select form-select-sm" name="advance_payment_method" required>
+                                    <option value="">Payment method</option>
+                                    {% for value, label in advance_payment_method_choices %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
+                                </select>
+                                <input class="form-control form-control-sm" name="advance_payment_reference" maxlength="120" placeholder="Receipt / transaction reference" required>
+                                <button class="btn btn-primary btn-sm" type="submit"><i class="bi bi-check2-circle me-1"></i>Record Issue</button>
+                            </form>
+                            {% else %}<span class="text-muted">No action available</span>{% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="6" class="text-center text-muted py-4">No salary advances match this search.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% include "partials/pagination.html" %}
+</div>
+{% endblock %}

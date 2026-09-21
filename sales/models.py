@@ -1,4 +1,5 @@
 from django.db import models
+from django.utils import timezone
 from decimal import Decimal
 from django.conf import settings
 from django.core.validators import MinValueValidator
@@ -48,6 +49,10 @@ class Customer(models.Model):
 
     def __str__(self) -> str:
         return self.name
+
+    @property
+    def display_id(self) -> str:
+        return f"CUST-{self.customer_id}"
 
 
 class SaleInvoice(models.Model):
@@ -204,6 +209,59 @@ class ReceivableLedger(models.Model):
 
     def __str__(self) -> str:
         return f"{self.invoice.invoice_no} balance {self.balance}"
+
+    @property
+    def is_settled(self):
+        return self.balance <= Decimal("0.00")
+
+    @property
+    def is_overdue(self):
+        due_date = self.invoice.due_date
+        return bool(self.balance > 0 and due_date and due_date < timezone.localdate())
+
+
+class ReceivableEntry(models.Model):
+    """Immutable customer receivable movements for an invoice ledger."""
+
+    class EntryType(models.TextChoices):
+        INVOICE = "INVOICE", "Invoice charge"
+        PAYMENT = "PAYMENT", "Customer payment"
+        ADJUSTMENT = "ADJUSTMENT", "Approved adjustment"
+
+    receivable_entry_id = models.BigAutoField(primary_key=True)
+    receivable = models.ForeignKey(
+        ReceivableLedger,
+        on_delete=models.CASCADE,
+        related_name="entries",
+    )
+    entry_date = models.DateField(db_index=True)
+    entry_type = models.CharField(max_length=16, choices=EntryType.choices, db_index=True)
+    amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal("0.00"))],
+    )
+    balance_after = models.DecimalField(max_digits=14, decimal_places=2)
+    reference = models.CharField(max_length=100, blank=True)
+    notes = models.TextField(blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="receivable_entries_created",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-entry_date", "-receivable_entry_id"]
+        indexes = [
+            models.Index(fields=["receivable", "entry_date"]),
+            models.Index(fields=["entry_type", "entry_date"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.receivable.invoice.invoice_no} / {self.get_entry_type_display()} / {self.amount}"
 
 
 class CustomerPayment(models.Model):

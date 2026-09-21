@@ -260,7 +260,12 @@ def dashboard(request):
                 output_field=DecimalField(max_digits=14, decimal_places=2),
             )
         )["total"],
-        "pending_salaries": SalaryPayment.objects.filter(status=SalaryPayment.Status.PENDING).count(),
+        "pending_salaries": SalaryPayment.objects.filter(
+            status__in=[
+                SalaryPayment.Status.PREPARED,
+                SalaryPayment.Status.PART_PAID,
+            ]
+        ).count(),
         "active_alerts_count": active_alerts.count(),
         "supervisor_alerts_count": supervisor_alerts.count(),
         "urgent_alerts_count": active_alerts.filter(priority=Alert.Priority.URGENT).count(),

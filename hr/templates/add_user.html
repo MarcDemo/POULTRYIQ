@@ -20,6 +20,14 @@
                     <form method="POST" enctype="multipart/form-data" novalidate>
                         {% csrf_token %}
 
+                        <div class="alert alert-info d-flex gap-2" role="note">
+                            <i class="bi bi-info-circle mt-1"></i>
+                            <div>
+                                <strong>Employee onboarding.</strong> The system issues a permanent employee ID when this profile is saved.
+                                Choose whether the employee is paid a monthly salary or an hourly wage; hourly payroll is based on approved hours.
+                            </div>
+                        </div>
+
                         <div class="row g-3">
                             <div class="col-md-6">
                                 <label for="username" class="form-label">
@@ -49,14 +57,14 @@
                                 <input type="tel" id="phone_number" class="form-control" name="phone_number" value="{{ form_data.phone_number }}" placeholder="+256 700 000000">
                             </div>
 
-                            <div class="col-md-2">
-                                <label for="age" class="form-label">
-                                    <i class="bi bi-calendar3 me-1"></i>Age
+                            <div class="col-md-3">
+                                <label for="date_of_birth" class="form-label">
+                                    <i class="bi bi-calendar3 me-1"></i>Date of Birth
                                 </label>
-                                <input type="number" id="age" class="form-control" min="1" name="age" value="{{ form_data.age }}">
+                                <input type="date" id="date_of_birth" class="form-control" name="date_of_birth" value="{{ form_data.date_of_birth }}">
                             </div>
 
-                            <div class="col-md-4">
+                            <div class="col-md-3">
                                 <label for="profile_photo" class="form-label">
                                     <i class="bi bi-image me-1"></i>Profile Picture
                                 </label>
@@ -102,13 +110,6 @@
                             </div>
 
                             <div class="col-md-3">
-                                <label for="employee_number" class="form-label">
-                                    <i class="bi bi-person-badge me-1"></i>Employee #
-                                </label>
-                                <input type="text" id="employee_number" class="form-control" name="employee_number" value="{{ form_data.employee_number }}">
-                            </div>
-
-                            <div class="col-md-3">
                                 <label for="job_title" class="form-label">
                                     <i class="bi bi-briefcase me-1"></i>Job Title
                                 </label>
@@ -143,11 +144,36 @@
                                 <input type="date" id="hire_date" class="form-control" name="hire_date" value="{{ form_data.hire_date }}">
                             </div>
 
-                            <div class="col-md-6">
+                            <div class="col-md-4">
+                                <label for="pay_basis" class="form-label">
+                                    <i class="bi bi-clock-history me-1"></i>Pay Basis
+                                </label>
+                                <select id="pay_basis" class="form-select" name="pay_basis">
+                                    {% for value, label in pay_basis_choices %}
+                                    <option value="{{ value }}" {% if form_data.pay_basis == value %}selected{% endif %}>{{ label }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+
+                            <div class="col-12">
+                                <div class="form-text">
+                                    <i class="bi bi-person-badge me-1"></i>
+                                    Employee ID: <strong>{{ form_data.employee_number|default:"Will be issued automatically when saved" }}</strong>
+                                </div>
+                            </div>
+
+                            <div class="col-md-4">
                                 <label for="monthly_salary" class="form-label">
-                                    <i class="bi bi-cash-coin me-1"></i>Gross Salary
+                                    <i class="bi bi-cash-coin me-1"></i>Monthly Salary (UGX)
                                 </label>
                                 <input type="number" id="monthly_salary" class="form-control" name="monthly_salary" value="{{ form_data.monthly_salary }}" min="0" step="0.01" placeholder="0.00">
+                            </div>
+
+                            <div class="col-md-4">
+                                <label for="hourly_rate" class="form-label">
+                                    <i class="bi bi-stopwatch me-1"></i>Hourly Wage (UGX)
+                                </label>
+                                <input type="number" id="hourly_rate" class="form-control" name="hourly_rate" value="{{ form_data.hourly_rate }}" min="0" step="0.01" placeholder="0.00">
                             </div>
 
                             <div class="col-md-6">
@@ -162,6 +188,39 @@
                                     <input class="form-check-input" type="checkbox" id="pay_paye" name="pay_paye" {% if form_data.pay_paye != "False" %}checked{% endif %}>
                                     <label class="form-check-label" for="pay_paye">Pays PAYE</label>
                                 </div>
+                                <div class="form-check form-check-inline">
+                                    <input class="form-check-input" type="checkbox" id="pay_lst" name="pay_lst" {% if form_data.pay_lst != "False" %}checked{% endif %}>
+                                    <label class="form-check-label" for="pay_lst">Eligible for LST</label>
+                                </div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label for="lst_local_government" class="form-label">
+                                    <i class="bi bi-geo me-1"></i>LST Local Government
+                                </label>
+                                <input type="text" id="lst_local_government" class="form-control" name="lst_local_government" value="{{ form_data.lst_local_government }}" maxlength="120" placeholder="e.g. Kira Municipal Council">
+                                <small class="form-text text-muted">Uganda Local Service Tax is based on the statutory income band and, where applicable, is deducted in four July–October instalments. Only mark an employee eligible when the relevant local authority rules apply.</small>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label for="contract_start_date" class="form-label">
+                                    <i class="bi bi-calendar-range me-1"></i>Contract Start
+                                </label>
+                                <input type="date" id="contract_start_date" class="form-control" name="contract_start_date" value="{{ form_data.contract_start_date }}">
+                            </div>
+
+                            <div class="col-md-6">
+                                <label for="contract_end_date" class="form-label">
+                                    <i class="bi bi-calendar-x me-1"></i>Contract Expiry
+                                </label>
+                                <input type="date" id="contract_end_date" class="form-control" name="contract_end_date" value="{{ form_data.contract_end_date }}">
+                            </div>
+
+                            <div class="col-12">
+                                <label for="contract_notes" class="form-label">
+                                    <i class="bi bi-file-earmark-text me-1"></i>Contract Notes
+                                </label>
+                                <textarea id="contract_notes" class="form-control" name="contract_notes" rows="2" placeholder="Contract terms, renewal notes, or expiry follow-up">{{ form_data.contract_notes }}</textarea>
                             </div>
 
                             <div class="col-md-6">

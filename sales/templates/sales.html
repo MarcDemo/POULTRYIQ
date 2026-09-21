@@ -233,11 +233,11 @@
 
 			<div class="row g-3">
 				<div class="col-md-6">
-					<label class="form-label">Customer Name</label>
+					<label class="form-label">Customer</label>
 					<select class="form-select" name="customer" id="customerName" required>
 						<option value="">Select Customer</option>
 						{% for customer in customers %}
-						<option value="{{ customer.name }}">{{ customer.name }}</option>
+						<option value="{{ customer.customer_id }}">{{ customer.display_id }} — {{ customer.name }}</option>
 						{% endfor %}
 					</select>
 				</div>
@@ -368,7 +368,7 @@
 							<strong>{{ order.invoice_no }}</strong>
 							<span class="badge bg-warning text-dark">UGX {{ order.receivable.balance|default:"0.00" }}</span>
 						</div>
-						<div class="small text-muted">{{ order.customer.name }}</div>
+						<div class="small text-muted">{{ order.customer.display_id }} — {{ order.customer.name }}</div>
 						<div class="small">Pickup: {{ order.due_date|default:"Instant" }} | Total: UGX {{ order.total_amount }}</div>
 					</div>
 					{% empty %}
@@ -402,7 +402,7 @@
 					{% for row in recent_sales %}
 					<tr>
 						<td>{{ row.invoice.invoice_no }}</td>
-						<td>{{ row.invoice.customer.name }}</td>
+						<td>{{ row.invoice.customer.display_id }} — {{ row.invoice.customer.name }}</td>
 						<td>{{ row.product_name }}</td>
 						<td>{{ row.quantity }} {{ row.unit }}</td>
 						<td>UGX {{ row.unit_price }}</td>

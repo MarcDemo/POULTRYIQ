@@ -2,6 +2,7 @@ from datetime import date
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.urls import reverse
 
@@ -13,9 +14,27 @@ from accounting.models import (
     FixedAssetAcquisition,
     AssetConstructionProject,
     AssetConstructionCostLine,
+    Budget,
+    BudgetLine,
+    FiscalPeriod,
+    JournalEntry,
+    JournalLine,
 )
 from accounting.balance_sheet_data import BALANCE_SHEET_ACCOUNTS
-from accounting.services import get_pl_data, get_bs_data
+from accounting.services import (
+    budget_variance_summary,
+    change_budget_status,
+    dispose_fixed_asset,
+    ensure_fiscal_periods,
+    ensure_payroll_accounts,
+    get_bs_data,
+    get_pl_data,
+    post_asset_purchase,
+    post_journal_entry,
+    post_salary_accrual,
+    post_salary_advance,
+    revalue_fixed_asset,
+)
 from expenses.models import ExpenseCategory, ExpenseTransaction
 from hr.models import WelfareRequest
 from inventory.models import InventoryTransaction, Item, ItemCategory, Store
@@ -294,7 +313,7 @@ class BalanceSheetAccountTests(TestCase):
         self.assertEqual(self._account_row("321002")["amount"], Decimal("450000.00"))
 
     def test_balance_sheet_wires_payroll_tax_creditors_and_equity(self):
-        SalaryPayment.objects.create(
+        salary = SalaryPayment.objects.create(
             employee=self.manager,
             period_month="2026-06",
             amount=Decimal("700000.00"),
@@ -304,9 +323,12 @@ class BalanceSheetAccountTests(TestCase):
             nssf_employer=Decimal("100000.00"),
             net_pay=Decimal("700000.00"),
             payment_date=date(2026, 6, 30),
-            status=SalaryPayment.Status.PENDING,
+            status=SalaryPayment.Status.PREPARED,
             recorded_by=self.manager,
         )
+        salary_entry = post_salary_accrual(salary, created_by=self.manager)
+        salary.liability_entry_reference = salary_entry.reference
+        salary.save(update_fields=["liability_entry_reference"])
         audit_category = ExpenseCategory.objects.create(
             code="AUDIT_FEES",
             name="Audit Fees",
@@ -338,8 +360,8 @@ class BalanceSheetAccountTests(TestCase):
         self.assertEqual(self._account_row("431001")["amount"], Decimal("300000.00"))
         self.assertEqual(self._account_row("511001")["amount"], Decimal("2000000.00"))
 
-    def test_salary_advances_are_wired_as_prepaid_salaries(self):
-        WelfareRequest.objects.create(
+    def test_salary_advances_are_wired_as_staff_advances_receivable(self):
+        advance = WelfareRequest.objects.create(
             worker=self.manager,
             request_type=WelfareRequest.RequestType.SALARY_ADVANCE,
             title="July salary advance",
@@ -348,14 +370,119 @@ class BalanceSheetAccountTests(TestCase):
             advance_period_start=date(2026, 7, 1),
             advance_period_end=date(2026, 7, 31),
             status=WelfareRequest.Status.MANAGER_APPROVED,
+            advance_disbursed_on=date(2026, 7, 1),
+            advance_payment_method=WelfareRequest.AdvancePaymentMethod.CASH,
+            advance_payment_reference="CASH-ADV-01",
+            advance_disbursed_by=self.manager,
         )
+        post_salary_advance(advance, created_by=self.manager)
 
         bs_data = get_bs_data(end_date=date(2026, 7, 15))
         assets_group = next(row for row in bs_data["grouped_accounts"] if row["group_value"] == "ASSETS")
-        prepayments = next(row for row in assets_group["type_groups"] if row["type_value"] == "PREPAYMENT")
-        prepaid_salaries = next(row for row in prepayments["accounts"] if row["code"] == "341002")
         staff_advances = next(row for row in assets_group["type_groups"] if row["type_value"] == "RECEIVABLE")
         staff_advances_row = next(row for row in staff_advances["accounts"] if row["code"] == "331003")
 
-        self.assertEqual(prepaid_salaries["amount"], Decimal("170000.00"))
-        self.assertEqual(staff_advances_row["amount"], Decimal("0.00"))
+        self.assertEqual(staff_advances_row["account_name"], "Staff Advances Receivable")
+        self.assertEqual(staff_advances_row["amount"], Decimal("310000.00"))
+
+
+class AccountingWorkflowTests(TestCase):
+    def setUp(self):
+        self.manager_role = Role.objects.create(code=Role.RoleCode.MANAGER, name="Accounting Workflow Manager")
+        self.manager = get_user_model().objects.create_user(
+            username="workflow-manager",
+            password="pass1234",
+            role=self.manager_role,
+        )
+
+    def test_posted_journal_receives_immutable_fdn(self):
+        accounts = ensure_payroll_accounts()
+        entry = post_journal_entry(
+            entry_date=date(2026, 8, 15),
+            reference="TEST-FDN-1",
+            description="FDN test entry",
+            lines=[
+                {"account": accounts["salary_expense"], "debit": Decimal("100.00")},
+                {"account": accounts["cash"], "credit": Decimal("100.00")},
+            ],
+            created_by=self.manager,
+        )
+
+        self.assertEqual(entry.fdn, f"FDN-202608-{entry.pk:06d}")
+        entry.reference = "CHANGED"
+        with self.assertRaises(ValidationError):
+            entry.save()
+        with self.assertRaises(ValidationError):
+            JournalLine.objects.create(
+                entry=entry,
+                account=accounts["salary_expense"],
+                debit=Decimal("1.00"),
+            )
+
+    def test_budget_uses_posted_ledger_actuals_and_locks_after_approval(self):
+        accounts = ensure_payroll_accounts()
+        periods = ensure_fiscal_periods(2026)
+        january = next(period for period in periods if period.period_number == 1)
+        budget = Budget.objects.create(
+            name="FY 2026 Payroll",
+            fiscal_year=2026,
+            version=1,
+            created_by=self.manager,
+        )
+        line = BudgetLine.objects.create(
+            budget=budget,
+            account=accounts["salary_expense"],
+            fiscal_period=january,
+            amount=Decimal("1000.00"),
+        )
+        post_journal_entry(
+            entry_date=date(2026, 1, 31),
+            reference="BUDGET-ACTUAL-1",
+            description="January payroll actual",
+            lines=[
+                {"account": accounts["salary_expense"], "debit": Decimal("1200.00")},
+                {"account": accounts["cash"], "credit": Decimal("1200.00")},
+            ],
+            created_by=self.manager,
+        )
+
+        summary = budget_variance_summary(budget)
+        self.assertEqual(summary["actual_total"], Decimal("1200.00"))
+        self.assertEqual(summary["variance_total"], Decimal("200.00"))
+        budget = change_budget_status(budget, status=Budget.Status.APPROVED, changed_by=self.manager)
+        line.amount = Decimal("1250.00")
+        with self.assertRaises(ValidationError):
+            line.save()
+
+    def test_revaluation_and_disposal_post_audit_journals(self):
+        category = AssetCategory.objects.get(legacy_code="HARDWARE_EQUIPMENT")
+        asset = FixedAssetAcquisition.objects.create(
+            asset_name="Workflow Generator",
+            asset_category=category,
+            acquisition_date=date(2026, 1, 1),
+            in_service_date=date(2026, 1, 1),
+            amount=Decimal("1000.00"),
+            residual_value=Decimal("0.00"),
+            useful_life_years=5,
+            payment_method="CASH",
+            created_by=self.manager,
+        )
+        post_asset_purchase(asset, created_by=self.manager)
+        revaluation = revalue_fixed_asset(
+            asset=asset,
+            revaluation_date=date(2026, 2, 1),
+            new_value=Decimal("1100.00"),
+            reason="Independent valuation",
+            created_by=self.manager,
+        )
+        disposal = dispose_fixed_asset(
+            asset=asset,
+            disposal_date=date(2026, 3, 1),
+            proceeds=Decimal("0.00"),
+            reason="Damaged beyond repair",
+            created_by=self.manager,
+        )
+        asset.refresh_from_db()
+        self.assertTrue(revaluation.journal_entry.fdn.startswith("FDN-"))
+        self.assertTrue(disposal.journal_entry.fdn.startswith("FDN-"))
+        self.assertFalse(asset.is_active)

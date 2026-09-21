@@ -1,0 +1,121 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container-fluid">
+    <div class="page-header-row mb-4 d-flex justify-content-between flex-wrap gap-2">
+        <div>
+            <h2 class="mb-1"><i class="bi bi-stopwatch me-2"></i>Hourly Wages</h2>
+            <small class="text-muted">Record actual hours for a month before preparing its payroll.</small>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+            <a class="btn btn-outline-primary" href="{% url 'pending_salaries' period_month %}"><i class="bi bi-wallet2 me-1"></i>Open {{ period_month }} Payroll</a>
+            <a class="btn btn-outline-secondary" href="{% url 'salary_history' %}"><i class="bi bi-clock-history me-1"></i>Salary History</a>
+        </div>
+    </div>
+
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        {% endfor %}
+    {% endif %}
+
+    <div class="row g-4">
+        <div class="col-lg-4">
+            <div class="card mb-4">
+                <div class="card-body">
+                    <label class="form-label" for="hourly-month">Payroll month</label>
+                    <div class="input-group">
+                        <input id="hourly-month" class="form-control" type="month" value="{{ period_month }}">
+                        <button type="button" class="btn btn-outline-primary" id="open-hourly-month">Open</button>
+                    </div>
+                    <small class="text-muted d-block mt-2">Only active staff whose onboarding pay basis is “Hourly wage” can be selected.</small>
+                </div>
+            </div>
+
+            <form method="post" class="card">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="add_hourly_entry">
+                <input type="hidden" name="period_month" value="{{ period_month }}">
+                <div class="card-header"><strong>Add work hours</strong></div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="form-label" for="hourly-employee">Employee</label>
+                        <select class="form-select" id="hourly-employee" name="employee" required>
+                            <option value="">Select employee</option>
+                            {% for employee in hourly_employees %}
+                                <option value="{{ employee.pk }}" data-rate="{{ employee.staff_profile.hourly_rate }}">{{ employee.display_name|default:employee.username }}{% if employee.staff_profile.employee_number %} · {{ employee.staff_profile.employee_number }}{% endif %}</option>
+                            {% empty %}
+                                <option value="" disabled>No eligible hourly employees</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="row g-3">
+                        <div class="col-sm-6">
+                            <label class="form-label" for="work-date">Work date</label>
+                            <input class="form-control" id="work-date" type="date" name="work_date" required>
+                        </div>
+                        <div class="col-sm-6">
+                            <label class="form-label" for="hours-worked">Hours</label>
+                            <input class="form-control" id="hours-worked" type="number" name="hours_worked" min="0.01" step="0.01" required>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label" for="hourly-rate">Hourly rate (UGX)</label>
+                            <input class="form-control" id="hourly-rate" type="number" name="hourly_rate" min="0.01" step="0.01" required>
+                            <small class="text-muted">Defaults from onboarding and is saved with this work entry.</small>
+                        </div>
+                    </div>
+                    <div class="mt-3">
+                        <label class="form-label" for="hourly-notes">Notes</label>
+                        <textarea class="form-control" id="hourly-notes" name="notes" rows="2" placeholder="Optional shift, task, or approval note"></textarea>
+                    </div>
+                </div>
+                <div class="card-footer text-end"><button class="btn btn-success" type="submit"><i class="bi bi-plus-circle me-1"></i>Add Hours</button></div>
+            </form>
+        </div>
+
+        <div class="col-lg-8">
+            <div class="row g-3 mb-3">
+                <div class="col-sm-6"><div class="card"><div class="card-body"><div class="small text-muted">Recorded hours</div><div class="h4 mb-0">{{ total_hours|floatformat:2 }}</div></div></div></div>
+                <div class="col-sm-6"><div class="card"><div class="card-body"><div class="small text-muted">Gross hourly wages</div><div class="h4 mb-0">{{ total_gross|floatformat:0 }}</div></div></div></div>
+            </div>
+            <div class="card">
+                <div class="card-header"><strong>{{ period_month }} work entries</strong></div>
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead><tr><th>Date</th><th>Employee</th><th>Hours</th><th>Rate</th><th>Gross</th><th>Payroll status</th><th></th></tr></thead>
+                        <tbody>
+                            {% for entry in entries %}
+                                <tr>
+                                    <td>{{ entry.work_date }}</td>
+                                    <td><strong>{{ entry.employee.display_name|default:entry.employee.username }}</strong></td>
+                                    <td>{{ entry.hours_worked|floatformat:2 }}</td>
+                                    <td>{{ entry.hourly_rate|floatformat:0 }}</td>
+                                    <td><strong>{{ entry.gross_amount|floatformat:0 }}</strong></td>
+                                    <td>{% if entry.salary_payment %}<span class="badge bg-secondary">Included in {{ entry.salary_payment.period_month }}</span>{% else %}<span class="badge bg-warning text-dark">Not prepared</span>{% endif %}</td>
+                                    <td class="text-end">{% if not entry.salary_payment %}<form method="post">{% csrf_token %}<input type="hidden" name="action" value="remove_hourly_entry"><input type="hidden" name="period_month" value="{{ period_month }}"><input type="hidden" name="entry_id" value="{{ entry.pk }}"><button class="btn btn-sm btn-outline-danger" type="submit">Remove</button></form>{% else %}<span class="small text-muted">Locked</span>{% endif %}</td>
+                                </tr>
+                            {% empty %}
+                                <tr><td colspan="7" class="text-center text-muted py-4">No hourly work has been recorded for this month.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const month = document.getElementById('hourly-month');
+    const open = document.getElementById('open-hourly-month');
+    const employee = document.getElementById('hourly-employee');
+    const rate = document.getElementById('hourly-rate');
+    const workDate = document.getElementById('work-date');
+    if (workDate) workDate.value = '{{ period_month }}-01';
+    if (open) open.addEventListener('click', function () { if (month.value) window.location.href = '{% url "hourly_wages" %}?month=' + encodeURIComponent(month.value); });
+    if (employee && rate) employee.addEventListener('change', function () { const option = employee.options[employee.selectedIndex]; if (option && option.dataset.rate) rate.value = option.dataset.rate; });
+});
+</script>
+{% endblock %}
