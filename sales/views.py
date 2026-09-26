@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 from django.contrib import messages
@@ -14,7 +14,7 @@ from poultry.models import ApprovalStatus, egg_collection
 from poultryiq.pagination import paginate
 from accounting.models import AccountingCode, ChartOfAccount
 from accounting.services import account_by_system_code, payment_account_for_method, post_customer_payment, post_sale, post_sale_delivery
-from .models import Customer, CustomerPayment, ReceivableLedger, SaleInvoice, SaleItem
+from .models import Customer, CustomerPayment, ReceivableEntry, ReceivableLedger, SaleInvoice, SaleItem
 
 
 EGGS_PER_TRAY = Decimal("30")
@@ -276,6 +276,106 @@ def _payment_method_from_post(raw_value):
     }.get((raw_value or "").strip().upper(), Customer.PaymentMethod.CASH)
 
 
+def _customer_from_sale_value(raw_value):
+    """Accept current customer IDs while retaining name support for legacy form posts."""
+    value = (raw_value or "").strip()
+    if not value:
+        return None
+    if value.isdigit():
+        return Customer.objects.filter(customer_id=value, is_active=True).first()
+    return Customer.objects.filter(name__iexact=value, is_active=True).first()
+
+
+def _customer_open_receivable_balance(customer):
+    return ReceivableLedger.objects.filter(
+        invoice__customer=customer,
+        invoice__status__in=[SaleInvoice.Status.DRAFT, SaleInvoice.Status.ISSUED],
+        balance__gt=0,
+    ).aggregate(
+        total=Coalesce(
+            Sum("balance"),
+            Value(Decimal("0.00")),
+            output_field=DecimalField(max_digits=14, decimal_places=2),
+        )
+    )["total"]
+
+
+def _credit_validation_error(customer, new_credit_amount):
+    """Return a customer-facing message when a new balance cannot be put on credit."""
+    if new_credit_amount <= 0:
+        return None
+    if not customer.allow_credit:
+        return f"{customer.name} is not approved for credit. Collect the full amount before saving the sale."
+
+    # A zero limit has historically meant that no ceiling was configured. Keep that
+    # behaviour for existing customers while enforcing every configured limit.
+    if customer.credit_limit > 0:
+        outstanding = _customer_open_receivable_balance(customer)
+        proposed_balance = (outstanding + new_credit_amount).quantize(Decimal("0.01"))
+        if proposed_balance > customer.credit_limit:
+            return (
+                f"This sale would put {customer.display_id} at UGX {proposed_balance:,.0f}, "
+                f"above its UGX {customer.credit_limit:,.0f} credit limit."
+            )
+    return None
+
+
+def _add_receivable_entry(*, receivable, entry_date, entry_type, amount, balance_after, reference="", notes="", created_by=None):
+    return ReceivableEntry.objects.create(
+        receivable=receivable,
+        entry_date=entry_date,
+        entry_type=entry_type,
+        amount=amount,
+        balance_after=balance_after,
+        reference=reference,
+        notes=notes,
+        created_by=created_by,
+    )
+
+
+def _record_receivable_payment(*, invoice, amount, method, reference, notes, received_by, payment_date=None):
+    """Create the payment, its accounting journal, and its immutable AR movement."""
+    receivable = getattr(invoice, "receivable", None)
+    if not receivable:
+        raise ValidationError("No receivable record found for this invoice.")
+    amount = Decimal(amount).quantize(Decimal("0.01"))
+    if amount <= 0:
+        raise ValidationError("Payment amount must be greater than zero.")
+    if amount > receivable.balance:
+        raise ValidationError(
+            f"Payment amount cannot exceed the outstanding balance of UGX {receivable.balance:,.0f}."
+        )
+
+    payment_date = payment_date or date.today()
+    payment = CustomerPayment.objects.create(
+        invoice=invoice,
+        customer=invoice.customer,
+        payment_date=payment_date,
+        method=method,
+        amount=amount,
+        reference=reference,
+        notes=notes,
+        received_by=received_by,
+    )
+    post_customer_payment(payment, created_by=received_by)
+    receivable.amount_paid = (receivable.amount_paid + amount).quantize(Decimal("0.01"))
+    receivable.balance = (receivable.amount_due - receivable.amount_paid).quantize(Decimal("0.01"))
+    receivable.last_payment_date = payment_date
+    receivable.save(update_fields=["amount_paid", "balance", "last_payment_date"])
+    _add_receivable_entry(
+        receivable=receivable,
+        entry_date=payment_date,
+        entry_type=ReceivableEntry.EntryType.PAYMENT,
+        amount=amount,
+        balance_after=receivable.balance,
+        reference=reference or f"PAY-{payment.payment_id}",
+        notes=notes,
+        created_by=received_by,
+    )
+    _refresh_invoice_financial_status(invoice, receivable)
+    return payment, receivable
+
+
 def _customer_form_data(request):
     return {
         "name": request.POST.get("name", "").strip(),
@@ -364,12 +464,17 @@ def customers(request):
     ).order_by("name")
     query = request.GET.get("q", "").strip()
     if query:
-        customers_qs = customers_qs.filter(
+        search_filter = (
             Q(name__icontains=query)
             | Q(contact_person__icontains=query)
             | Q(phone_number__icontains=query)
             | Q(email__icontains=query)
         )
+        if query.upper().startswith("CUST-"):
+            query = query[5:]
+        if query.isdigit():
+            search_filter |= Q(customer_id=int(query))
+        customers_qs = customers_qs.filter(search_filter)
 
     if request.method == "POST":
         form_data = _customer_form_data(request)
@@ -446,6 +551,9 @@ def customer_profile(request, pk):
         .order_by("-invoice_date", "-invoice_id")[:20]
     )
     payments = customer.payments.select_related("invoice", "received_by").order_by("-payment_date", "-payment_id")[:20]
+    receivable_entries = ReceivableEntry.objects.filter(
+        receivable__invoice__customer=customer
+    ).select_related("receivable", "receivable__invoice").order_by("-entry_date", "-receivable_entry_id")[:30]
     totals = customer.invoices.aggregate(
         sales=Coalesce(Sum("total_amount"), Value(Decimal("0.00")), output_field=DecimalField(max_digits=14, decimal_places=2)),
         paid=Coalesce(Sum("receivable__amount_paid"), Value(Decimal("0.00")), output_field=DecimalField(max_digits=14, decimal_places=2)),
@@ -460,7 +568,54 @@ def customer_profile(request, pk):
             "payment_method_choices": Customer.PaymentMethod.choices,
             "invoices": invoices,
             "payments": payments,
+            "receivable_entries": receivable_entries,
             "totals": totals,
+        },
+    )
+
+
+@login_required(login_url="login")
+def receivables(request):
+    """A focused customer-credit register with balances and payment history links."""
+    query = request.GET.get("q", "").strip()
+    ledgers = ReceivableLedger.objects.select_related("invoice", "invoice__customer").filter(
+        balance__gt=0,
+        invoice__status__in=[SaleInvoice.Status.DRAFT, SaleInvoice.Status.ISSUED],
+    ).order_by("invoice__due_date", "invoice__invoice_date", "invoice__invoice_id")
+    if query:
+        search_filter = Q(invoice__invoice_no__icontains=query) | Q(invoice__customer__name__icontains=query)
+        raw_customer_id = query[5:] if query.upper().startswith("CUST-") else query
+        if raw_customer_id.isdigit():
+            search_filter |= Q(invoice__customer__customer_id=int(raw_customer_id))
+        ledgers = ledgers.filter(search_filter)
+
+    summary = ledgers.aggregate(
+        total=Coalesce(
+            Sum("balance"),
+            Value(Decimal("0.00")),
+            output_field=DecimalField(max_digits=14, decimal_places=2),
+        )
+    )
+    overdue = ledgers.filter(invoice__due_date__lt=date.today())
+    page_obj, querystring = paginate(request, ledgers, per_page=25)
+    return render(
+        request,
+        "receivables.html",
+        {
+            "receivables": page_obj,
+            "page_obj": page_obj,
+            "querystring": querystring,
+            "q": query,
+            "open_total": summary["total"],
+            "overdue_total": overdue.aggregate(
+                total=Coalesce(
+                    Sum("balance"),
+                    Value(Decimal("0.00")),
+                    output_field=DecimalField(max_digits=14, decimal_places=2),
+                )
+            )["total"],
+            "overdue_count": overdue.count(),
+            "payment_method_choices": CustomerPayment.Method.choices,
         },
     )
 
@@ -471,7 +626,7 @@ def sales(request):
     pending_orders = _pending_orders_queryset()
 
     if request.method == "POST":
-        customer_name = request.POST.get("customer", "").strip()
+        customer_value = request.POST.get("customer", "").strip()
         phone = request.POST.get("phone", "").strip()
         product_key = request.POST.get("product", "").strip()
         quantity_raw = request.POST.get("quantity", "0").strip()
@@ -484,9 +639,10 @@ def sales(request):
 
         errors = []
 
-        if not customer_name:
-            errors.append("Customer name is required.")
-        elif not Customer.objects.filter(name__iexact=customer_name, is_active=True).exists():
+        customer = _customer_from_sale_value(customer_value)
+        if not customer_value:
+            errors.append("Customer is required.")
+        elif not customer:
             errors.append("Please select a valid active customer.")
 
         if product_key not in stock:
@@ -555,7 +711,6 @@ def sales(request):
                 messages.error(request, "No receivable account is configured for unpaid or partially paid sales.")
                 return redirect("sales")
 
-            customer = Customer.objects.filter(name__iexact=customer_name).first()
             wht_amount = (line_total * WHT_RATE).quantize(Decimal("0.01")) if customer and customer.pay_wht else Decimal("0.00")
             customer_amount_due = (line_total - wht_amount).quantize(Decimal("0.01"))
             if amount_paid > customer_amount_due:
@@ -564,6 +719,18 @@ def sales(request):
                     f"Amount paid cannot exceed {customer_amount_due} because this customer has withholding tax.",
                 )
                 return redirect("sales")
+
+            credit_error = _credit_validation_error(customer, customer_amount_due - amount_paid)
+            if credit_error:
+                messages.error(request, credit_error)
+                return redirect("sales")
+
+            credit_base_date = delivery_date if sale_type == "booking" and delivery_date else today
+            due_date = (
+                credit_base_date + timedelta(days=customer.credit_days)
+                if customer_amount_due > amount_paid
+                else None
+            )
 
             with transaction.atomic():
                 if customer:
@@ -583,7 +750,7 @@ def sales(request):
                     invoice_no=_next_invoice_no(today),
                     customer=customer,
                     invoice_date=today,
-                    due_date=delivery_date,
+                    due_date=due_date,
                     subtotal=line_total,
                     discount_amount=Decimal("0.00"),
                     total_amount=line_total,
@@ -627,22 +794,42 @@ def sales(request):
                 )
                 post_sale(sale_item, amount_paid=amount_paid, created_by=request.user)
 
-                ReceivableLedger.objects.create(
+                receivable = ReceivableLedger.objects.create(
                     invoice=invoice,
                     amount_due=customer_amount_due,
                     amount_paid=amount_paid,
                     balance=balance,
                     last_payment_date=today if amount_paid > 0 else None,
                 )
+                _add_receivable_entry(
+                    receivable=receivable,
+                    entry_date=today,
+                    entry_type=ReceivableEntry.EntryType.INVOICE,
+                    amount=customer_amount_due,
+                    balance_after=customer_amount_due,
+                    reference=invoice.invoice_no,
+                    notes="Invoice issued to customer",
+                    created_by=request.user,
+                )
 
                 if amount_paid > 0:
-                    CustomerPayment.objects.create(
+                    payment = CustomerPayment.objects.create(
                         invoice=invoice,
                         customer=customer,
                         payment_date=today,
                         method=payment_method,
                         amount=amount_paid,
                         received_by=request.user,
+                    )
+                    _add_receivable_entry(
+                        receivable=receivable,
+                        entry_date=today,
+                        entry_type=ReceivableEntry.EntryType.PAYMENT,
+                        amount=amount_paid,
+                        balance_after=balance,
+                        reference=f"PAY-{payment.payment_id}",
+                        notes="Payment received with sale",
+                        created_by=request.user,
                     )
 
             messages.success(request, f"Sale saved successfully. Invoice {invoice.invoice_no} created.")
@@ -663,7 +850,7 @@ def sales(request):
         "pending_orders_preview": pending_orders[:5],
         "customers": Customer.objects.filter(is_active=True).order_by("name"),
         "customer_payment_defaults": {
-            customer.name: {
+            str(customer.customer_id): {
                 "phone": customer.phone_number,
                 "preferred_payment_method": customer.preferred_payment_method,
                 "pay_wht": customer.pay_wht,
@@ -735,24 +922,14 @@ def orders(request):
 
                 try:
                     with transaction.atomic():
-                        receivable.amount_paid = (receivable.amount_paid + payment_amount).quantize(Decimal("0.01"))
-                        receivable.balance = (receivable.amount_due - receivable.amount_paid).quantize(Decimal("0.01"))
-                        receivable.last_payment_date = date.today()
-                        receivable.save(update_fields=["amount_paid", "balance", "last_payment_date"])
-
-                        payment = CustomerPayment.objects.create(
+                        _payment, receivable = _record_receivable_payment(
                             invoice=invoice,
-                            customer=invoice.customer,
-                            payment_date=date.today(),
                             method=payment_method,
                             amount=payment_amount,
                             reference=payment_reference,
                             notes=payment_notes,
                             received_by=request.user,
                         )
-                        post_customer_payment(payment, created_by=request.user)
-
-                        _refresh_invoice_financial_status(invoice, receivable)
                 except ValidationError as exc:
                     messages.error(request, "; ".join(exc.messages) if hasattr(exc, "messages") else str(exc))
                     return redirect("orders")
@@ -814,3 +991,43 @@ def orders(request):
         **_pending_orders_metrics(pending_orders),
     }
     return render(request, 'orders.html', context)
+
+
+@login_required(login_url="login")
+def record_receivable_payment(request, receivable_id):
+    if request.method != "POST":
+        return redirect("receivables")
+
+    receivable = get_object_or_404(
+        ReceivableLedger.objects.select_related("invoice", "invoice__customer"),
+        pk=receivable_id,
+        balance__gt=0,
+    )
+    try:
+        amount = Decimal(request.POST.get("payment_amount", "0").strip())
+    except (InvalidOperation, ValueError):
+        amount = Decimal("0.00")
+    method = {
+        "CASH": CustomerPayment.Method.CASH,
+        "MOBILE MONEY": CustomerPayment.Method.MOMO,
+        "MOMO": CustomerPayment.Method.MOMO,
+        "BANK": CustomerPayment.Method.BANK,
+        "OTHER": CustomerPayment.Method.OTHER,
+    }.get(request.POST.get("payment_method", "CASH").strip().upper(), CustomerPayment.Method.CASH)
+
+    try:
+        with transaction.atomic():
+            _payment, updated_receivable = _record_receivable_payment(
+                invoice=receivable.invoice,
+                amount=amount,
+                method=method,
+                reference=request.POST.get("payment_reference", "").strip(),
+                notes=request.POST.get("payment_notes", "").strip(),
+                received_by=request.user,
+            )
+    except ValidationError as exc:
+        messages.error(request, "; ".join(exc.messages) if hasattr(exc, "messages") else str(exc))
+    else:
+        state = "fully paid" if updated_receivable.balance <= 0 else "partially paid"
+        messages.success(request, f"Payment saved. {updated_receivable.invoice.invoice_no} is now {state}.")
+    return redirect("receivables")

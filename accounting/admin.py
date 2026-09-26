@@ -14,6 +14,12 @@ from .models import (
     FixedAssetAcquisition,
     AssetConstructionProject,
     AssetConstructionCostLine,
+    Budget,
+    BudgetLine,
+    FiscalPeriod,
+    DepreciationRun,
+    FixedAssetDisposal,
+    FixedAssetRevaluation,
 )
 
 
@@ -165,10 +171,10 @@ class JournalLineInline(admin.TabularInline):
 
 @admin.register(JournalEntry)
 class JournalEntryAdmin(admin.ModelAdmin):
-    list_display = ("reference", "entry_date", "description", "status", "total_debits", "total_credits")
+    list_display = ("fdn", "reference", "entry_date", "description", "status", "total_debits", "total_credits")
     list_filter = ("status", "entry_date", "lines__account__account_type__account_nature")
-    search_fields = ("reference", "description", "lines__account__code", "lines__account__account_name")
-    readonly_fields = ("reference", "entry_date", "description", "status", "content_type", "object_id", "created_by", "created_at")
+    search_fields = ("fdn", "reference", "description", "lines__account__code", "lines__account__account_name")
+    readonly_fields = ("fdn", "reference", "entry_date", "description", "status", "content_type", "object_id", "created_by", "created_at", "void_reason", "voided_by", "voided_at", "reversal_of")
     inlines = (JournalLineInline,)
     ordering = ("-entry_date", "-id")
 
@@ -178,10 +184,10 @@ class JournalEntryAdmin(admin.ModelAdmin):
 
 @admin.register(FixedAssetAcquisition)
 class FixedAssetAcquisitionAdmin(admin.ModelAdmin):
-    list_display = ("asset_name", "asset_category", "acquisition_date", "amount", "payment_method", "is_active")
+    list_display = ("asset_name", "asset_category", "acquisition_date", "amount", "payment_method_display", "supplier", "is_active")
     list_filter = ("asset_category", "is_active", "acquisition_date")
     search_fields = ("asset_name", "notes")
-    autocomplete_fields = ("asset_category",)
+    autocomplete_fields = ("asset_category", "payment_method_option", "supplier")
     ordering = ("-acquisition_date",)
 
 
@@ -200,3 +206,51 @@ class AssetConstructionCostLineAdmin(admin.ModelAdmin):
     list_filter = ("cost_date",)
     search_fields = ("project__project_name", "cost_item_name", "notes")
     ordering = ("-cost_date",)
+
+
+class BudgetLineInline(admin.TabularInline):
+    model = BudgetLine
+    extra = 0
+    autocomplete_fields = ("account", "fiscal_period")
+
+
+@admin.register(Budget)
+class BudgetAdmin(admin.ModelAdmin):
+    list_display = ("name", "fiscal_year", "version", "status", "approved_by", "approved_at")
+    list_filter = ("fiscal_year", "status")
+    search_fields = ("name", "notes")
+    readonly_fields = ("created_at", "updated_at", "approved_at")
+    inlines = (BudgetLineInline,)
+
+
+@admin.register(FiscalPeriod)
+class FiscalPeriodAdmin(admin.ModelAdmin):
+    list_display = ("fiscal_year", "period_number", "label", "start_date", "end_date", "is_closed")
+    list_filter = ("fiscal_year", "is_closed")
+    search_fields = ("label",)
+    ordering = ("-fiscal_year", "period_number")
+
+
+@admin.register(DepreciationRun)
+class DepreciationRunAdmin(admin.ModelAdmin):
+    list_display = ("period_year", "period_month", "status", "posted_count", "skipped_count", "total_amount", "run_by", "ran_at")
+    list_filter = ("status", "period_year")
+    readonly_fields = ("created_at", "ran_at")
+
+
+@admin.register(FixedAssetDisposal)
+class FixedAssetDisposalAdmin(admin.ModelAdmin):
+    list_display = ("asset", "disposal_date", "proceeds", "book_value", "gain_loss", "journal_entry")
+    list_filter = ("disposal_date",)
+    search_fields = ("asset__asset_name", "reason", "journal_entry__fdn")
+    autocomplete_fields = ("asset", "payment_method_option")
+    readonly_fields = ("accumulated_depreciation", "book_value", "gain_loss", "depreciation_entry", "journal_entry", "created_at")
+
+
+@admin.register(FixedAssetRevaluation)
+class FixedAssetRevaluationAdmin(admin.ModelAdmin):
+    list_display = ("asset", "revaluation_date", "old_book_value", "new_value", "adjustment", "journal_entry")
+    list_filter = ("revaluation_date",)
+    search_fields = ("asset__asset_name", "reason", "journal_entry__fdn")
+    autocomplete_fields = ("asset",)
+    readonly_fields = ("old_book_value", "adjustment", "journal_entry", "created_at")

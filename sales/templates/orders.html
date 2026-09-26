@@ -276,7 +276,7 @@
 
 						<div>
 							<div class="meta-label">Customer</div>
-							<div class="meta-value">{{ order.customer.name }}</div>
+							<div class="meta-value">{{ order.customer.display_id }} — {{ order.customer.name }}</div>
 							<div class="small text-muted">Taken by {{ order.created_by.get_full_name|default:order.created_by.username }}</div>
 						</div>
 
