@@ -1,547 +1,221 @@
+from datetime import date
+from decimal import Decimal
+from unittest.mock import Mock, patch
+
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
-from django.utils import timezone
-from datetime import date
-from decimal import Decimal
-from unittest.mock import patch
 
 from accounts.models import Role
-from hr.models import StaffProfile, WelfareRequest
-from .models import SalaryBonus, SalaryPayment, SalaryPaymentEditLog
+from hr.models import SalaryAdvanceAllocation, StaffProfile, WelfareRequest
+from payroll.models import HourlyWorkEntry, SalaryDisbursement, SalaryPayment
+from payroll.services import (
+    accrue_due_salary_liabilities,
+    calculate_paye,
+    calculate_salary_breakdown,
+    calculate_uganda_lst,
+    prepare_monthly_payroll,
+    record_salary_disbursement,
+)
 
 
-class SalariesViewTests(TestCase):
-    def test_salaries_page_renders(self):
-        role = Role.objects.create(code=Role.RoleCode.MANAGER, name="Farm Manager")
-        user = get_user_model().objects.create_user(
-            username="salary-user",
-            password="pass1234",
-            role=role,
+class PayrollWorkflowTests(TestCase):
+    def setUp(self):
+        self.manager_role = Role.objects.create(code=Role.RoleCode.MANAGER, name="Farm Manager")
+        self.worker_role = Role.objects.create(code=Role.RoleCode.WORKER, name="Farm Worker")
+        self.manager = get_user_model().objects.create_user(
+            username="payroll-manager", password="pass1234", role=self.manager_role
         )
-        self.client.force_login(user)
 
-        response = self.client.get(reverse("salaries"))
-
-        self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, "payroll/salaries.html")
-        self.assertContains(response, "Pending Salaries")
-
-    def test_generate_monthly_payroll_deducts_approved_advances(self):
-        manager_role = Role.objects.create(code=Role.RoleCode.MANAGER, name="Farm Manager")
-        worker_role = Role.objects.create(code=Role.RoleCode.WORKER, name="Farm Worker")
-        manager = get_user_model().objects.create_user(
-            username="payroll-manager",
-            password="pass1234",
-            role=manager_role,
-        )
+    def make_worker(self, username, **profile_values):
         worker = get_user_model().objects.create_user(
-            username="worker-payroll",
+            username=username,
             password="pass1234",
-            role=worker_role,
+            role=self.worker_role,
         )
-        StaffProfile.objects.create(user=worker, monthly_salary="1000000.00")
-        WelfareRequest.objects.create(
+        defaults = {
+            "monthly_salary": Decimal("1000000.00"),
+            "pay_nssf": False,
+            "pay_paye": False,
+        }
+        defaults.update(profile_values)
+        StaffProfile.objects.create(user=worker, **defaults)
+        return worker
+
+    def test_uganda_lst_uses_july_to_october_installments_before_paye(self):
+        self.assertEqual(calculate_uganda_lst(Decimal("150000"), "2026-07", eligible=True), Decimal("1250.00"))
+        self.assertEqual(calculate_uganda_lst(Decimal("150000"), "2026-11", eligible=True), Decimal("0.00"))
+        self.assertEqual(calculate_uganda_lst(Decimal("150000"), "2026-07", eligible=False), Decimal("0.00"))
+        self.assertEqual(calculate_uganda_lst(Decimal("1000000"), "2026-07", eligible=True), Decimal("22500.00"))
+
+        breakdown = calculate_salary_breakdown(
+            Decimal("1000000"),
+            Decimal("0"),
+            pay_nssf=False,
+            pay_paye=True,
+            pay_lst=True,
+            period_month="2026-07",
+        )
+        self.assertEqual(breakdown["lst_deduction"], Decimal("22500.00"))
+        self.assertEqual(breakdown["paye_tax"], calculate_paye(Decimal("977500.00")))
+
+    def test_hourly_entries_are_snapshotted_into_prepared_payroll(self):
+        worker = self.make_worker(
+            "hourly-worker",
+            pay_basis=StaffProfile.PayBasis.HOURLY,
+            hourly_rate=Decimal("10000.00"),
+        )
+        first = HourlyWorkEntry.objects.create(
+            employee=worker,
+            work_date=date(2099, 7, 3),
+            hours_worked=Decimal("8"),
+            hourly_rate=Decimal("10000"),
+            recorded_by=self.manager,
+        )
+        second = HourlyWorkEntry.objects.create(
+            employee=worker,
+            work_date=date(2099, 7, 4),
+            hours_worked=Decimal("4.5"),
+            hourly_rate=Decimal("12000"),
+            recorded_by=self.manager,
+        )
+
+        prepare_monthly_payroll("2099-07", created_by=self.manager)
+
+        salary = SalaryPayment.objects.get(employee=worker, period_month="2099-07")
+        self.assertEqual(salary.pay_basis, SalaryPayment.PayBasis.HOURLY)
+        self.assertEqual(salary.hours_worked, Decimal("12.50"))
+        self.assertEqual(salary.gross_salary, Decimal("134000.00"))
+        first.refresh_from_db()
+        second.refresh_from_db()
+        self.assertEqual(first.salary_payment, salary)
+        self.assertEqual(second.salary_payment, salary)
+
+    def test_inactive_or_expired_staff_are_not_prepared_and_existing_draft_is_cancelled(self):
+        inactive_worker = self.make_worker("inactive-worker")
+        expired_worker = self.make_worker("expired-worker", contract_end_date=date(2099, 6, 30))
+
+        prepare_monthly_payroll("2099-07", created_by=self.manager)
+        draft = SalaryPayment.objects.get(employee=inactive_worker, period_month="2099-07")
+        self.assertFalse(SalaryPayment.objects.filter(employee=expired_worker, period_month="2099-07").exists())
+
+        profile = inactive_worker.staff_profile
+        profile.employment_status = StaffProfile.EmploymentStatus.INACTIVE
+        profile.save(update_fields=["employment_status"])
+        with patch("payroll.services.timezone.localdate", return_value=date(2099, 7, 15)):
+            summary = prepare_monthly_payroll("2099-07", created_by=self.manager)
+
+        draft.refresh_from_db()
+        self.assertEqual(summary["cancelled"], 1)
+        self.assertEqual(draft.status, SalaryPayment.Status.CANCELLED)
+        self.assertFalse(draft.liability_entry_reference)
+
+    def test_issued_advance_is_recovered_evenly_across_selected_months(self):
+        worker = self.make_worker("advance-worker")
+        advance = WelfareRequest.objects.create(
             worker=worker,
             request_type=WelfareRequest.RequestType.SALARY_ADVANCE,
             title="School fees",
-            details="Advance request",
-            advance_amount="100000.00",
-            advance_period_start=date(2026, 6, 1),
-            advance_period_end=date(2026, 6, 30),
+            details="Recover over two months",
+            advance_amount=Decimal("100000.00"),
+            advance_period_start=date(2099, 7, 1),
+            advance_period_end=date(2099, 8, 31),
+            advance_disbursed_on=date(2099, 6, 30),
+            advance_payment_method="CASH",
+            advance_payment_reference="ADV-100",
+            advance_disbursed_by=self.manager,
             status=WelfareRequest.Status.MANAGER_APPROVED,
-            manager=manager,
-            manager_reviewed_at=timezone.now(),
-        )
-        self.client.force_login(manager)
-
-        response = self.client.post(
-            reverse("salaries"),
-            {"action": "generate_monthly", "batch_month": "2026-06"},
+            manager=self.manager,
         )
 
-        self.assertRedirects(response, reverse("pending_salaries", args=["2026-06"]))
-        salary = SalaryPayment.objects.get(employee=worker, period_month="2026-06")
-        self.assertEqual(salary.gross_salary, Decimal("1000000.00"))
-        self.assertEqual(salary.advances_deducted, Decimal("100000.00"))
-        self.assertEqual(salary.payment_date.isoformat(), "2026-06-28")
-        self.assertEqual(WelfareRequest.objects.get(worker=worker).salary_payment, salary)
+        prepare_monthly_payroll("2099-07", created_by=self.manager)
+        prepare_monthly_payroll("2099-08", created_by=self.manager)
 
-    def test_generate_monthly_payroll_uses_advance_period_not_approval_date(self):
-        manager_role = Role.objects.create(code=Role.RoleCode.MANAGER, name="Farm Manager")
-        worker_role = Role.objects.create(code=Role.RoleCode.WORKER, name="Farm Worker")
-        manager = get_user_model().objects.create_user(
-            username="period-advance-manager",
-            password="pass1234",
-            role=manager_role,
-        )
-        worker = get_user_model().objects.create_user(
-            username="period-advance-worker",
-            password="pass1234",
-            role=worker_role,
-        )
-        StaffProfile.objects.create(user=worker, monthly_salary="1000000.00", pay_nssf=False, pay_paye=False)
-        WelfareRequest.objects.create(
-            worker=worker,
-            request_type=WelfareRequest.RequestType.SALARY_ADVANCE,
-            title="July salary advance",
-            details="Advance request",
-            advance_amount="100000.00",
-            advance_period_start=date(2026, 7, 1),
-            advance_period_end=date(2026, 7, 31),
-            status=WelfareRequest.Status.MANAGER_APPROVED,
-            manager=manager,
-            manager_reviewed_at=timezone.now(),
-        )
-        self.client.force_login(manager)
+        july = SalaryPayment.objects.get(employee=worker, period_month="2099-07")
+        august = SalaryPayment.objects.get(employee=worker, period_month="2099-08")
+        self.assertEqual(july.advances_deducted, Decimal("50000.00"))
+        self.assertEqual(august.advances_deducted, Decimal("50000.00"))
+        self.assertEqual(SalaryAdvanceAllocation.objects.filter(advance=advance).count(), 2)
+        self.assertIsNone(advance.salary_payment_id)
 
-        self.client.post(reverse("salaries"), {"action": "generate_monthly", "batch_month": "2026-06"})
-        june_salary = SalaryPayment.objects.get(employee=worker, period_month="2026-06")
-        self.assertEqual(june_salary.advances_deducted, Decimal("0.00"))
-
-        self.client.post(reverse("salaries"), {"action": "generate_monthly", "batch_month": "2026-07"})
-        july_salary = SalaryPayment.objects.get(employee=worker, period_month="2026-07")
-        self.assertEqual(july_salary.advances_deducted, Decimal("100000.00"))
-
-    def test_generate_monthly_payroll_includes_managers_and_bonuses(self):
-        manager_role = Role.objects.create(code=Role.RoleCode.MANAGER, name="Farm Manager")
-        manager = get_user_model().objects.create_user(
-            username="bonus-payroll-manager",
-            password="pass1234",
-            role=manager_role,
-        )
-        StaffProfile.objects.create(user=manager, monthly_salary="1000000.00", pay_nssf=False, pay_paye=False)
-        SalaryBonus.objects.create(
-            employee=manager,
-            period_month="2026-06",
-            bonus_name="Performance Bonus",
-            amount=Decimal("150000.00"),
-            reason="Performance",
-            granted_by=manager,
-        )
-        self.client.force_login(manager)
-
-        response = self.client.post(
-            reverse("salaries"),
-            {"action": "generate_monthly", "batch_month": "2026-06"},
-        )
-
-        self.assertRedirects(response, reverse("pending_salaries", args=["2026-06"]))
-        salary = SalaryPayment.objects.get(employee=manager, period_month="2026-06")
-        self.assertEqual(salary.bonus_amount, Decimal("150000.00"))
-        self.assertEqual(salary.net_pay, Decimal("1150000.00"))
-
-    def test_generate_monthly_payroll_creates_editable_rows_without_profile_salary(self):
-        manager_role = Role.objects.create(code=Role.RoleCode.MANAGER, name="Farm Manager")
-        worker_role = Role.objects.create(code=Role.RoleCode.WORKER, name="Farm Worker")
-        manager = get_user_model().objects.create_user(
-            username="zero-payroll-manager",
-            password="pass1234",
-            role=manager_role,
-        )
-        worker = get_user_model().objects.create_user(
-            username="zero-salary-worker",
-            password="pass1234",
-            role=worker_role,
-        )
-        self.client.force_login(manager)
-
-        response = self.client.post(
-            reverse("salaries"),
-            {"action": "generate_monthly", "batch_month": "2026-06"},
-            follow=True,
-        )
-
-        self.assertEqual(response.status_code, 200)
-        salary = SalaryPayment.objects.get(employee=worker, period_month="2026-06")
-        self.assertEqual(salary.gross_salary, Decimal("0.00"))
-        self.assertContains(response, "zero-salary-worker")
-        self.assertContains(response, reverse("edit_salary", args=[salary.pk]))
-
-    def test_generate_monthly_payroll_respects_staff_tax_choices(self):
-        manager_role = Role.objects.create(code=Role.RoleCode.MANAGER, name="Farm Manager")
-        worker_role = Role.objects.create(code=Role.RoleCode.WORKER, name="Farm Worker")
-        manager = get_user_model().objects.create_user(
-            username="tax-choice-manager",
-            password="pass1234",
-            role=manager_role,
-        )
-        worker = get_user_model().objects.create_user(
-            username="tax-choice-worker",
-            password="pass1234",
-            role=worker_role,
-        )
-        StaffProfile.objects.create(
-            user=worker,
-            monthly_salary="1000000.00",
-            pay_nssf=False,
-            pay_paye=False,
-        )
-        self.client.force_login(manager)
-
-        response = self.client.post(
-            reverse("salaries"),
-            {"action": "generate_monthly", "batch_month": "2026-06"},
-        )
-
-        self.assertRedirects(response, reverse("pending_salaries", args=["2026-06"]))
-        salary = SalaryPayment.objects.get(employee=worker, period_month="2026-06")
-        self.assertEqual(salary.gross_salary, Decimal("1000000.00"))
-        self.assertEqual(salary.nssf_employee, Decimal("0.00"))
-        self.assertEqual(salary.nssf_employer, Decimal("0.00"))
-        self.assertEqual(salary.paye_tax, Decimal("0.00"))
-        self.assertEqual(salary.net_pay, Decimal("1000000.00"))
-
-    def test_manager_can_edit_prepared_salary_record(self):
-        manager_role = Role.objects.create(code=Role.RoleCode.MANAGER, name="Farm Manager")
-        worker_role = Role.objects.create(code=Role.RoleCode.WORKER, name="Farm Worker")
-        manager = get_user_model().objects.create_user(
-            username="salary-editor",
-            password="pass1234",
-            role=manager_role,
-        )
-        worker = get_user_model().objects.create_user(
-            username="salary-edit-worker",
-            password="pass1234",
-            role=worker_role,
-        )
+    def test_unpaid_salary_becomes_liability_only_on_next_month_first_day(self):
+        worker = self.make_worker("liability-worker")
         salary = SalaryPayment.objects.create(
             employee=worker,
-            period_month="2026-06",
-            amount=Decimal("500000.00"),
-            gross_salary=Decimal("600000.00"),
-            paye_tax=Decimal("10000.00"),
-            nssf_employee=Decimal("30000.00"),
-            nssf_employer=Decimal("60000.00"),
-            advances_deducted=Decimal("60000.00"),
-            net_pay=Decimal("500000.00"),
-            payment_date="2026-06-28",
-            status=SalaryPayment.Status.PENDING,
-            recorded_by=manager,
+            period_month="2099-06",
+            amount=Decimal("100000"),
+            gross_salary=Decimal("100000"),
+            net_pay=Decimal("100000"),
+            recorded_by=self.manager,
         )
-        self.client.force_login(manager)
+        with patch("payroll.services.post_salary_accrual", return_value=Mock(reference="SAL-ACCRUAL-1")) as post:
+            before = accrue_due_salary_liabilities(as_of=date(2099, 6, 30), created_by=self.manager)
+            after = accrue_due_salary_liabilities(as_of=date(2099, 7, 1), created_by=self.manager)
 
-        response = self.client.get(reverse("pending_salaries", args=["2026-06"]))
-        self.assertContains(response, reverse("edit_salary", args=[salary.pk]))
-
-        response = self.client.post(
-            reverse("edit_salary", args=[salary.pk]),
-            {
-                "gross_salary": "700000",
-                "advances_deducted": "50000",
-                "bonus_amount": "10000",
-                "net_pay": "595000",
-                "payment_date": "2026-06-28",
-                "status": SalaryPayment.Status.PAID,
-                "calculate_from": "gross",
-                "edit_reason": "Corrected monthly salary",
-            },
-        )
-
-        self.assertRedirects(response, reverse("salary_history"))
         salary.refresh_from_db()
-        self.assertEqual(salary.gross_salary, Decimal("700000.00"))
-        self.assertEqual(salary.nssf_employee, Decimal("35000.00"))
-        self.assertEqual(salary.net_pay, Decimal("523500.00"))
-        self.assertEqual(salary.amount, Decimal("523500.00"))
+        self.assertEqual(before["accrued"], 0)
+        self.assertEqual(after["accrued"], 1)
+        self.assertEqual(salary.liability_entry_reference, "SAL-ACCRUAL-1")
+        self.assertEqual(post.call_count, 1)
+
+    def test_early_full_payment_posts_directly_without_a_salary_payable(self):
+        worker = self.make_worker("direct-payment-worker")
+        salary = SalaryPayment.objects.create(
+            employee=worker,
+            period_month="2099-07",
+            amount=Decimal("100000"),
+            gross_salary=Decimal("100000"),
+            net_pay=Decimal("100000"),
+            recorded_by=self.manager,
+        )
+        with patch("payroll.services._post_direct_salary_payment", return_value=Mock(reference="SAL-DIRECT-1")) as direct, patch(
+            "payroll.services._post_salary_disbursement_settlement"
+        ) as settlement:
+            payment = record_salary_disbursement(
+                salary.pk,
+                amount=Decimal("100000"),
+                payment_method=SalaryDisbursement.PaymentMethod.CASH,
+                payment_reference="PAY-1",
+                paid_on=date(2099, 7, 28),
+                paid_by=self.manager,
+            )
+
+        salary.refresh_from_db()
         self.assertEqual(salary.status, SalaryPayment.Status.PAID)
-        self.assertEqual(salary.edit_reason, "Corrected monthly salary")
-        self.assertTrue(SalaryPaymentEditLog.objects.filter(salary=salary, reason="Corrected monthly salary").exists())
+        self.assertFalse(salary.liability_entry_reference)
+        self.assertEqual(payment.accounting_entry_reference, "SAL-DIRECT-1")
+        direct.assert_called_once()
+        settlement.assert_not_called()
 
-    def test_salary_edit_requires_reason(self):
-        manager_role = Role.objects.create(code=Role.RoleCode.MANAGER, name="Farm Manager")
-        worker_role = Role.objects.create(code=Role.RoleCode.WORKER, name="Farm Worker")
-        manager = get_user_model().objects.create_user(
-            username="salary-reason-manager",
-            password="pass1234",
-            role=manager_role,
-        )
-        worker = get_user_model().objects.create_user(
-            username="salary-reason-worker",
-            password="pass1234",
-            role=worker_role,
-        )
+    def test_post_rollover_payment_clears_salaries_payable(self):
+        worker = self.make_worker("settlement-worker")
         salary = SalaryPayment.objects.create(
             employee=worker,
-            period_month="2026-06",
-            amount=Decimal("500000.00"),
-            gross_salary=Decimal("500000.00"),
-            net_pay=Decimal("500000.00"),
-            status=SalaryPayment.Status.PENDING,
-            recorded_by=manager,
+            period_month="2099-07",
+            amount=Decimal("100000"),
+            gross_salary=Decimal("100000"),
+            net_pay=Decimal("100000"),
+            liability_entry_reference="SAL-ACCRUAL-2",
+            recorded_by=self.manager,
         )
-        self.client.force_login(manager)
+        with patch("payroll.services.ensure_salary_liability_accrual", return_value=Mock(reference="SAL-ACCRUAL-2")), patch(
+            "payroll.services._post_salary_disbursement_settlement", return_value=Mock(reference="SAL-PAY-2")
+        ) as settlement, patch("payroll.services._post_direct_salary_payment") as direct:
+            record_salary_disbursement(
+                salary.pk,
+                amount=Decimal("100000"),
+                payment_method=SalaryDisbursement.PaymentMethod.CASH,
+                payment_reference="PAY-2",
+                paid_on=date(2099, 8, 1),
+                paid_by=self.manager,
+            )
 
-        response = self.client.post(
-            reverse("edit_salary", args=[salary.pk]),
-            {
-                "gross_salary": "700000",
-                "advances_deducted": "0",
-                "bonus_amount": "0",
-                "net_pay": "700000",
-                "status": SalaryPayment.Status.PENDING,
-                "calculate_from": "gross",
-            },
-        )
+        settlement.assert_called_once()
+        direct.assert_not_called()
 
+    def test_hourly_wages_page_is_available_to_managers(self):
+        self.client.force_login(self.manager)
+        response = self.client.get(reverse("hourly_wages"), {"month": "2099-07"})
         self.assertEqual(response.status_code, 200)
-        salary.refresh_from_db()
-        self.assertEqual(salary.gross_salary, Decimal("500000.00"))
-
-    def test_salary_edit_can_calculate_from_net_pay(self):
-        manager_role = Role.objects.create(code=Role.RoleCode.MANAGER, name="Farm Manager")
-        worker_role = Role.objects.create(code=Role.RoleCode.WORKER, name="Farm Worker")
-        manager = get_user_model().objects.create_user(
-            username="salary-net-manager",
-            password="pass1234",
-            role=manager_role,
-        )
-        worker = get_user_model().objects.create_user(
-            username="salary-net-worker",
-            password="pass1234",
-            role=worker_role,
-        )
-        StaffProfile.objects.create(user=worker, pay_nssf=False, pay_paye=False)
-        salary = SalaryPayment.objects.create(
-            employee=worker,
-            period_month="2026-06",
-            amount=Decimal("500000.00"),
-            gross_salary=Decimal("500000.00"),
-            net_pay=Decimal("500000.00"),
-            status=SalaryPayment.Status.PENDING,
-            recorded_by=manager,
-        )
-        self.client.force_login(manager)
-
-        response = self.client.post(
-            reverse("edit_salary", args=[salary.pk]),
-            {
-                "gross_salary": "500000",
-                "advances_deducted": "50000",
-                "bonus_amount": "10000",
-                "net_pay": "800000",
-                "status": SalaryPayment.Status.PENDING,
-                "calculate_from": "net",
-                "edit_reason": "Set agreed net pay",
-            },
-        )
-
-        self.assertRedirects(response, reverse("pending_salaries", args=["2026-06"]))
-        salary.refresh_from_db()
-        self.assertEqual(salary.gross_salary, Decimal("840000.00"))
-        self.assertEqual(salary.net_pay, Decimal("800000.00"))
-
-    def test_manager_can_pay_selected_salary_records(self):
-        manager_role = Role.objects.create(code=Role.RoleCode.MANAGER, name="Farm Manager")
-        worker_role = Role.objects.create(code=Role.RoleCode.WORKER, name="Farm Worker")
-        manager = get_user_model().objects.create_user(
-            username="selected-pay-manager",
-            password="pass1234",
-            role=manager_role,
-        )
-        first_worker = get_user_model().objects.create_user(
-            username="selected-pay-one",
-            password="pass1234",
-            role=worker_role,
-        )
-        second_worker = get_user_model().objects.create_user(
-            username="selected-pay-two",
-            password="pass1234",
-            role=worker_role,
-        )
-        first_salary = SalaryPayment.objects.create(
-            employee=first_worker,
-            period_month="2026-06",
-            amount=Decimal("500000.00"),
-            net_pay=Decimal("500000.00"),
-            status=SalaryPayment.Status.PENDING,
-            recorded_by=manager,
-        )
-        second_salary = SalaryPayment.objects.create(
-            employee=second_worker,
-            period_month="2026-06",
-            amount=Decimal("600000.00"),
-            net_pay=Decimal("600000.00"),
-            status=SalaryPayment.Status.PENDING,
-            recorded_by=manager,
-        )
-        self.client.force_login(manager)
-
-        response = self.client.post(
-            reverse("pending_salaries", args=["2026-06"]),
-            {
-                "action": "pay_selected",
-                "salary_ids": [str(first_salary.pk)],
-            },
-        )
-
-        self.assertRedirects(response, reverse("pending_salaries", args=["2026-06"]))
-        first_salary.refresh_from_db()
-        second_salary.refresh_from_db()
-        self.assertEqual(first_salary.status, SalaryPayment.Status.PAID)
-        self.assertEqual(second_salary.status, SalaryPayment.Status.PENDING)
-
-    def test_manager_can_pay_all_pending_salary_records(self):
-        manager_role = Role.objects.create(code=Role.RoleCode.MANAGER, name="Farm Manager")
-        worker_role = Role.objects.create(code=Role.RoleCode.WORKER, name="Farm Worker")
-        manager = get_user_model().objects.create_user(
-            username="pay-all-manager",
-            password="pass1234",
-            role=manager_role,
-        )
-        first_worker = get_user_model().objects.create_user(
-            username="pay-all-one",
-            password="pass1234",
-            role=worker_role,
-        )
-        second_worker = get_user_model().objects.create_user(
-            username="pay-all-two",
-            password="pass1234",
-            role=worker_role,
-        )
-        paid_worker = get_user_model().objects.create_user(
-            username="already-paid-worker",
-            password="pass1234",
-            role=worker_role,
-        )
-        first_salary = SalaryPayment.objects.create(
-            employee=first_worker,
-            period_month="2026-06",
-            amount=Decimal("500000.00"),
-            net_pay=Decimal("500000.00"),
-            status=SalaryPayment.Status.PENDING,
-            recorded_by=manager,
-        )
-        second_salary = SalaryPayment.objects.create(
-            employee=second_worker,
-            period_month="2026-06",
-            amount=Decimal("600000.00"),
-            net_pay=Decimal("600000.00"),
-            status=SalaryPayment.Status.PENDING,
-            recorded_by=manager,
-        )
-        already_paid = SalaryPayment.objects.create(
-            employee=paid_worker,
-            period_month="2026-06",
-            amount=Decimal("700000.00"),
-            net_pay=Decimal("700000.00"),
-            status=SalaryPayment.Status.PAID,
-            recorded_by=manager,
-        )
-        self.client.force_login(manager)
-
-        response = self.client.post(reverse("pending_salaries", args=["2026-06"]), {"action": "pay_all"})
-
-        self.assertRedirects(response, reverse("pending_salaries", args=["2026-06"]))
-        first_salary.refresh_from_db()
-        second_salary.refresh_from_db()
-        already_paid.refresh_from_db()
-        self.assertEqual(first_salary.status, SalaryPayment.Status.PAID)
-        self.assertEqual(second_salary.status, SalaryPayment.Status.PAID)
-        self.assertEqual(already_paid.status, SalaryPayment.Status.PAID)
-
-    def test_paid_salaries_disappear_from_pending_month_page(self):
-        manager_role = Role.objects.create(code=Role.RoleCode.MANAGER, name="Farm Manager")
-        worker_role = Role.objects.create(code=Role.RoleCode.WORKER, name="Farm Worker")
-        manager = get_user_model().objects.create_user(
-            username="pending-only-manager",
-            password="pass1234",
-            role=manager_role,
-        )
-        pending_worker = get_user_model().objects.create_user(
-            username="pending-only-worker",
-            password="pass1234",
-            role=worker_role,
-        )
-        paid_worker = get_user_model().objects.create_user(
-            username="paid-hidden-worker",
-            password="pass1234",
-            role=worker_role,
-        )
-        SalaryPayment.objects.create(
-            employee=pending_worker,
-            period_month="2026-06",
-            amount=Decimal("500000.00"),
-            net_pay=Decimal("500000.00"),
-            status=SalaryPayment.Status.PENDING,
-            recorded_by=manager,
-        )
-        SalaryPayment.objects.create(
-            employee=paid_worker,
-            period_month="2026-06",
-            amount=Decimal("600000.00"),
-            net_pay=Decimal("600000.00"),
-            status=SalaryPayment.Status.PAID,
-            recorded_by=manager,
-        )
-        self.client.force_login(manager)
-
-        response = self.client.get(reverse("pending_salaries", args=["2026-06"]))
-
-        self.assertContains(response, "pending-only-worker")
-        self.assertNotContains(response, "paid-hidden-worker")
-
-    def test_current_month_pending_salaries_hidden_before_28th(self):
-        manager_role = Role.objects.create(code=Role.RoleCode.MANAGER, name="Farm Manager")
-        worker_role = Role.objects.create(code=Role.RoleCode.WORKER, name="Farm Worker")
-        manager = get_user_model().objects.create_user(
-            username="early-month-manager",
-            password="pass1234",
-            role=manager_role,
-        )
-        worker = get_user_model().objects.create_user(
-            username="early-month-worker",
-            password="pass1234",
-            role=worker_role,
-        )
-        SalaryPayment.objects.create(
-            employee=worker,
-            period_month="2026-07",
-            amount=Decimal("500000.00"),
-            net_pay=Decimal("500000.00"),
-            status=SalaryPayment.Status.PENDING,
-            recorded_by=manager,
-        )
-        self.client.force_login(manager)
-
-        with patch("payroll.views.timezone.localdate", return_value=date(2026, 7, 27)):
-            response = self.client.get(reverse("pending_salaries", args=["2026-07"]))
-
-        self.assertContains(response, "Current month salaries will appear as pending from July 28, 2026")
-        self.assertNotContains(response, "early-month-worker")
-
-    def test_manager_can_create_named_bonus_on_bonus_page(self):
-        manager_role = Role.objects.create(code=Role.RoleCode.MANAGER, name="Farm Manager")
-        worker_role = Role.objects.create(code=Role.RoleCode.WORKER, name="Farm Worker")
-        manager = get_user_model().objects.create_user(
-            username="bonus-page-manager",
-            password="pass1234",
-            role=manager_role,
-        )
-        worker = get_user_model().objects.create_user(
-            username="bonus-page-worker",
-            password="pass1234",
-            role=worker_role,
-        )
-        second_worker = get_user_model().objects.create_user(
-            username="bonus-page-worker-two",
-            password="pass1234",
-            role=worker_role,
-        )
-        self.client.force_login(manager)
-
-        response = self.client.post(
-            reverse("salary_bonuses"),
-            {
-                "bonus_employees": [str(worker.pk), str(second_worker.pk)],
-                "bonus_month": "2026-07",
-                "bonus_name": "Manager Award",
-                "bonus_amount": "250000",
-                "bonus_reason": "Outstanding work",
-            },
-        )
-
-        self.assertRedirects(response, reverse("salary_bonuses"))
-        bonus = SalaryBonus.objects.get(employee=worker, period_month="2026-07")
-        self.assertEqual(bonus.bonus_name, "Manager Award")
-        self.assertTrue(SalaryBonus.objects.filter(employee=second_worker, period_month="2026-07").exists())
+        self.assertTemplateUsed(response, "payroll/hourly_wages.html")
+        self.assertContains(response, "Hourly Wages")

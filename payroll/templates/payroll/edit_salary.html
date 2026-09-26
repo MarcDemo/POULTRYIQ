@@ -51,18 +51,12 @@
                     <label class="form-label">Employer NSSF</label>
                     <input class="form-control" type="number" value="{{ salary.nssf_employer }}" readonly>
                 </div>
-                <div class="col-md-6">
-                    <label class="form-label">Payment Date</label>
-                    <input class="form-control" type="date" name="payment_date" value="{{ salary.payment_date|date:'Y-m-d' }}">
+                <div class="col-md-4">
+                    <label class="form-label">Local Service Tax (LST)</label>
+                    <input class="form-control" type="number" value="{{ salary.lst_deduction }}" readonly>
+                    <small class="text-muted">Calculated from onboarding eligibility and the selected payroll month.</small>
                 </div>
-                <div class="col-md-6">
-                    <label class="form-label">Status</label>
-                    <select class="form-select" name="status">
-                        {% for value, label in status_choices %}
-                        <option value="{{ value }}" {% if salary.status == value %}selected{% endif %}>{{ label }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
+                {% if salary.pay_basis == 'HOURLY' %}<div class="col-12"><div class="alert alert-info mb-0">This is an hourly-wage payroll line: {{ salary.hours_worked|floatformat:2 }} hours at {{ salary.hourly_rate|floatformat:0 }}. Adjust work entries before preparing payroll; this edit records a manager-approved payroll correction.</div></div>{% endif %}
                 <div class="col-12">
                     <label class="form-label">Reason for Editing</label>
                     <textarea class="form-control" name="edit_reason" rows="3" required>{{ salary.edit_reason }}</textarea>

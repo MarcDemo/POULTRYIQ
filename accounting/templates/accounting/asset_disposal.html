@@ -1,0 +1,22 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container" style="max-width: 880px;">
+    <div class="page-header-row mb-4">
+        <div><h2 class="mb-1"><i class="bi bi-trash3 me-2"></i>Dispose Asset</h2><small class="text-muted">This retires the asset and posts the final depreciation, disposal, and gain or loss journals.</small></div>
+        <a href="{% url 'fixed_assets' %}" class="btn btn-outline-secondary">Back to Fixed Assets</a>
+    </div>
+    <div class="card">
+        <div class="card-header"><strong>{{ asset.asset_name }}</strong><span class="text-muted ms-2">{{ asset.asset_category }} · acquired {{ asset.acquisition_date|date:'M d, Y' }}</span></div>
+        <div class="card-body">
+            <form method="post" class="row g-3">
+                {% csrf_token %}
+                <div class="col-md-6"><label class="form-label">Disposal date</label><input type="date" name="disposal_date" class="form-control" value="{{ today|date:'Y-m-d' }}" min="{{ asset.acquisition_date|date:'Y-m-d' }}" required></div>
+                <div class="col-md-6"><label class="form-label">Proceeds received (UGX)</label><input type="number" name="proceeds" step="0.01" min="0" class="form-control" value="0" required></div>
+                <div class="col-12"><label class="form-label">How were proceeds received?</label><select name="payment_method" class="form-select"><option value="">No proceeds / not applicable</option>{% for method in payment_methods %}<option value="payment-{{ method.pk }}">{{ method.name }}</option>{% endfor %}</select><div class="form-text">Required only when proceeds are greater than zero.</div></div>
+                <div class="col-12"><label class="form-label">Reason for disposal</label><textarea name="reason" rows="3" class="form-control" required placeholder="e.g. sold, damaged beyond repair, scrapped"></textarea></div>
+                <div class="col-12 d-flex gap-2"><button class="btn btn-danger">Post disposal</button><a href="{% url 'fixed_assets' %}" class="btn btn-outline-secondary">Cancel</a></div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

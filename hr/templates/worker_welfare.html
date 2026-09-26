@@ -14,7 +14,13 @@
     </div>
 
     <div class="row g-4 mb-4">
-        <div class="col-md-4">
+
+<!--
+        TODO
+CHANGE THIS TO SALARY RECIEVED BY THE EMPLOYEE
+        -->
+<!-- salary paid -->
+        <div class="col-md-3">
             <div class="card field-card h-100">
                 <div class="card-header"><i class="bi bi-cash-stack me-2"></i>Salary Paid</div>
                 <div class="card-body">
@@ -23,7 +29,9 @@
                 </div>
             </div>
         </div>
-        <div class="col-md-4">
+
+        <!-- pending salaries -->
+        <div class="col-md-3">
             <div class="card field-card h-100">
                 <div class="card-header"><i class="bi bi-hourglass-split me-2"></i>Pending Salary</div>
                 <div class="card-body">
@@ -32,21 +40,34 @@
                 </div>
             </div>
         </div>
-        <div class="col-md-4">
+
+        <!-- approved advances -->
+        <div class="col-md-3">
             <div class="card field-card h-100">
                 <div class="card-header"><i class="bi bi-wallet2 me-2"></i>Approved Advances</div>
                 <div class="card-body">
                     <h3 class="fw-bold">UGX {{ approved_advances|floatformat:0 }}</h3>
-                    <small class="text-muted">Manager-approved salary advances.</small>
+                    <small class="text-muted">Approved, whether issued or awaiting payment.</small>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card field-card h-100 border-primary">
+                <div class="card-header"><i class="bi bi-cash-coin me-2"></i>Issued Advances</div>
+                <div class="card-body">
+                    <h3 class="fw-bold">UGX {{ issued_advances|floatformat:0 }}</h3>
+                    <small class="text-muted">Advances actually paid out to you.</small>
                 </div>
             </div>
         </div>
     </div>
 
+    <!-- the request form -->
     <div class="row g-4">
-        <div class="col-lg-5">
+        <div class="col-lg-10">
             <div class="card field-card">
-                <div class="card-header"><i class="bi bi-send me-2"></i>New Welfare Request</div>
+                <div class="card-header"><i class="bi bi-send me-2"></i>Make a new Request</div>
                 <div class="card-body">
                     <form method="post" class="field-form js-welfare-form">
                         {% csrf_token %}
@@ -60,7 +81,7 @@
                             </select>
                         </div>
                         <div class="mb-3">
-                            <label class="form-label">Title</label>
+                            <label class="form-label">Reason for Request</label>
                             <input type="text" class="form-control" name="title" maxlength="120" required>
                         </div>
                         <div class="row g-2 d-none" id="leaveFields">
@@ -93,7 +114,7 @@
                             <label class="form-label">Details</label>
                             <textarea class="form-control" name="details" rows="4" required></textarea>
                         </div>
-                        <button class="btn btn-primary w-100">
+                        <button class="btn btn-primary w-50">
                             <i class="bi bi-check-circle me-1"></i>Submit Request
                         </button>
                     </form>
@@ -101,13 +122,13 @@
             </div>
         </div>
 
-        <div class="col-lg-7">
+        <div class="">
             <div class="card field-card mb-4">
                 <div class="card-header"><i class="bi bi-list-check me-2"></i>My Welfare Requests</div>
                 <div class="card-body p-0">
                     <div class="table-responsive">
                         <table class="table table-hover mb-0">
-                            <thead><tr><th>Date</th><th>Request</th><th>Status</th><th>Notes</th></tr></thead>
+                            <thead><tr><th>Date</th><th>Request</th><th>Advance Issue & Recovery</th><th>Status</th><th>Notes</th></tr></thead>
                             <tbody>
                                 {% for req in welfare_requests %}
                                 <tr>
@@ -115,6 +136,19 @@
                                     <td>
                                         <div class="fw-semibold">{{ req.title }}</div>
                                         <small class="text-muted">{{ req.get_request_type_display }}</small>
+                                    </td>
+                                    <td>
+                                        {% if req.request_type == "SALARY_ADVANCE" %}
+                                        <div>UGX {{ req.advance_amount|floatformat:0 }}</div>
+                                        <div class="small text-muted">Intended: {% if req.advance_period_start %}{{ req.advance_period_start|date:"M Y" }}{% else %}-{% endif %}{% if req.advance_period_end and req.advance_period_end != req.advance_period_start %} to {{ req.advance_period_end|date:"M Y" }}{% endif %}</div>
+                                        {% if req.advance_disbursed_on %}
+                                        <div class="small mt-1"><strong>Issued:</strong> {{ req.advance_disbursed_on|date:"d M Y" }} · {{ req.get_advance_payment_method_display }}</div>
+                                        <div class="small text-muted">Ref: {{ req.advance_payment_reference }}</div>
+                                        {% for allocation in req.recovery_allocations %}
+                                        <div class="small">Recovered {{ allocation.salary_payment.period_month }}: UGX {{ allocation.amount|floatformat:0 }}</div>
+                                        {% empty %}{% if req.salary_payment %}<div class="small">Recovered from {{ req.salary_payment.period_month }}</div>{% endif %}{% endfor %}
+                                        {% else %}<div class="small text-warning mt-1">Not issued yet</div>{% endif %}
+                                        {% else %}-{% endif %}
                                     </td>
                                     <td><span class="badge bg-secondary">{{ req.get_status_display }}</span></td>
                                     <td>
@@ -130,7 +164,7 @@
                                     </td>
                                 </tr>
                                 {% empty %}
-                                <tr><td colspan="4" class="text-center text-muted py-3">No welfare requests yet.</td></tr>
+                                <tr><td colspan="5" class="text-center text-muted py-3">No welfare requests yet.</td></tr>
                                 {% endfor %}
                             </tbody>
                         </table>

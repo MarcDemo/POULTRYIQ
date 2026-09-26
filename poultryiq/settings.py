@@ -26,10 +26,15 @@ SECRET_KEY = 'django-insecure-^%ipa47*&g7k_y=g%)%r0t%wlam*9r%in4au9ibu=64g8+7x@j
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ["*"]
+
+CSRF_TRUSTED_ORIGINS = [
+    "https://another-random-name.ngrok-free.dev",
+]
 
 URA_TIN_LOOKUP_URL = os.environ.get("URA_TIN_LOOKUP_URL", "")
 URA_TIN_LOOKUP_TOKEN = os.environ.get("URA_TIN_LOOKUP_TOKEN", "")
+
 
 
 # Application definition
@@ -62,6 +67,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'accounting.middleware.AutoPostMonthlyDepreciationMiddleware',
+    'payroll.middleware.AutoAccrueSalaryLiabilitiesMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
@@ -120,7 +126,8 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = 'en-us'
 
-TIME_ZONE = 'UTC'
+# Payroll cut-offs, LST periods, and due dates are operated in Uganda.
+TIME_ZONE = 'Africa/Kampala'
 
 USE_I18N = True
 

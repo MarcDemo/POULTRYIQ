@@ -1,0 +1,129 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container-fluid">
+    <div class="page-header-row mb-4">
+        <div>
+            <h2 class="mb-1"><i class="bi bi-journal-text me-2"></i>Journal Entries</h2>
+            <small class="text-muted">Every posted entry receives a system-generated, immutable Financial Document Number (FDN).</small>
+        </div>
+    </div>
+
+    {% if messages %}
+        {% for message in messages %}
+        <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+            {{ message }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+        {% endfor %}
+    {% endif %}
+
+    <div class="card mb-4">
+        <div class="card-header"><i class="bi bi-plus-circle me-2"></i>Create a balanced journal</div>
+        <div class="card-body">
+            <form method="post" id="journal-form">
+                {% csrf_token %}
+                <div class="row g-3 mb-3">
+                    <div class="col-md-3">
+                        <label class="form-label">Journal date</label>
+                        <input type="date" name="entry_date" class="form-control" value="{{ today|date:'Y-m-d' }}" required>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Reference <span class="text-muted">(optional)</span></label>
+                        <input name="reference" maxlength="80" class="form-control" placeholder="Supplier invoice / internal reference">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Description</label>
+                        <input name="description" maxlength="255" class="form-control" required>
+                    </div>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle" id="journal-lines">
+                        <thead class="table-light"><tr><th>Ledger account</th><th>Memo</th><th class="text-end">Debit</th><th class="text-end">Credit</th><th></th></tr></thead>
+                        <tbody>
+                            {% for number in '12' %}
+                            <tr>
+                                <td><select name="account" class="form-select form-select-sm"><option value="">-- Select account --</option>{% for account in accounts %}<option value="{{ account.pk }}">{{ account.code }} — {{ account.account_name }}</option>{% endfor %}</select></td>
+                                <td><input name="memo" maxlength="255" class="form-control form-control-sm"></td>
+                                <td><input name="debit" type="number" step="0.01" min="0" class="form-control form-control-sm text-end journal-debit"></td>
+                                <td><input name="credit" type="number" step="0.01" min="0" class="form-control form-control-sm text-end journal-credit"></td>
+                                <td><button type="button" class="btn btn-sm btn-outline-danger remove-line" aria-label="Remove line"><i class="bi bi-x"></i></button></td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                        <tfoot><tr class="fw-semibold"><td colspan="2" class="text-end">Totals</td><td id="debit-total" class="text-end">0.00</td><td id="credit-total" class="text-end">0.00</td><td></td></tr></tfoot>
+                    </table>
+                </div>
+                <div class="d-flex flex-wrap gap-2 align-items-center">
+                    <button type="button" id="add-line" class="btn btn-outline-secondary btn-sm"><i class="bi bi-plus me-1"></i>Add line</button>
+                    <span id="balance-state" class="small text-muted">Enter equal debits and credits to post.</span>
+                    <div class="ms-auto d-flex gap-2">
+                        <button name="action" value="draft" class="btn btn-outline-primary">Save draft</button>
+                        <button name="action" value="post" class="btn btn-primary">Post balanced journal</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header"><i class="bi bi-clock-history me-2"></i>Journal register</div>
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light"><tr><th>Date</th><th>FDN</th><th>Reference</th><th>Description</th><th>Status</th><th class="text-end">Debits</th><th class="text-end">Credits</th><th></th></tr></thead>
+                <tbody>
+                    {% for entry in entries %}
+                    <tr>
+                        <td>{{ entry.entry_date|date:'M d, Y' }}</td>
+                        <td><code>{{ entry.fdn }}</code></td>
+                        <td>{{ entry.reference }}</td>
+                        <td>{{ entry.description }}{% if entry.reversal_of %}<div class="small text-muted">Reverses {{ entry.reversal_of.fdn }}</div>{% endif %}</td>
+                        <td><span class="badge {% if entry.status == 'POSTED' %}text-bg-success{% elif entry.status == 'DRAFT' %}text-bg-secondary{% else %}text-bg-dark{% endif %}">{{ entry.get_status_display }}</span>{% if entry.is_reversed %}<div class="small text-muted">Reversed by {{ entry.reversal_entry.fdn }}</div>{% endif %}</td>
+                        <td class="text-end">{{ entry.total_debits|floatformat:2 }}</td>
+                        <td class="text-end">{{ entry.total_credits|floatformat:2 }}</td>
+                        <td class="text-nowrap text-end">
+                            {% if entry.status == 'DRAFT' %}
+                            <form method="post" class="d-inline">{% csrf_token %}<input type="hidden" name="action" value="post_draft"><input type="hidden" name="entry_id" value="{{ entry.pk }}"><button class="btn btn-sm btn-success">Post</button></form>
+                            <form method="post" class="d-inline">{% csrf_token %}<input type="hidden" name="action" value="void"><input type="hidden" name="entry_id" value="{{ entry.pk }}"><input name="reason" required maxlength="255" class="form-control form-control-sm d-inline-block" style="width: 10rem" placeholder="Void reason"><button class="btn btn-sm btn-outline-danger">Void</button></form>
+                            {% elif entry.status == 'POSTED' and not entry.is_reversed %}
+                            <form method="post" class="d-inline">{% csrf_token %}<input type="hidden" name="action" value="reverse"><input type="hidden" name="entry_id" value="{{ entry.pk }}"><input type="date" name="reversal_date" class="form-control form-control-sm d-inline-block" style="width: 9rem" value="{{ today|date:'Y-m-d' }}" required><input name="reversal_description" maxlength="255" class="form-control form-control-sm d-inline-block" style="width: 11rem" placeholder="Reason / note"><button class="btn btn-sm btn-outline-warning">Reverse</button></form>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="8" class="text-center text-muted py-4">No journal entries have been recorded.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+<template id="journal-line-template">
+    <tr>
+        <td><select name="account" class="form-select form-select-sm"><option value="">-- Select account --</option>{% for account in accounts %}<option value="{{ account.pk }}">{{ account.code }} — {{ account.account_name }}</option>{% endfor %}</select></td>
+        <td><input name="memo" maxlength="255" class="form-control form-control-sm"></td>
+        <td><input name="debit" type="number" step="0.01" min="0" class="form-control form-control-sm text-end journal-debit"></td>
+        <td><input name="credit" type="number" step="0.01" min="0" class="form-control form-control-sm text-end journal-credit"></td>
+        <td><button type="button" class="btn btn-sm btn-outline-danger remove-line" aria-label="Remove line"><i class="bi bi-x"></i></button></td>
+    </tr>
+</template>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const body = document.querySelector('#journal-lines tbody');
+    const template = document.getElementById('journal-line-template');
+    const debitTotal = document.getElementById('debit-total');
+    const creditTotal = document.getElementById('credit-total');
+    const balanceState = document.getElementById('balance-state');
+    const total = selector => [...document.querySelectorAll(selector)].reduce((sum, field) => sum + (parseFloat(field.value) || 0), 0);
+    function refresh() {
+        const debit = total('.journal-debit'), credit = total('.journal-credit');
+        debitTotal.textContent = debit.toFixed(2); creditTotal.textContent = credit.toFixed(2);
+        const balanced = debit > 0 && Math.abs(debit - credit) < 0.005;
+        balanceState.textContent = balanced ? 'Balanced — ready to post.' : 'Debits and credits must be equal.';
+        balanceState.className = 'small ' + (balanced ? 'text-success' : 'text-muted');
+    }
+    document.getElementById('add-line').addEventListener('click', () => { body.appendChild(template.content.cloneNode(true)); refresh(); });
+    document.addEventListener('input', event => { if (event.target.matches('.journal-debit, .journal-credit')) refresh(); });
+    document.addEventListener('click', event => { if (event.target.closest('.remove-line') && body.rows.length > 2) { event.target.closest('tr').remove(); refresh(); } });
+    refresh();
+});
+</script>
+{% endblock %}

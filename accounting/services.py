@@ -289,9 +289,9 @@ def ensure_payroll_accounts():
         name="Payroll Expense",
         nature=AccountType.AccountNature.EXPENSE,
     )
-    payroll_prepayment_type = _get_or_create_account_type(
-        legacy_code="PAYROLL_PREPAYMENT",
-        name="Payroll Prepayments",
+    payroll_receivable_type = _get_or_create_account_type(
+        legacy_code="PAYROLL_RECEIVABLE",
+        name="Payroll Receivables",
         nature=AccountType.AccountNature.ASSET,
     )
     payroll_liability_type = _get_or_create_account_type(
@@ -306,10 +306,11 @@ def ensure_payroll_accounts():
     )
 
     for code, account_name, group, account_type, allow_reconciliation in [
-        ("341002", "Prepaid Salaries", BalanceSheetAccount.Group.ASSETS, BalanceSheetAccount.AccountType.PREPAYMENT, True),
+        ("331003", "Staff Advances Receivable", BalanceSheetAccount.Group.ASSETS, BalanceSheetAccount.AccountType.RECEIVABLE, True),
         ("421010", "Salaries_payable", BalanceSheetAccount.Group.LIABILITIES, BalanceSheetAccount.AccountType.CURRENT_LIABILITY, True),
         ("421012", "PAYE_payable", BalanceSheetAccount.Group.LIABILITIES, BalanceSheetAccount.AccountType.CURRENT_LIABILITY, True),
         ("421016", "NSSF_Payable", BalanceSheetAccount.Group.LIABILITIES, BalanceSheetAccount.AccountType.CURRENT_LIABILITY, True),
+        ("421017", "Local Service Tax Payable", BalanceSheetAccount.Group.LIABILITIES, BalanceSheetAccount.AccountType.CURRENT_LIABILITY, True),
     ]:
         BalanceSheetAccount.objects.update_or_create(
             code=code,
@@ -361,12 +362,15 @@ def ensure_payroll_accounts():
             is_active=True,
         )
 
-    prepaid_salaries = payroll_balance_sheet_chart_account(
+    # Keep the original system code as a compatibility alias for existing
+    # payroll callers, but present and report the balance as an accounts-
+    # receivable staff advance rather than a prepaid salary.
+    staff_advances = payroll_balance_sheet_chart_account(
         system_code="PAYROLL_PREPAID_SALARIES",
-        code="341002",
-        account_name="Prepaid Salaries",
-        account_type=payroll_prepayment_type,
-        description="Salary advances paid before the payroll period is earned.",
+        code="331003",
+        account_name="Staff Advances Receivable",
+        account_type=payroll_receivable_type,
+        description="Salary advances disbursed to staff and recoverable from later salary payments.",
     )
 
     accounts = {
@@ -388,7 +392,10 @@ def ensure_payroll_accounts():
             account_type=payroll_expense_type,
             description="Employer NSSF contribution expense.",
         ),
-        "prepaid_salaries": prepaid_salaries,
+        # Compatibility alias retained for existing integrations.  The ledger
+        # itself is now the Staff Advances Receivable account above.
+        "prepaid_salaries": staff_advances,
+        "staff_advances": staff_advances,
         "paye_payable": payroll_balance_sheet_chart_account(
             system_code="PAYROLL_PAYE_PAYABLE",
             code="421012",
@@ -402,6 +409,13 @@ def ensure_payroll_accounts():
             account_name="NSSF Payable",
             account_type=payroll_liability_type,
             description="Employee and employer NSSF payable.",
+        ),
+        "lst_payable": payroll_balance_sheet_chart_account(
+            system_code="PAYROLL_LST_PAYABLE",
+            code="421017",
+            account_name="Local Service Tax Payable",
+            account_type=payroll_liability_type,
+            description="Local Service Tax withheld from employees and payable to the local authority.",
         ),
         "salary_payable": payroll_balance_sheet_chart_account(
             system_code="PAYROLL_SALARY_PAYABLE",
@@ -419,7 +433,6 @@ def ensure_payroll_accounts():
             allow_reconciliation=False,
         ),
     }
-    accounts["staff_advances"] = prepaid_salaries
     return accounts
 
 
@@ -432,20 +445,53 @@ def post_salary_advance(welfare_request, *, created_by=None):
     if amount <= 0:
         return None
 
+    disbursed_on = getattr(welfare_request, "advance_disbursed_on", None)
+    if not disbursed_on:
+        raise ValidationError("Record the actual advance disbursement date before posting it to accounts.")
+
+    # HR records a short, consistent payment method.  Map it to the standard
+    # accounting method names, then resolve the controlled payment account.
+    method_map = {
+        "CASH": "CASH",
+        "BANK": "BANK",
+        "MOBILE_MONEY": "MOBILE MONEY",
+        "CHEQUE": "CHECK",
+        "OTHER": "CHECK",
+    }
+    raw_method = (getattr(welfare_request, "advance_payment_method", "") or "").strip().upper()
+    payment_method = method_map.get(raw_method)
+    if not payment_method:
+        raise ValidationError("Select how the salary advance was actually paid before posting it to accounts.")
+
     accounts = ensure_payroll_accounts()
     worker_name = getattr(welfare_request.worker, "display_name", str(welfare_request.worker))
     description = f"Salary advance to {worker_name}"
-    return post_journal_entry(
-        entry_date=(welfare_request.manager_reviewed_at.date() if welfare_request.manager_reviewed_at else date.today()),
+    entry = post_journal_entry(
+        entry_date=disbursed_on,
         reference=f"ADV-{welfare_request.pk}",
         description=description,
         lines=[
-            {"account": accounts["prepaid_salaries"], "debit": amount, "memo": description},
-            {"account": accounts["cash"], "credit": amount, "memo": description},
+            {"account": accounts["staff_advances"], "debit": amount, "memo": description},
+            {
+                "account": _require_account(
+                    _payment_account(payment_method),
+                    f"Payment method {payment_method} is not mapped to a ledger account.",
+                ),
+                "credit": amount,
+                "memo": getattr(welfare_request, "advance_payment_reference", "") or description,
+            },
         ],
         source=welfare_request,
         created_by=created_by or welfare_request.manager,
     )
+    if hasattr(welfare_request, "advance_journal_reference") and welfare_request.advance_journal_reference != entry.reference:
+        # Avoid a second model save while a welfare review is in progress; the
+        # journal reference is audit metadata and does not alter the posting.
+        type(welfare_request).objects.filter(pk=welfare_request.pk).update(
+            advance_journal_reference=entry.reference,
+        )
+        welfare_request.advance_journal_reference = entry.reference
+    return entry
 
 
 def _salary_breakdown_amounts(salary):
@@ -453,9 +499,12 @@ def _salary_breakdown_amounts(salary):
     paye_tax = _money(salary.paye_tax)
     nssf_employee = _money(salary.nssf_employee)
     nssf_employer = _money(salary.nssf_employer)
+    lst_deduction = _money(getattr(salary, "lst_deduction", 0))
     advances = _money(salary.advances_deducted)
     bonuses = _money(salary.bonus_amount)
-    calculated_net_pay = _money(max(gross_salary + bonuses - nssf_employee - paye_tax - advances, Decimal("0.00")))
+    calculated_net_pay = _money(
+        max(gross_salary + bonuses - nssf_employee - paye_tax - lst_deduction - advances, Decimal("0.00"))
+    )
     net_pay = _money(salary.net_pay or salary.amount or calculated_net_pay)
     if net_pay != calculated_net_pay:
         net_pay = calculated_net_pay
@@ -464,6 +513,7 @@ def _salary_breakdown_amounts(salary):
         "paye_tax": paye_tax,
         "nssf_employee": nssf_employee,
         "nssf_employer": nssf_employer,
+        "lst_deduction": lst_deduction,
         "advances": advances,
         "bonuses": bonuses,
         "net_pay": net_pay,
@@ -477,11 +527,12 @@ def post_salary_accrual(salary, *, created_by=None):
     paye_tax = amounts["paye_tax"]
     nssf_employee = amounts["nssf_employee"]
     nssf_employer = amounts["nssf_employer"]
+    lst_deduction = amounts["lst_deduction"]
     advances = amounts["advances"]
     bonuses = amounts["bonuses"]
     net_pay = amounts["net_pay"]
 
-    if not any([gross_salary, paye_tax, nssf_employee, nssf_employer, advances, bonuses, net_pay]):
+    if not any([gross_salary, paye_tax, nssf_employee, nssf_employer, lst_deduction, advances, bonuses, net_pay]):
         return None
 
     employee_name = getattr(salary.employee, "display_name", str(salary.employee))
@@ -497,6 +548,8 @@ def post_salary_accrual(salary, *, created_by=None):
         lines.append({"account": accounts["prepaid_salaries"], "credit": advances, "memo": "Salary advance recovered"})
     if paye_tax > 0:
         lines.append({"account": accounts["paye_payable"], "credit": paye_tax, "memo": "PAYE withheld"})
+    if lst_deduction > 0:
+        lines.append({"account": accounts["lst_payable"], "credit": lst_deduction, "memo": "Local Service Tax withheld"})
     total_nssf = nssf_employee + nssf_employer
     if total_nssf > 0:
         lines.append({"account": accounts["nssf_payable"], "credit": total_nssf, "memo": "NSSF payable"})
@@ -712,19 +765,8 @@ def record_due_monthly_depreciation(*, as_of_date=None, created_by=None):
     return summary
 
 
-@transaction.atomic
-def post_journal_entry(*, entry_date, reference, description, lines, source=None, created_by=None, dedupe_source=True):
-    from .models import JournalEntry, JournalLine
-
-    existing_reference = JournalEntry.objects.filter(reference=reference, status=JournalEntry.Status.POSTED).first()
-    if existing_reference:
-        return existing_reference
-
-    if dedupe_source and source and source.pk:
-        existing = JournalEntry.objects.filter(**_source_filter(source), status=JournalEntry.Status.POSTED).first()
-        if existing:
-            return existing
-
+def _clean_journal_lines(lines):
+    """Validate and normalize journal lines before any financial record is saved."""
     clean_lines = []
     for line in lines:
         debit = _money(line.get("debit", 0))
@@ -750,6 +792,35 @@ def post_journal_entry(*, entry_date, reference, description, lines, source=None
     total_credits = sum((line["credit"] for line in clean_lines), Decimal("0.00"))
     if not clean_lines or total_debits != total_credits:
         raise ValidationError("Journal entry must balance before it can be posted.")
+    return clean_lines
+
+
+@transaction.atomic
+def post_journal_entry(
+    *,
+    entry_date,
+    reference,
+    description,
+    lines,
+    source=None,
+    created_by=None,
+    dedupe_source=True,
+    reversal_of=None,
+):
+    from .models import JournalEntry, JournalLine
+
+    existing_reference = JournalEntry.objects.filter(reference=reference).first()
+    if existing_reference:
+        if existing_reference.status == JournalEntry.Status.POSTED:
+            return existing_reference
+        raise ValidationError("This journal reference has already been used and cannot be reused.")
+
+    if dedupe_source and source and source.pk:
+        existing = JournalEntry.objects.filter(**_source_filter(source), status=JournalEntry.Status.POSTED).first()
+        if existing:
+            return existing
+
+    clean_lines = _clean_journal_lines(lines)
 
     kwargs = _source_filter(source) if source and source.pk else {"content_type": None, "object_id": None}
     entry = JournalEntry.objects.create(
@@ -757,6 +828,7 @@ def post_journal_entry(*, entry_date, reference, description, lines, source=None
         reference=reference,
         description=description,
         created_by=created_by,
+        reversal_of=reversal_of,
         **kwargs,
     )
     JournalLine.objects.bulk_create(
@@ -772,6 +844,203 @@ def post_journal_entry(*, entry_date, reference, description, lines, source=None
         ]
     )
     return entry
+
+
+@transaction.atomic
+def create_journal_draft(*, entry_date, reference, description, lines, created_by=None):
+    """Create a balanced draft that can later be posted or voided by a manager."""
+    from .models import JournalEntry, JournalLine
+
+    if JournalEntry.objects.filter(reference=reference).exists():
+        raise ValidationError("This journal reference has already been used.")
+    clean_lines = _clean_journal_lines(lines)
+    entry = JournalEntry.objects.create(
+        entry_date=entry_date,
+        reference=reference,
+        description=description,
+        status=JournalEntry.Status.DRAFT,
+        created_by=created_by,
+    )
+    JournalLine.objects.bulk_create(
+        [
+            JournalLine(
+                entry=entry,
+                account=line["account"],
+                debit=line["debit"],
+                credit=line["credit"],
+                memo=line["memo"],
+            )
+            for line in clean_lines
+        ]
+    )
+    return entry
+
+
+@transaction.atomic
+def post_journal_draft(entry, *, posted_by=None):
+    from .models import JournalEntry
+
+    entry = JournalEntry.objects.select_for_update().get(pk=entry.pk)
+    if entry.status != JournalEntry.Status.DRAFT:
+        raise ValidationError("Only a draft journal entry can be posted.")
+    _clean_journal_lines(
+        [
+            {"account": line.account, "debit": line.debit, "credit": line.credit, "memo": line.memo}
+            for line in entry.lines.select_related("account")
+        ]
+    )
+    entry.status = JournalEntry.Status.POSTED
+    entry.save(update_fields=["status"])
+    return entry
+
+
+@transaction.atomic
+def void_journal_entry(entry, *, voided_by=None, reason=""):
+    """Void only an unposted draft, so a posted transaction is never erased."""
+    from django.utils import timezone
+    from .models import JournalEntry
+
+    entry = JournalEntry.objects.select_for_update().get(pk=entry.pk)
+    if entry.status != JournalEntry.Status.DRAFT:
+        raise ValidationError("Posted journals cannot be voided. Reverse them instead.")
+    if not (reason or "").strip():
+        raise ValidationError("Please provide a reason for voiding this draft.")
+    entry.status = JournalEntry.Status.VOID
+    entry.void_reason = reason.strip()
+    entry.voided_by = voided_by
+    entry.voided_at = timezone.now()
+    entry.save(update_fields=["status", "void_reason", "voided_by", "voided_at"])
+    return entry
+
+
+@transaction.atomic
+def reverse_journal_entry(entry, *, reversal_date, created_by=None, description=""):
+    """Post a separate, equal-and-opposite journal; originals remain immutable."""
+    from .models import JournalEntry
+
+    entry = JournalEntry.objects.select_for_update().get(pk=entry.pk)
+    if entry.status != JournalEntry.Status.POSTED:
+        raise ValidationError("Only posted journal entries can be reversed.")
+    if hasattr(entry, "reversal_entry"):
+        raise ValidationError("This journal entry has already been reversed.")
+    if reversal_date < entry.entry_date:
+        raise ValidationError("A reversal date cannot be before the original journal date.")
+
+    lines = [
+        {
+            "account": line.account,
+            "debit": line.credit,
+            "credit": line.debit,
+            "memo": f"Reversal of {entry.fdn or entry.reference}: {line.memo}".strip(),
+        }
+        for line in entry.lines.select_related("account")
+    ]
+    reference = f"REV-{entry.fdn or entry.reference}"
+    if JournalEntry.objects.filter(reference=reference).exists():
+        raise ValidationError("A reversal reference already exists for this journal.")
+    return post_journal_entry(
+        entry_date=reversal_date,
+        reference=reference,
+        description=description.strip() or f"Reversal of {entry.fdn or entry.reference}: {entry.description}",
+        lines=lines,
+        created_by=created_by,
+        dedupe_source=False,
+        reversal_of=entry,
+    )
+
+
+def ensure_fiscal_periods(fiscal_year):
+    """Create the standard January–December periods for a fiscal year once."""
+    from .models import FiscalPeriod
+
+    fiscal_year = int(fiscal_year)
+    periods = []
+    for month in range(1, 13):
+        start, end = _month_bounds(fiscal_year, month)
+        period, _ = FiscalPeriod.objects.get_or_create(
+            fiscal_year=fiscal_year,
+            period_number=month,
+            defaults={"start_date": start, "end_date": end},
+        )
+        periods.append(period)
+    return periods
+
+
+def budget_variance_rows(budget):
+    """Return actual posted ledger activity against every budgeted account/month.
+
+    ``variance`` is actual minus budget: a positive amount means activity was
+    above the planned amount, irrespective of the account's normal balance.
+    """
+    from .models import AccountType, JournalEntry, JournalLine
+
+    rows = []
+    lines = budget.lines.select_related(
+        "account",
+        "account__account_type",
+        "fiscal_period",
+    ).order_by("fiscal_period__period_number", "account__code")
+    for line in lines:
+        totals = JournalLine.objects.filter(
+            entry__status=JournalEntry.Status.POSTED,
+            entry__entry_date__gte=line.fiscal_period.start_date,
+            entry__entry_date__lte=line.fiscal_period.end_date,
+            account=line.account,
+        ).aggregate(debit=Sum("debit"), credit=Sum("credit"))
+        debit = _money(totals["debit"] or 0)
+        credit = _money(totals["credit"] or 0)
+        nature = line.account.account_type.account_nature
+        actual = _money(
+            debit - credit
+            if nature in {AccountType.AccountNature.ASSET, AccountType.AccountNature.EXPENSE}
+            else credit - debit
+        )
+        budget_amount = _money(line.amount)
+        rows.append(
+            {
+                "line": line,
+                "account": line.account,
+                "fiscal_period": line.fiscal_period,
+                "budget_amount": budget_amount,
+                "actual_amount": actual,
+                "variance": _money(actual - budget_amount),
+            }
+        )
+    return rows
+
+
+def budget_variance_summary(budget):
+    rows = budget_variance_rows(budget)
+    return {
+        "rows": rows,
+        "budget_total": sum((row["budget_amount"] for row in rows), Decimal("0.00")),
+        "actual_total": sum((row["actual_amount"] for row in rows), Decimal("0.00")),
+        "variance_total": sum((row["variance"] for row in rows), Decimal("0.00")),
+    }
+
+
+@transaction.atomic
+def change_budget_status(budget, *, status, changed_by=None):
+    """Apply the small approval lifecycle without unlocking prior versions."""
+    from django.utils import timezone
+    from .models import Budget
+
+    budget = Budget.objects.select_for_update().get(pk=budget.pk)
+    if status == Budget.Status.APPROVED:
+        if budget.status != Budget.Status.DRAFT:
+            raise ValidationError("Only draft budgets can be approved.")
+        budget.status = Budget.Status.APPROVED
+        budget.approved_by = changed_by
+        budget.approved_at = timezone.now()
+        budget.save(update_fields=["status", "approved_by", "approved_at", "updated_at"])
+    elif status == Budget.Status.LOCKED:
+        if budget.status != Budget.Status.APPROVED:
+            raise ValidationError("Only approved budgets can be locked.")
+        budget.status = Budget.Status.LOCKED
+        budget.save(update_fields=["status", "updated_at"])
+    else:
+        raise ValidationError("Budgets may only be approved or locked from this workflow.")
+    return budget
 
 
 def post_sale(sale_item, *, amount_paid=None, created_by=None):
@@ -950,12 +1219,13 @@ def post_expense(expense, *, created_by=None):
 
 def post_asset_purchase(asset, *, created_by=None):
     asset_account = _require_account(asset.asset_category.asset_account, f"Asset category {asset.asset_category} has no asset account.")
-    if (asset.payment_method or "").strip().upper() == "CREDIT":
+    payment_method = asset.payment_method_display if hasattr(asset, "payment_method_display") else asset.payment_method
+    if (payment_method or "").strip().upper() == "CREDIT":
         payment_account = _require_account(_first_account_by_legacy_type("PAYABLE"), "No payable account is configured.")
     else:
         payment_account = _require_account(
-            _payment_account(asset.payment_method),
-            f"Payment method {asset.payment_method} is not mapped to a ledger account.",
+            _payment_account(payment_method),
+            f"Payment method {payment_method} is not mapped to a ledger account.",
         )
     amount = _money(asset.amount)
     return post_journal_entry(
@@ -964,11 +1234,305 @@ def post_asset_purchase(asset, *, created_by=None):
         description=f"Fixed asset purchase: {asset.asset_name}",
         lines=[
             {"account": asset_account, "debit": amount, "memo": asset.asset_name},
-            {"account": payment_account, "credit": amount, "memo": asset.payment_method},
+            {"account": payment_account, "credit": amount, "memo": payment_method},
         ],
         source=asset,
         created_by=created_by or asset.created_by,
     )
+
+
+@transaction.atomic
+def run_depreciation_report(*, year, month, created_by=None):
+    """Run a monthly depreciation batch and retain its manager-facing report."""
+    from .models import DepreciationRun
+
+    summary = record_monthly_depreciation(year=year, month=month, created_by=created_by)
+    errors = [str(error) for error in summary.get("errors", [])]
+    run, created = DepreciationRun.objects.get_or_create(
+        period_year=int(year),
+        period_month=int(month),
+        defaults={
+            "status": (
+                DepreciationRun.Status.COMPLETE_WITH_ERRORS
+                if errors
+                else DepreciationRun.Status.COMPLETE
+            ),
+            "posted_count": summary["posted"],
+            "skipped_count": summary["skipped"],
+            "total_amount": summary["total_amount"],
+            "error_summary": "\n".join(errors),
+            "run_by": created_by,
+        },
+    )
+    if not created and (summary["posted"] or errors):
+        # A re-run normally finds the existing journals and posts zero. Keep
+        # the first report intact in that case; if a newly added asset does
+        # require a catch-up entry, accumulate it into the same month report.
+        run.status = (
+            DepreciationRun.Status.COMPLETE_WITH_ERRORS
+            if errors
+            else DepreciationRun.Status.COMPLETE
+        )
+        run.posted_count += summary["posted"]
+        run.skipped_count = summary["skipped"]
+        run.total_amount = _money(run.total_amount + summary["total_amount"])
+        run.error_summary = "\n".join(errors)
+        run.run_by = created_by
+        run.save(update_fields=[
+            "status",
+            "posted_count",
+            "skipped_count",
+            "total_amount",
+            "error_summary",
+            "run_by",
+            "ran_at",
+        ])
+    summary["run"] = run
+    return summary
+
+
+def _asset_event_accounts():
+    """Return system-controlled accounts for asset gains, losses and reserves."""
+    from .models import AccountType
+
+    loss_type = _get_or_create_account_type(
+        legacy_code="ASSET_DISPOSAL_LOSS",
+        name="Asset Disposal Loss",
+        nature=AccountType.AccountNature.EXPENSE,
+    )
+    gain_type = _get_or_create_account_type(
+        legacy_code="ASSET_DISPOSAL_GAIN",
+        name="Asset Disposal Gain",
+        nature=AccountType.AccountNature.INCOME,
+    )
+    equity_type = _get_or_create_account_type(
+        legacy_code="REVALUATION_RESERVE",
+        name="Revaluation Reserve",
+        nature=AccountType.AccountNature.EQUITY,
+    )
+    revaluation_loss_type = _get_or_create_account_type(
+        legacy_code="REVALUATION_LOSS",
+        name="Revaluation Loss",
+        nature=AccountType.AccountNature.EXPENSE,
+    )
+    return {
+        "disposal_loss": _get_or_create_chart_account(
+            system_code="ASSET_DISPOSAL_LOSS",
+            account_name="Loss on Disposal of Fixed Assets",
+            account_type=loss_type,
+            description="Loss recognised when a fixed asset is disposed.",
+        ),
+        "disposal_gain": _get_or_create_chart_account(
+            system_code="ASSET_DISPOSAL_GAIN",
+            account_name="Gain on Disposal of Fixed Assets",
+            account_type=gain_type,
+            description="Gain recognised when a fixed asset is disposed.",
+        ),
+        "revaluation_reserve": _get_or_create_chart_account(
+            system_code="ASSET_REVALUATION_RESERVE",
+            account_name="Asset Revaluation Reserve",
+            account_type=equity_type,
+            description="Equity reserve for upward fixed-asset revaluations.",
+        ),
+        "revaluation_loss": _get_or_create_chart_account(
+            system_code="ASSET_REVALUATION_LOSS",
+            account_name="Asset Revaluation Loss",
+            account_type=revaluation_loss_type,
+            description="Loss recognised for downward fixed-asset revaluations.",
+        ),
+    }
+
+
+def _asset_posted_depreciation(asset):
+    """Get depreciation actually journaled for one asset, not a model estimate."""
+    from .models import JournalEntry, JournalLine
+
+    return _money(
+        JournalLine.objects.filter(
+            entry__status=JournalEntry.Status.POSTED,
+            account=asset.asset_category.accumulated_depreciation_account,
+        )
+        .filter(
+            entry__reference__startswith=f"DEP-FA-{asset.pk}-"
+        )
+        .aggregate(total=Sum("credit"))["total"]
+        or Decimal("0.00")
+    )
+
+
+def _asset_revaluation_adjustment(asset, as_of_date):
+    from .models import FixedAssetRevaluation
+
+    return _money(
+        FixedAssetRevaluation.objects.filter(
+            asset=asset,
+            revaluation_date__lte=as_of_date,
+            journal_entry__status="POSTED",
+        ).aggregate(total=Sum("adjustment"))["total"]
+        or Decimal("0.00")
+    )
+
+
+def _post_disposal_depreciation(disposal, *, created_by=None):
+    """Bring an asset's posted depreciation up to its disposal date."""
+    asset = disposal.asset
+    if not asset.is_depreciable:
+        return None, Decimal("0.00")
+    depreciation_account, accumulated_account, _ = ensure_depreciation_accounts(asset.asset_category)
+    expected = _money(asset.accumulated_depreciation(disposal.disposal_date))
+    already_posted = _asset_posted_depreciation(asset)
+    amount = max(expected - already_posted, Decimal("0.00"))
+    if amount <= 0:
+        return None, already_posted
+    entry = post_journal_entry(
+        entry_date=disposal.disposal_date,
+        reference=f"DEP-DISP-FA-{asset.pk}-{disposal.disposal_date:%Y%m%d}",
+        description=f"Depreciation to disposal date: {asset.asset_name}",
+        lines=[
+            {"account": depreciation_account, "debit": amount, "memo": "Depreciation to disposal date"},
+            {"account": accumulated_account, "credit": amount, "memo": "Depreciation to disposal date"},
+        ],
+        source=disposal,
+        created_by=created_by,
+        dedupe_source=False,
+    )
+    return entry, _money(already_posted + amount)
+
+
+@transaction.atomic
+def dispose_fixed_asset(
+    *,
+    asset,
+    disposal_date,
+    proceeds=Decimal("0.00"),
+    payment_method_option=None,
+    payment_method="",
+    reason="",
+    created_by=None,
+):
+    """Post final depreciation and a balanced disposal journal, then retire the asset."""
+    from .models import FixedAssetAcquisition, FixedAssetDisposal
+
+    asset = FixedAssetAcquisition.objects.select_for_update().select_related(
+        "asset_category",
+        "asset_category__asset_account",
+    ).get(pk=asset.pk)
+    if not asset.is_active:
+        raise ValidationError("Only active assets can be disposed.")
+    if hasattr(asset, "disposal"):
+        raise ValidationError("This asset already has a disposal record.")
+
+    proceeds = _money(proceeds)
+    disposal = FixedAssetDisposal.objects.create(
+        asset=asset,
+        disposal_date=disposal_date,
+        proceeds=proceeds,
+        payment_method_option=payment_method_option,
+        payment_method=payment_method,
+        reason=reason,
+        created_by=created_by,
+    )
+    depreciation_entry, accumulated = _post_disposal_depreciation(disposal, created_by=created_by)
+    gross_value = _money(asset.amount + _asset_revaluation_adjustment(asset, disposal_date))
+    accumulated = min(accumulated, gross_value)
+    book_value = _money(max(gross_value - accumulated, Decimal("0.00")))
+    gain_loss = _money(proceeds - book_value)
+    event_accounts = _asset_event_accounts()
+
+    lines = []
+    if proceeds > 0:
+        selected_method = payment_method_option.name if payment_method_option else payment_method
+        payment_account = _require_account(
+            _payment_account(selected_method),
+            "Select a payment method that is mapped to a ledger account for disposal proceeds.",
+        )
+        lines.append({"account": payment_account, "debit": proceeds, "memo": "Disposal proceeds"})
+    if accumulated > 0:
+        _, accumulated_account, _ = ensure_depreciation_accounts(asset.asset_category)
+        lines.append({"account": accumulated_account, "debit": accumulated, "memo": "Clear accumulated depreciation"})
+    if gain_loss < 0:
+        lines.append({"account": event_accounts["disposal_loss"], "debit": -gain_loss, "memo": "Loss on disposal"})
+    lines.append({"account": asset.asset_category.asset_account, "credit": gross_value, "memo": "Remove disposed asset"})
+    if gain_loss > 0:
+        lines.append({"account": event_accounts["disposal_gain"], "credit": gain_loss, "memo": "Gain on disposal"})
+
+    journal_entry = post_journal_entry(
+        entry_date=disposal_date,
+        reference=f"DISP-FA-{asset.pk}-{disposal_date:%Y%m%d}",
+        description=f"Disposal of fixed asset: {asset.asset_name}",
+        lines=lines,
+        source=disposal,
+        created_by=created_by,
+        dedupe_source=False,
+    )
+    disposal.accumulated_depreciation = accumulated
+    disposal.book_value = book_value
+    disposal.gain_loss = gain_loss
+    disposal.depreciation_entry = depreciation_entry
+    disposal.journal_entry = journal_entry
+    disposal.save(update_fields=[
+        "accumulated_depreciation",
+        "book_value",
+        "gain_loss",
+        "depreciation_entry",
+        "journal_entry",
+    ])
+    asset.is_active = False
+    asset.save(update_fields=["is_active", "updated_at"])
+    return disposal
+
+
+@transaction.atomic
+def revalue_fixed_asset(*, asset, revaluation_date, new_value, reason="", created_by=None):
+    """Record a new carrying value with a balancing equity reserve or loss."""
+    from .models import FixedAssetAcquisition, FixedAssetRevaluation
+
+    asset = FixedAssetAcquisition.objects.select_for_update().select_related(
+        "asset_category",
+        "asset_category__asset_account",
+    ).get(pk=asset.pk)
+    if not asset.is_active:
+        raise ValidationError("Only active assets can be revalued.")
+    new_value = _money(new_value)
+    accumulated = min(_money(asset.accumulated_depreciation(revaluation_date)), _money(asset.amount))
+    prior_adjustment = _asset_revaluation_adjustment(asset, revaluation_date)
+    old_book_value = _money(max(asset.amount - accumulated + prior_adjustment, Decimal("0.00")))
+    adjustment = _money(new_value - old_book_value)
+    if adjustment == 0:
+        raise ValidationError("The new carrying value must differ from the current carrying value.")
+
+    revaluation = FixedAssetRevaluation.objects.create(
+        asset=asset,
+        revaluation_date=revaluation_date,
+        old_book_value=old_book_value,
+        new_value=new_value,
+        adjustment=adjustment,
+        reason=reason,
+        created_by=created_by,
+    )
+    accounts = _asset_event_accounts()
+    if adjustment > 0:
+        lines = [
+            {"account": asset.asset_category.asset_account, "debit": adjustment, "memo": "Revaluation increase"},
+            {"account": accounts["revaluation_reserve"], "credit": adjustment, "memo": "Revaluation reserve"},
+        ]
+    else:
+        lines = [
+            {"account": accounts["revaluation_loss"], "debit": -adjustment, "memo": "Revaluation decrease"},
+            {"account": asset.asset_category.asset_account, "credit": -adjustment, "memo": "Revaluation decrease"},
+        ]
+    entry = post_journal_entry(
+        entry_date=revaluation_date,
+        reference=f"REVAL-FA-{asset.pk}-{revaluation_date:%Y%m%d}",
+        description=f"Revaluation of fixed asset: {asset.asset_name}",
+        lines=lines,
+        source=revaluation,
+        created_by=created_by,
+        dedupe_source=False,
+    )
+    revaluation.journal_entry = entry
+    revaluation.save(update_fields=["journal_entry"])
+    return revaluation
 
 
 def _clamp(value, lower, upper):
@@ -1756,7 +2320,19 @@ def _legacy_get_bs_data(start_date=None, end_date=None):
         for advance in staff_advance_qs.order_by("manager_reviewed_at", "request_id")
     ]
 
-    salary_payable_qs = SalaryPayment.objects.filter(status=SalaryPayment.Status.PENDING).select_related("employee")
+    # A prepared line does not become a liability until the first day of the
+    # following month, when payroll records its payable journal reference.
+    # ``PENDING`` remains here only for records created by the retired schema.
+    legacy_payable_statuses = [
+        SalaryPayment.Status.PREPARED,
+        SalaryPayment.Status.PART_PAID,
+        "PENDING",
+    ]
+    salary_payable_qs = SalaryPayment.objects.filter(
+        status__in=legacy_payable_statuses,
+    ).filter(
+        Q(liability_entry_reference__gt="") | Q(status="PENDING"),
+    ).select_related("employee")
     if start_date:
         salary_payable_qs = salary_payable_qs.filter(payment_date__gte=start_date)
     if end_date:
@@ -1766,7 +2342,7 @@ def _legacy_get_bs_data(start_date=None, end_date=None):
             "code": f"SAL-PAY-{salary.salary_id}",
             "account_name": f"Salaries Payable / {salary.period_month} - {salary.employee.display_name}",
             "type": "Current Liability",
-            "amount": salary.amount,
+            "amount": salary.outstanding_amount if hasattr(salary, "outstanding_amount") else salary.amount,
             "is_active": True,
         }
         for salary in salary_payable_qs.order_by("payment_date", "salary_id")
@@ -1986,11 +2562,10 @@ def get_bs_data(start_date=None, end_date=None):
         entry__status=JournalEntry.Status.POSTED,
         account__account_type__account_nature__in=balance_sheet_natures,
     )
-    source_backed_content_types = [
-        ContentType.objects.get_for_model(SalaryPayment),
-        ContentType.objects.get_for_model(WelfareRequest),
-    ]
-    journal_lines = journal_lines.exclude(entry__content_type__in=source_backed_content_types)
+    # Posted journals are the accounting source of truth, including payroll
+    # disbursements and staff advances.  Older records without journals are
+    # handled by the compatibility fallbacks below, but must never be counted
+    # twice once a journal exists.
     if start_date:
         journal_lines = journal_lines.filter(entry__entry_date__gte=start_date)
     if end_date:
@@ -2010,6 +2585,20 @@ def get_bs_data(start_date=None, end_date=None):
     ).values_list("object_id", flat=True)
     journaled_sale_invoice_ids = set(
         SaleItem.objects.filter(item_id__in=journaled_sale_item_ids).values_list("invoice_id", flat=True)
+    )
+    salary_content_type = ContentType.objects.get_for_model(SalaryPayment)
+    journaled_salary_ids = set(
+        JournalEntry.objects.filter(
+            content_type=salary_content_type,
+            status=JournalEntry.Status.POSTED,
+        ).values_list("object_id", flat=True)
+    )
+    welfare_content_type = ContentType.objects.get_for_model(WelfareRequest)
+    journaled_welfare_ids = set(
+        JournalEntry.objects.filter(
+            content_type=welfare_content_type,
+            status=JournalEntry.Status.POSTED,
+        ).values_list("object_id", flat=True)
     )
 
     def remaining_prepayment_amount(amount, period_start, period_end, as_of_date):
@@ -2171,27 +2760,31 @@ def get_bs_data(start_date=None, end_date=None):
                 ),
             )
 
-    salary_advances = period_filter(
-        WelfareRequest.objects.filter(
+    # Only actual, unpaid advance disbursements are receivables.  New records
+    # are always represented by their journal; this fallback preserves a
+    # useful balance-sheet value for historic disbursements that pre-date the
+    # journal workflow without turning a mere approval into an asset.
+    welfare_fields = {field.name for field in WelfareRequest._meta.get_fields()}
+    if "advance_disbursed_on" in welfare_fields:
+        salary_advances = WelfareRequest.objects.filter(
+            request_type=WelfareRequest.RequestType.SALARY_ADVANCE,
+            advance_amount__gt=0,
+            advance_disbursed_on__isnull=False,
+        )
+        advance_date_field = "advance_disbursed_on"
+    else:
+        salary_advances = WelfareRequest.objects.filter(
             request_type=WelfareRequest.RequestType.SALARY_ADVANCE,
             status=WelfareRequest.Status.MANAGER_APPROVED,
-            salary_payment__isnull=True,
             advance_amount__gt=0,
-            advance_period_start__isnull=False,
-            advance_period_end__isnull=False,
-        ),
-        "advance_period_start",
-    )
-    for advance in salary_advances:
-        add_amount(
-            "341002",
-            remaining_prepayment_amount(
-                advance.advance_amount,
-                advance.advance_period_start,
-                advance.advance_period_end,
-                prepayment_as_of_date,
-            ),
         )
+        advance_date_field = "manager_reviewed_at"
+    salary_advances = salary_advances.exclude(pk__in=journaled_welfare_ids)
+    salary_advances = period_filter(salary_advances, advance_date_field)
+    add_amount(
+        "331003",
+        salary_advances.aggregate(total=Sum("advance_amount"))["total"] or Decimal("0.00"),
+    )
 
     wht_invoices = period_filter(
         SaleInvoice.objects.exclude(status=SaleInvoice.Status.CANCELLED).filter(wht_amount__gt=0),
@@ -2230,7 +2823,10 @@ def get_bs_data(start_date=None, end_date=None):
         if code:
             add_amount(code, -asset.amount)
 
-    paid_salaries = period_filter(SalaryPayment.objects.filter(status=SalaryPayment.Status.PAID), "payment_date")
+    paid_salaries = period_filter(
+        SalaryPayment.objects.filter(status=SalaryPayment.Status.PAID).exclude(salary_id__in=journaled_salary_ids),
+        "payment_date",
+    )
     add_amount("351008", -(paid_salaries.aggregate(total=Sum("amount"))["total"] or Decimal("0.00")))
 
     credit_expenses = period_filter(
@@ -2256,12 +2852,28 @@ def get_bs_data(start_date=None, end_date=None):
     add_amount("431001", credit_expense_total + credit_inventory_total)
     add_amount("421007", audit_fee_total)
 
-    salary_payables = period_filter(SalaryPayment.objects.filter(status=SalaryPayment.Status.PENDING), "payment_date")
-    add_amount("421010", salary_payables.aggregate(total=Sum("amount"))["total"] or Decimal("0.00"))
+    payable_statuses = [
+        SalaryPayment.Status.PREPARED,
+        SalaryPayment.Status.PART_PAID,
+        "PENDING",  # retained only for records created before the new workflow
+    ]
+    salary_payables = period_filter(
+        SalaryPayment.objects.filter(status__in=payable_statuses)
+        .filter(Q(liability_entry_reference__gt="") | Q(status="PENDING"))
+        .exclude(salary_id__in=journaled_salary_ids),
+        "payment_date",
+    )
+    add_amount(
+        "421010",
+        sum((salary.outstanding_amount for salary in salary_payables), Decimal("0.00")),
+    )
     add_amount("421012", salary_payables.aggregate(total=Sum("paye_tax"))["total"] or Decimal("0.00"))
     nssf_employee = salary_payables.aggregate(total=Sum("nssf_employee"))["total"] or Decimal("0.00")
     nssf_employer = salary_payables.aggregate(total=Sum("nssf_employer"))["total"] or Decimal("0.00")
     add_amount("421016", nssf_employee + nssf_employer)
+    salary_fields = {field.name for field in SalaryPayment._meta.get_fields()}
+    if "lst_deduction" in salary_fields:
+        add_amount("421017", salary_payables.aggregate(total=Sum("lst_deduction"))["total"] or Decimal("0.00"))
 
     capital_records = period_filter(InvestorCapitalTransaction.objects.all(), "transaction_date")
     capital_in = capital_records.exclude(

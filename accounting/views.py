@@ -1,21 +1,33 @@
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
+from uuid import uuid4
 
 from django.shortcuts import render
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
 from django.db import transaction
-from django.db.models import Sum, Q
+from django.db.models import Max, Sum, Q
 from django.shortcuts import get_object_or_404, redirect
 from django.utils import timezone
 
 from .services import (
+    budget_variance_summary,
+    change_budget_status,
+    create_journal_draft,
+    dispose_fixed_asset,
     get_cash_flow_data,
     get_financial_statement_data,
     get_pl_data,
     get_trial_balance_data,
+    post_journal_draft,
     post_asset_purchase,
+    post_journal_entry,
+    revalue_fixed_asset,
+    reverse_journal_entry,
+    run_depreciation_report,
+    ensure_fiscal_periods,
+    void_journal_entry,
 )
 from accounts.models import Role
 from .models import (
@@ -25,9 +37,18 @@ from .models import (
     AssetConstructionCostLine,
     AssetCategory,
     AccountType,
+    Budget,
+    BudgetLine,
     ChartOfAccount,
+    DepreciationRun,
     FinancialStatement,
+    FiscalPeriod,
+    FixedAssetDisposal,
+    FixedAssetRevaluation,
+    JournalEntry,
+    PaymentMethod,
 )
+from inventory.models import Supplier
 
 
 # Building categories that must be recorded via Asset Construction, not direct acquisition.
@@ -308,6 +329,264 @@ def financial_statement(request, statement_code):
     )
 
 
+def _parse_date(raw_value, label):
+    try:
+        return datetime.strptime((raw_value or "").strip(), "%Y-%m-%d").date()
+    except ValueError:
+        raise ValidationError(f"Please provide a valid {label}.")
+
+
+def _parse_money(raw_value, label, *, allow_zero=True):
+    try:
+        amount = Decimal((raw_value or "").strip())
+    except (InvalidOperation, ValueError):
+        raise ValidationError(f"Please enter a valid {label}.")
+    if amount < 0 or (not allow_zero and amount <= 0):
+        suffix = "greater than zero" if not allow_zero else "zero or greater"
+        raise ValidationError(f"{label.capitalize()} must be {suffix}.")
+    return amount
+
+
+def _new_manual_journal_reference(entry_date):
+    """Reference is readable; the FDN remains the authoritative unique key."""
+    return f"JRN-{entry_date:%Y%m%d}-{uuid4().hex[:8].upper()}"
+
+
+def _posted_journal_lines_from_request(request):
+    account_ids = request.POST.getlist("account")
+    debits = request.POST.getlist("debit")
+    credits = request.POST.getlist("credit")
+    memos = request.POST.getlist("memo")
+    lines = []
+    for index, account_id in enumerate(account_ids):
+        account_id = (account_id or "").strip()
+        debit_raw = debits[index] if index < len(debits) else ""
+        credit_raw = credits[index] if index < len(credits) else ""
+        memo = memos[index] if index < len(memos) else ""
+        # A blank spare UI row is harmless; a partially completed row is not.
+        if not account_id and not (debit_raw or "").strip() and not (credit_raw or "").strip() and not (memo or "").strip():
+            continue
+        if not account_id:
+            raise ValidationError(f"Line {index + 1}: select a ledger account.")
+        account = ChartOfAccount.objects.filter(pk=account_id, is_active=True).first()
+        if not account:
+            raise ValidationError(f"Line {index + 1}: select an active ledger account.")
+        try:
+            debit = Decimal((debit_raw or "0").strip() or "0")
+            credit = Decimal((credit_raw or "0").strip() or "0")
+        except (InvalidOperation, ValueError):
+            raise ValidationError(f"Line {index + 1}: debit and credit must be valid amounts.")
+        lines.append({"account": account, "debit": debit, "credit": credit, "memo": (memo or "").strip()})
+    return lines
+
+
+@login_required
+def journal_entries(request):
+    """Manager-only controlled journal entry screen and audit register."""
+    denied = _manager_required(request)
+    if denied:
+        return denied
+
+    if request.method == "POST":
+        action = request.POST.get("action", "post").strip()
+        try:
+            if action in {"post", "draft"}:
+                entry_date = _parse_date(request.POST.get("entry_date"), "journal date")
+                description = request.POST.get("description", "").strip()
+                if not description:
+                    raise ValidationError("A journal description is required.")
+                reference = request.POST.get("reference", "").strip() or _new_manual_journal_reference(entry_date)
+                lines = _posted_journal_lines_from_request(request)
+                if action == "draft":
+                    entry = create_journal_draft(
+                        entry_date=entry_date,
+                        reference=reference,
+                        description=description,
+                        lines=lines,
+                        created_by=request.user,
+                    )
+                    messages.success(request, f"Draft {entry.fdn} saved. It has no accounting effect until posted.")
+                else:
+                    entry = post_journal_entry(
+                        entry_date=entry_date,
+                        reference=reference,
+                        description=description,
+                        lines=lines,
+                        created_by=request.user,
+                        dedupe_source=False,
+                    )
+                    messages.success(request, f"Balanced journal {entry.fdn} posted.")
+            elif action == "post_draft":
+                entry = get_object_or_404(JournalEntry, pk=request.POST.get("entry_id"))
+                entry = post_journal_draft(entry, posted_by=request.user)
+                messages.success(request, f"Draft {entry.fdn} posted.")
+            elif action == "void":
+                entry = get_object_or_404(JournalEntry, pk=request.POST.get("entry_id"))
+                entry = void_journal_entry(
+                    entry,
+                    voided_by=request.user,
+                    reason=request.POST.get("reason", ""),
+                )
+                messages.success(request, f"Draft {entry.fdn} was voided and retained in the audit trail.")
+            elif action == "reverse":
+                entry = get_object_or_404(JournalEntry, pk=request.POST.get("entry_id"))
+                reversal_date = _parse_date(request.POST.get("reversal_date"), "reversal date")
+                reversal = reverse_journal_entry(
+                    entry,
+                    reversal_date=reversal_date,
+                    created_by=request.user,
+                    description=request.POST.get("reversal_description", ""),
+                )
+                messages.success(request, f"Reversal {reversal.fdn} was posted; the original remains unchanged.")
+            else:
+                raise ValidationError("Unknown journal action.")
+        except ValidationError as exc:
+            messages.error(request, "; ".join(exc.messages) if hasattr(exc, "messages") else str(exc))
+        return redirect("journal_entries")
+
+    entries = JournalEntry.objects.select_related("created_by", "reversal_of").prefetch_related(
+        "lines__account"
+    ).order_by("-entry_date", "-id")[:100]
+    return render(
+        request,
+        "accounting/journal_entries.html",
+        {
+            "entries": entries,
+            "accounts": ChartOfAccount.objects.filter(is_active=True).select_related("account_type").order_by("code"),
+            "today": timezone.localdate(),
+        },
+    )
+
+
+def _next_budget_version(fiscal_year):
+    current = Budget.objects.filter(fiscal_year=fiscal_year).aggregate(maximum=Max("version"))["maximum"]
+    return (current or 0) + 1
+
+
+@login_required
+def budgets(request):
+    """Budget setup and a live actual-vs-budget view from posted ledgers."""
+    denied = _manager_required(request)
+    if denied:
+        return denied
+
+    selected_budget = None
+    if request.method == "POST":
+        action = request.POST.get("action", "").strip()
+        try:
+            if action == "create_budget":
+                fiscal_year_raw = request.POST.get("fiscal_year", "").strip()
+                try:
+                    fiscal_year = int(fiscal_year_raw)
+                except ValueError:
+                    raise ValidationError("Please provide a valid fiscal year.")
+                if fiscal_year < 2000 or fiscal_year > 9999:
+                    raise ValidationError("Please provide a valid fiscal year.")
+                version_raw = request.POST.get("version", "").strip()
+                try:
+                    version = int(version_raw) if version_raw else _next_budget_version(fiscal_year)
+                except ValueError:
+                    raise ValidationError("Budget version must be a whole number.")
+                name = request.POST.get("name", "").strip() or f"FY {fiscal_year} Budget v{version}"
+                selected_budget = Budget.objects.create(
+                    name=name,
+                    fiscal_year=fiscal_year,
+                    version=version,
+                    notes=request.POST.get("notes", "").strip(),
+                    created_by=request.user,
+                )
+                ensure_fiscal_periods(fiscal_year)
+                messages.success(request, f"Budget {selected_budget} created.")
+            elif action == "save_line":
+                selected_budget = get_object_or_404(Budget, pk=request.POST.get("budget_id"))
+                if not selected_budget.is_editable:
+                    raise ValidationError("This budget is approved or locked. Create a new version to change it.")
+                account = get_object_or_404(ChartOfAccount, pk=request.POST.get("account_id"), is_active=True)
+                period = get_object_or_404(
+                    FiscalPeriod,
+                    pk=request.POST.get("fiscal_period_id"),
+                    fiscal_year=selected_budget.fiscal_year,
+                )
+                amount = _parse_money(request.POST.get("amount"), "budget amount")
+                line, created = BudgetLine.objects.get_or_create(
+                    budget=selected_budget,
+                    account=account,
+                    fiscal_period=period,
+                    defaults={"amount": amount, "notes": request.POST.get("notes", "").strip()},
+                )
+                if not created:
+                    line.amount = amount
+                    line.notes = request.POST.get("notes", "").strip()
+                    line.save(update_fields=["amount", "notes", "updated_at"])
+                messages.success(request, "Budget line saved.")
+            elif action in {"approve", "lock"}:
+                selected_budget = get_object_or_404(Budget, pk=request.POST.get("budget_id"))
+                selected_budget = change_budget_status(
+                    selected_budget,
+                    status=Budget.Status.APPROVED if action == "approve" else Budget.Status.LOCKED,
+                    changed_by=request.user,
+                )
+                messages.success(request, f"Budget is now {selected_budget.get_status_display().lower()}.")
+            else:
+                raise ValidationError("Unknown budget action.")
+        except ValidationError as exc:
+            messages.error(request, "; ".join(exc.messages) if hasattr(exc, "messages") else str(exc))
+        except Exception as exc:
+            # Integrity errors (for example a duplicate version) should be actionable,
+            # not a raw database page for managers.
+            messages.error(request, str(exc))
+        if selected_budget:
+            return redirect(f"{request.path}?budget={selected_budget.pk}")
+        return redirect("budgets")
+
+    budgets_qs = Budget.objects.all().order_by("-fiscal_year", "-version", "name")
+    selected_id = request.GET.get("budget", "").strip()
+    if selected_id:
+        selected_budget = budgets_qs.filter(pk=selected_id).first()
+    if not selected_budget:
+        selected_budget = budgets_qs.first()
+    periods = []
+    variance = None
+    if selected_budget:
+        periods = ensure_fiscal_periods(selected_budget.fiscal_year)
+        variance = budget_variance_summary(selected_budget)
+
+    return render(
+        request,
+        "accounting/budgets.html",
+        {
+            "budgets": budgets_qs,
+            "selected_budget": selected_budget,
+            "periods": periods,
+            "accounts": ChartOfAccount.objects.filter(is_active=True).select_related("account_type").order_by("code"),
+            "variance": variance,
+            "current_year": timezone.localdate().year,
+        },
+    )
+
+
+def _asset_payment_selection(raw_value):
+    """Resolve the controlled payment dropdown while accepting legacy labels."""
+    raw_value = (raw_value or "").strip()
+    if not raw_value:
+        return None, ""
+    if raw_value.upper() == "CREDIT":
+        return None, "CREDIT"
+    option = None
+    if raw_value.startswith("payment-"):
+        option = PaymentMethod.objects.filter(
+            pk=raw_value.removeprefix("payment-"),
+            is_active=True,
+        ).first()
+    elif raw_value.isdigit():
+        option = PaymentMethod.objects.filter(pk=raw_value, is_active=True).first()
+    else:
+        option = PaymentMethod.objects.filter(name__iexact=raw_value, is_active=True).first()
+    if not option:
+        raise ValidationError("Please select a valid payment method.")
+    return option, option.name
+
+
 @login_required
 def fixed_assets(request):
     denied = _manager_required(request)
@@ -325,7 +604,9 @@ def fixed_assets(request):
         residual_value_raw = request.POST.get("residual_value", "0").strip()
         useful_life_years_raw = request.POST.get("useful_life_years", "").strip()
         is_depreciable = request.POST.get("is_depreciable") == "on"
-        payment_method = request.POST.get("payment_method", "").strip()
+        payment_method_option = None
+        payment_method = ""
+        supplier = None
         notes = request.POST.get("notes", "").strip()
 
         errors = []
@@ -376,6 +657,19 @@ def fixed_assets(request):
             except (TypeError, ValueError):
                 errors.append("Please enter a valid useful life in years.")
 
+        try:
+            payment_method_option, payment_method = _asset_payment_selection(request.POST.get("payment_method"))
+            if not payment_method:
+                errors.append("Please select a payment method.")
+        except ValidationError as exc:
+            errors.extend(exc.messages)
+
+        supplier_id = request.POST.get("supplier_id", "").strip()
+        if supplier_id:
+            supplier = Supplier.objects.filter(pk=supplier_id, is_active=True).first()
+            if not supplier:
+                errors.append("Please select a valid active supplier.")
+
         if errors:
             for err in errors:
                 messages.error(request, err)
@@ -392,6 +686,8 @@ def fixed_assets(request):
                         residual_value=residual_value,
                         in_service_date=in_service_date or acquisition_date,
                         payment_method=payment_method,
+                        payment_method_option=payment_method_option,
+                        supplier=supplier,
                         notes=notes,
                         created_by=request.user,
                     )
@@ -402,14 +698,175 @@ def fixed_assets(request):
             messages.success(request, "Fixed asset acquisition recorded.")
             return redirect("fixed_assets")
 
-    acquisitions = FixedAssetAcquisition.objects.filter(is_active=True).order_by("-acquisition_date", "-id")
+    acquisitions = FixedAssetAcquisition.objects.filter(is_active=True).select_related(
+        "asset_category",
+        "payment_method_option",
+        "supplier",
+    ).order_by("-acquisition_date", "-id")
     return render(
         request,
         "accounting/fixed_assets.html",
         {
             "asset_categories": _asset_category_choices(),
             "acquisitions": acquisitions,
+            "payment_methods": PaymentMethod.objects.filter(is_active=True).select_related("account").order_by("name"),
+            "suppliers": Supplier.objects.filter(is_active=True).order_by("name"),
             "today": datetime.now().date(),
+        },
+    )
+
+
+@login_required
+def depreciation_run(request):
+    """Run a selected monthly batch and display its persisted report."""
+    denied = _manager_required(request)
+    if denied:
+        return denied
+
+    today = timezone.localdate()
+    selected_year = today.year
+    selected_month = today.month
+    raw_period = request.GET.get("period", "").strip()
+    if raw_period:
+        try:
+            selected_year, selected_month = (int(value) for value in raw_period.split("-", 1))
+            if not 1 <= selected_month <= 12:
+                raise ValueError
+        except ValueError:
+            messages.error(request, "Please choose a valid depreciation month.")
+            selected_year, selected_month = today.year, today.month
+
+    if request.method == "POST":
+        try:
+            period = request.POST.get("period", "").strip()
+            selected_year, selected_month = (int(value) for value in period.split("-", 1))
+            if not 1 <= selected_month <= 12:
+                raise ValueError
+            summary = run_depreciation_report(
+                year=selected_year,
+                month=selected_month,
+                created_by=request.user,
+            )
+            messages.success(
+                request,
+                f"Depreciation run completed: {summary['posted']} entry/entries posted, "
+                f"UGX {summary['total_amount']:,.2f}.",
+            )
+        except (ValidationError, ValueError) as exc:
+            messages.error(request, "; ".join(exc.messages) if hasattr(exc, "messages") else "Please choose a valid depreciation month.")
+        return redirect(f"{request.path}?period={selected_year:04d}-{selected_month:02d}")
+
+    run = DepreciationRun.objects.filter(period_year=selected_year, period_month=selected_month).first()
+    start, end = _month_bounds_for_view(selected_year, selected_month)
+    entries = JournalEntry.objects.filter(
+        status=JournalEntry.Status.POSTED,
+        entry_date__gte=start,
+        entry_date__lte=end,
+        reference__startswith="DEP-FA-",
+    ).prefetch_related("lines__account").order_by("reference")
+    return render(
+        request,
+        "accounting/depreciation_run.html",
+        {
+            "period": f"{selected_year:04d}-{selected_month:02d}",
+            "run": run,
+            "entries": entries,
+            "runs": DepreciationRun.objects.all()[:24],
+            "today": today,
+        },
+    )
+
+
+def _month_bounds_for_view(year, month):
+    """Use only stdlib date parsing in the view layer."""
+    import calendar
+    from datetime import date
+
+    return date(year, month, 1), date(year, month, calendar.monthrange(year, month)[1])
+
+
+@login_required
+def asset_disposal(request, asset_id):
+    denied = _manager_required(request)
+    if denied:
+        return denied
+
+    asset = get_object_or_404(
+        FixedAssetAcquisition.objects.select_related("asset_category", "supplier"),
+        pk=asset_id,
+        is_active=True,
+    )
+    if request.method == "POST":
+        try:
+            disposal_date = _parse_date(request.POST.get("disposal_date"), "disposal date")
+            proceeds = _parse_money(request.POST.get("proceeds", "0"), "disposal proceeds")
+            payment_option, payment_method = _asset_payment_selection(request.POST.get("payment_method"))
+            if proceeds > 0 and not payment_method:
+                raise ValidationError("Select how the disposal proceeds were received.")
+            disposal = dispose_fixed_asset(
+                asset=asset,
+                disposal_date=disposal_date,
+                proceeds=proceeds,
+                payment_method_option=payment_option,
+                payment_method=payment_method,
+                reason=request.POST.get("reason", "").strip(),
+                created_by=request.user,
+            )
+            messages.success(
+                request,
+                f"Asset disposed. Journal {disposal.journal_entry.fdn} records a "
+                f"{'gain' if disposal.gain_loss >= 0 else 'loss'} of UGX {abs(disposal.gain_loss):,.2f}.",
+            )
+            return redirect("fixed_assets")
+        except ValidationError as exc:
+            messages.error(request, "; ".join(exc.messages) if hasattr(exc, "messages") else str(exc))
+
+    return render(
+        request,
+        "accounting/asset_disposal.html",
+        {
+            "asset": asset,
+            "payment_methods": PaymentMethod.objects.filter(is_active=True).order_by("name"),
+            "today": timezone.localdate(),
+        },
+    )
+
+
+@login_required
+def asset_revaluation(request, asset_id):
+    denied = _manager_required(request)
+    if denied:
+        return denied
+
+    asset = get_object_or_404(
+        FixedAssetAcquisition.objects.select_related("asset_category"),
+        pk=asset_id,
+        is_active=True,
+    )
+    if request.method == "POST":
+        try:
+            revaluation = revalue_fixed_asset(
+                asset=asset,
+                revaluation_date=_parse_date(request.POST.get("revaluation_date"), "revaluation date"),
+                new_value=_parse_money(request.POST.get("new_value"), "new carrying value"),
+                reason=request.POST.get("reason", "").strip(),
+                created_by=request.user,
+            )
+            messages.success(
+                request,
+                f"Revaluation posted as {revaluation.journal_entry.fdn}. "
+                f"Adjustment: UGX {revaluation.adjustment:,.2f}.",
+            )
+            return redirect("fixed_assets")
+        except ValidationError as exc:
+            messages.error(request, "; ".join(exc.messages) if hasattr(exc, "messages") else str(exc))
+
+    return render(
+        request,
+        "accounting/asset_revaluation.html",
+        {
+            "asset": asset,
+            "today": timezone.localdate(),
         },
     )
 

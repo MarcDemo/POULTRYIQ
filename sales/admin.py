@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Customer, CustomerPayment, ReceivableLedger, SaleInvoice, SaleItem
+from .models import Customer, CustomerPayment, ReceivableEntry, ReceivableLedger, SaleInvoice, SaleItem
 
 
 @admin.register(SaleItem)
@@ -13,4 +13,5 @@ class SaleItemAdmin(admin.ModelAdmin):
 admin.site.register(Customer)
 admin.site.register(SaleInvoice)
 admin.site.register(ReceivableLedger)
+admin.site.register(ReceivableEntry)
 admin.site.register(CustomerPayment)
