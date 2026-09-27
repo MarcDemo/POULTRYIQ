@@ -132,7 +132,7 @@ DATABASE_ENGINE = os.environ.get("DJANGO_DB_ENGINE", "sqlite").strip().lower()
 if DATABASE_ENGINE in {"mariadb", "mysql"}:
     DATABASES = {
         "default": {
-            "ENGINE": "mysql.connector.django",
+            "ENGINE": "django.db.backends.mysql",
             "NAME": os.environ.get("DJANGO_DB_NAME", ""),
             "USER": os.environ.get("DJANGO_DB_USER", ""),
             "PASSWORD": os.environ.get("DJANGO_DB_PASSWORD", ""),
@@ -142,7 +142,6 @@ if DATABASE_ENGINE in {"mariadb", "mysql"}:
             "CONN_HEALTH_CHECKS": True,
             "OPTIONS": {
                 "charset": "utf8mb4",
-                "use_pure": True,
                 "init_command": "SET sql_mode='STRICT_TRANS_TABLES'",
             },
         }

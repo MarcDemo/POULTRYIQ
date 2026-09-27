@@ -179,8 +179,9 @@ automatic workflow.
 The script refuses to migrate MariaDB unless `mariadb-dump` or `mysqldump` can
 create a backup first.
 
-The application uses Oracle MySQL Connector/Python's Django backend because
-Namecheap shared hosting blocks the compiler required to build `mysqlclient`.
+The application uses Django's native MariaDB/MySQL backend through the
+MySQLdb-compatible PyMySQL driver because Namecheap shared hosting blocks the
+compiler required to build `mysqlclient`.
 
 ## 9. Create a dedicated GitHub Actions SSH key
 
