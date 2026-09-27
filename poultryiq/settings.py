@@ -125,14 +125,34 @@ WSGI_APPLICATION = 'poultryiq.wsgi.application'
 
 
 # Database
-# https://docs.djangoproject.com/en/5.2/ref/settings/#databases
+# SQLite remains the zero-configuration local default. Production uses the
+# MariaDB credentials stored in .env.production on the server.
+DATABASE_ENGINE = os.environ.get("DJANGO_DB_ENGINE", "sqlite").strip().lower()
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': os.environ.get("DJANGO_DB_PATH", BASE_DIR / "db.sqlite3"),
+if DATABASE_ENGINE in {"mariadb", "mysql"}:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.mysql",
+            "NAME": os.environ.get("DJANGO_DB_NAME", ""),
+            "USER": os.environ.get("DJANGO_DB_USER", ""),
+            "PASSWORD": os.environ.get("DJANGO_DB_PASSWORD", ""),
+            "HOST": os.environ.get("DJANGO_DB_HOST", "127.0.0.1"),
+            "PORT": os.environ.get("DJANGO_DB_PORT", "3306"),
+            "CONN_MAX_AGE": int(os.environ.get("DJANGO_DB_CONN_MAX_AGE", "60")),
+            "CONN_HEALTH_CHECKS": True,
+            "OPTIONS": {
+                "charset": "utf8mb4",
+                "init_command": "SET sql_mode='STRICT_TRANS_TABLES'",
+            },
+        }
     }
-}
+else:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": BASE_DIR / "db.sqlite3",
+        }
+    }
 
 
 # Password validation
