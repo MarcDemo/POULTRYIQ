@@ -39,10 +39,54 @@
     font-weight: 650;
 }
 
+/* Authentication pages use a standalone document instead of base.html. */
+body.auth-page {
+    display: grid;
+    grid-template-rows: minmax(0, 1fr) auto;
+    align-items: stretch;
+    justify-content: stretch;
+    min-height: 100dvh;
+}
+
+.auth-page .auth-container {
+    width: 100%;
+    min-height: 0;
+    padding: clamp(1.25rem, 3vw, 3rem);
+}
+
+.auth-page .site-credit {
+    margin-top: 0;
+    padding: 0.75rem 1rem;
+    background: #f8f9fa;
+}
+
+.auth-page .site-credit__logo {
+    width: clamp(5rem, 7vw, 6.5rem);
+}
+
+@media (max-width: 768px) {
+    body.auth-page {
+        display: block;
+    }
+
+    .auth-page .auth-container {
+        min-height: 100dvh;
+        padding: 0;
+    }
+
+    .auth-page .site-credit {
+        margin-top: 0;
+    }
+}
+
 @media (max-width: 575.98px) {
     .site-credit {
         margin-top: 2rem;
         padding-bottom: calc(1.25rem + env(safe-area-inset-bottom));
+    }
+
+    .auth-page .site-credit {
+        margin-top: 0;
     }
 
     .site-credit__inner {
