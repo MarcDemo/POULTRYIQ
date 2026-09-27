@@ -146,3 +146,21 @@ class InvestorCapitalTransaction(models.Model):
 
     def __str__(self) -> str:
         return f"{self.get_transaction_type_display()} - {self.amount}"
+
+
+class EndOfDayNote(models.Model):
+    summary_date = models.DateField(unique=True, db_index=True)
+    notes = models.TextField(blank=True)
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="end_of_day_notes_updated",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-summary_date"]
+
+    def __str__(self) -> str:
+        return f"End of day - {self.summary_date}"

@@ -1,92 +1,112 @@
 {% extends 'base.html' %}
+{% block title %}End of Day | PoultryIQ{% endblock %}
+
 {% block content %}
-
 <div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-start gap-3 mb-4 flex-wrap">
+        <div>
+            <h2 class="mb-1">End of Day Summary</h2>
+            <p class="text-muted mb-0">Operational totals for {{ selected_date|date:"l, d F Y" }}</p>
+        </div>
+    </div>
 
-<h3 class="mb-4">End of Day Summary</h3>
+    <div class="card mb-4">
+        <div class="card-body">
+            <form method="get" class="row g-3 align-items-end">
+                <div class="col-sm-7 col-lg-4">
+                    <label for="summaryDate" class="form-label">Summary date</label>
+                    <input id="summaryDate" type="date" name="date" value="{{ selected_date_value }}" class="form-control" required>
+                </div>
+                <div class="col-sm-5 col-lg-3">
+                    <button class="btn btn-primary w-100" type="submit">
+                        <i class="bi bi-arrow-clockwise me-1"></i>Load Summary
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
 
-<!-- DATE -->
-<div class="card mb-3">
-<div class="card-body">
+    {% if not activity_count %}
+    <div class="alert alert-info" role="status">
+        <i class="bi bi-info-circle me-2"></i>No operational records were found for this date. The calculated totals are zero.
+    </div>
+    {% endif %}
 
-<form method="GET" class="row g-3">
+    <div class="row g-3 mb-4">
+        <div class="col-sm-6 col-xl-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <p class="text-muted mb-1">Eggs collected</p>
+                    <h3 class="mb-1">{{ eggs }}</h3>
+                    <small class="text-muted">{{ eggs_rejected }} rejected · {{ net_eggs }} net</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-sm-6 col-xl-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <p class="text-muted mb-1">Sales revenue</p>
+                    <h3 class="mb-1">{{ sales }}</h3>
+                    <small class="text-muted">Non-cancelled invoices dated this day</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-sm-6 col-xl-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <p class="text-muted mb-1">Payments received</p>
+                    <h3 class="mb-1">{{ cash_received }}</h3>
+                    <small class="text-muted">Customer payments received this day</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-sm-6 col-xl-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <p class="text-muted mb-1">Expenses</p>
+                    <h3 class="mb-1">{{ expenses }}</h3>
+                    <small class="text-muted">All non-rejected expense records</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-sm-6 col-xl-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <p class="text-muted mb-1">Deaths</p>
+                    <h3 class="mb-1">{{ deaths }}</h3>
+                    <small class="text-muted">All non-rejected mortality records</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-sm-6 col-xl-4">
+            <div class="card h-100 {% if operating_result_value < 0 %}border-danger{% else %}border-success{% endif %}">
+                <div class="card-body">
+                    <p class="text-muted mb-1">Operating result</p>
+                    <h3 class="mb-1 {% if operating_result_value < 0 %}text-danger{% else %}text-success{% endif %}">{{ operating_result }}</h3>
+                    <small class="text-muted">Sales revenue minus recorded expenses</small>
+                </div>
+            </div>
+        </div>
+    </div>
 
-<div class="col-md-4">
-<input type="date" name="date" class="form-control">
+    <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center gap-2 flex-wrap">
+            <span><i class="bi bi-journal-text me-2"></i>Manager Notes</span>
+            {% if note %}
+            <small class="fw-normal">Last updated by {{ note.updated_by.display_name }} at {{ note.updated_at|date:"d M Y, H:i" }}</small>
+            {% endif %}
+        </div>
+        <div class="card-body">
+            <form method="post">
+                {% csrf_token %}
+                <input type="hidden" name="date" value="{{ selected_date_value }}">
+                <label for="managerNotes" class="visually-hidden">Manager notes for {{ selected_date|date:"d F Y" }}</label>
+                <textarea id="managerNotes" class="form-control mb-3" name="notes" rows="4" placeholder="Record daily observations, incidents, or follow-up actions...">{% if note %}{{ note.notes }}{% endif %}</textarea>
+                <button class="btn btn-success" type="submit">
+                    <i class="bi bi-check-circle me-1"></i>Save Notes
+                </button>
+            </form>
+        </div>
+    </div>
 </div>
-
-<div class="col-md-4">
-<button class="btn btn-primary">Load Summary</button>
-</div>
-
-</form>
-
-</div>
-</div>
-
-<!-- SUMMARY CARDS -->
-<div class="row g-4 mb-4">
-
-<div class="col-md-3">
-<div class="card text-center">
-<div class="card-body">
-<h6>Eggs Collected</h6>
-<h3>{{ eggs }}</h3>
-</div>
-</div>
-</div>
-
-<div class="col-md-3">
-<div class="card text-center">
-<div class="card-body">
-<h6>Total Sales</h6>
-<h3>{{ sales }}</h3>
-</div>
-</div>
-</div>
-
-<div class="col-md-3">
-<div class="card text-center">
-<div class="card-body">
-<h6>Expenses</h6>
-<h3>{{ expenses }}</h3>
-</div>
-</div>
-</div>
-
-<div class="col-md-3">
-<div class="card text-center">
-<div class="card-body">
-<h6>Deaths</h6>
-<h3>{{ deaths }}</h3>
-</div>
-</div>
-</div>
-
-</div>
-
-<!-- PROFIT -->
-<div class="card mb-3">
-<div class="card-body text-center">
-<h5>cash at hand</h5>
-<h2>{{ profit }}</h2>
-</div>
-</div>
-
-<!-- NOTES -->
-<div class="card">
-<div class="card-header">Manager Notes</div>
-
-<div class="card-body">
-<form method="POST">
-{% csrf_token %}
-<textarea class="form-control mb-2" name="notes" placeholder="Enter daily remarks..."></textarea>
-<button class="btn btn-success">Save Notes</button>
-</form>
-</div>
-
-</div>
-
-</div>
-
 {% endblock %}
