@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load poultry_units %}
 {% block extra_css %}
 <style>
 /* small copy of sickbay banner styles for sickbay record pages */
@@ -80,6 +81,7 @@
                                 <i class="bi bi-egg me-2"></i>Total Eggs Collected
                             </label>
                             <input type="number" id="total_eggs" name="total_eggs" class="form-control" placeholder="Enter total eggs" required min="0">
+                            <div id="egg_tray_preview" class="small fw-semibold text-primary mt-2" aria-live="polite">Enter an egg count to see trays and loose eggs.</div>
                         </div>
 
                         <div class="mb-3">
@@ -89,6 +91,7 @@
                             <input type="number" id="broken_eggs" name="broken_eggs" class="form-control" placeholder="Enter broken eggs" min="0" value="0">
                         </div>
 
+                        {% if egg_weight_capture_enabled %}
                         <div class="mb-3">
                             <label class="form-label">
                                 <i class="bi bi-speedometer2 me-2"></i>Average egg weight
@@ -114,6 +117,7 @@
                                 </small>
                             </div>
                         </div>
+                        {% endif %}
 
                         <div class="mb-3">
                             <label for="notes" class="form-label">
@@ -149,6 +153,7 @@
                                     <th>Eggs</th>
                                     <th>Broken</th>
                                     <th>Avg Weight</th>
+                                    <th>Status</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -162,7 +167,10 @@
                                             {{ rec.batch.house.name|default:rec.batch.house.house_code }}
                                         {% endif %}
                                     </td>
-                                    <td>{{ rec.eggs_collected }}</td>
+                                    <td>
+                                        <strong>{{ rec.eggs_collected }} eggs</strong>
+                                        <div class="small text-muted">{{ rec.eggs_collected|egg_trays }}</div>
+                                    </td>
                                     <td>{{ rec.eggs_rejected }}</td>
                                     <td>
                                         {% if rec.average_egg_weight_g %}
@@ -171,9 +179,19 @@
                                             <span class="text-muted">-</span>
                                         {% endif %}
                                     </td>
+                                    <td>
+                                        {% if rec.status == 'APPROVED' %}
+                                            <span class="badge bg-success">Approved</span>
+                                        {% elif rec.status == 'REJECTED' %}
+                                            <span class="badge bg-danger">Rejected</span>
+                                        {% else %}
+                                            <span class="badge bg-warning text-dark">Pending</span>
+                                        {% endif %}
+                                        {% if rec.review_notes %}<div class="small text-muted mt-1">{{ rec.review_notes }}</div>{% endif %}
+                                    </td>
                                 </tr>
                                 {% empty %}
-                                <tr><td colspan="5" class="text-center text-muted py-3">No sickbay egg records today.</td></tr>
+                                <tr><td colspan="6" class="text-center text-muted py-3">No sickbay egg records today.</td></tr>
                                 {% endfor %}
                             </tbody>
                         </table>
@@ -201,6 +219,19 @@ document.addEventListener('DOMContentLoaded', function(){
     const avgWeightButton = document.getElementById('calculate_avg_weight');
     const avgWeightOutput = document.getElementById('average_egg_weight');
     const avgWeightHint = document.getElementById('average_weight_hint');
+    const trayPreview = document.getElementById('egg_tray_preview');
+
+    function formatEggTrays(eggCount) {
+        if (!Number.isFinite(eggCount) || eggCount < 0) {
+            return 'Enter an egg count to see trays and loose eggs.';
+        }
+        const trays = Math.floor(eggCount / 30);
+        const looseEggs = eggCount % 30;
+        const parts = [];
+        if (trays) parts.push(`${trays} ${trays === 1 ? 'tray' : 'trays'}`);
+        if (looseEggs) parts.push(`${looseEggs} ${looseEggs === 1 ? 'egg' : 'eggs'}`);
+        return parts.length ? parts.join(' and ') : '0 eggs';
+    }
 
     function setAverageHint(message, state) {
         avgWeightHint.textContent = message;
@@ -289,6 +320,14 @@ document.addEventListener('DOMContentLoaded', function(){
         avgWeightOutput.value = `${average.toFixed(1)} g`;
         setAverageHint(`Calculated from ${weights.length} egg weight${weights.length === 1 ? '' : 's'}.`, 'text-success');
         return true;
+    }
+
+    if (totalEggsInput && trayPreview) {
+        const updateTrayPreview = () => {
+            trayPreview.textContent = formatEggTrays(currentEggCount());
+        };
+        totalEggsInput.addEventListener('input', updateTrayPreview);
+        updateTrayPreview();
     }
 
     if (totalEggsInput && weightList && avgWeightButton && avgWeightOutput && avgWeightHint) {

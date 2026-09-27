@@ -19,6 +19,7 @@ from poultry.models import (
     FeedRecord,
     CleaningRecord,
 )
+from poultry.units import EGG_WEIGHT_CAPTURE_ENABLED, format_eggs_as_trays
 from poultryiq.pagination import paginate
 from decimal import Decimal, InvalidOperation
 from .models import SickbayCleaningRecord, SicknessReport, TreatmentPlanItem
@@ -88,7 +89,7 @@ def mortality(request):
                 reported_by=request.user,
             )
             messages.success(request, "Mortality record saved successfully.")
-            return redirect("mortality")
+            return redirect("workersdash")
 
     recent_records = MortalityRecord.objects.filter(
         reported_by=request.user,
@@ -392,6 +393,7 @@ def treatment(request):
         },
     )
 
+@supervisor_required
 def vaccination(request):
     role_code = _role_code(request.user)
     houses = _scoped_health_houses(request.user)
@@ -551,6 +553,7 @@ def vaccination(request):
         "vac_status_choices": VaccinationSchedule.Status.choices,
     })
 
+@supervisor_required
 def vaccine_report(request):
     from health.models import VaccinationSchedule
     from poultry.models import PoultryHouse
@@ -674,7 +677,7 @@ def report_sickness(request):
                 case_status=SicknessReport.CaseStatus.REPORTED,
             )
             messages.success(request, "Sickness case saved successfully.")
-            return redirect("report_sickness")
+            return redirect("supdash")
 
     return render(
         request,
@@ -734,7 +737,7 @@ def record_sickbay_cleaning(request):
                 recorded_by=request.user,
             )
             messages.success(request, "Sickbay cleaning record saved successfully.")
-            return redirect("record_sickbay_cleaning")
+            return redirect("workersdash")
 
     recent_cleaning_records = (
         SickbayCleaningRecord.objects.filter(
@@ -757,15 +760,8 @@ def record_sickbay_cleaning(request):
     )
 
 
+@supervisor_required
 def view_sickness_reports(request):
-    if not request.user.is_authenticated:
-        return redirect("login")
-
-    role_code = _role_code(request.user)
-    if role_code == "WORKER":
-        messages.error(request, "Workers can only submit sickness reports from the worker panel.")
-        return redirect("workersdash")
-
     reports = _scope_sickness_reports_for_user(
         SicknessReport.objects.select_related("house_ref", "batch__house", "reported_by").prefetch_related(
             "treatment_items",
@@ -911,34 +907,35 @@ def sick_record_egg(request):
         if not selected_batch and not selected_report:
             errors.append("Please select a valid batch or sickbay case from your assignment.")
 
-        weights = []
-        for raw_weight in egg_weight_values:
-            raw_weight = raw_weight.strip()
-            if not raw_weight:
-                continue
-            try:
-                weight = Decimal(raw_weight)
-            except InvalidOperation:
-                errors.append("Please enter valid egg weights.")
-                weights = []
-                break
-            if weight <= 0:
-                errors.append("Egg weights must be greater than zero.")
-                weights = []
-                break
-            weights.append(weight)
+        if EGG_WEIGHT_CAPTURE_ENABLED:
+            weights = []
+            for raw_weight in egg_weight_values:
+                raw_weight = raw_weight.strip()
+                if not raw_weight:
+                    continue
+                try:
+                    weight = Decimal(raw_weight)
+                except InvalidOperation:
+                    errors.append("Please enter valid egg weights.")
+                    weights = []
+                    break
+                if weight <= 0:
+                    errors.append("Egg weights must be greater than zero.")
+                    weights = []
+                    break
+                weights.append(weight)
 
-        if eggs_collected is not None and eggs_collected > 0:
-            if eggs_collected < 50:
-                if len(weights) != eggs_collected:
-                    errors.append(
-                        f"Because fewer than 50 eggs were collected, enter the weight for all {eggs_collected} eggs."
-                    )
-            elif len(weights) < 20 or len(weights) > 30:
-                errors.append("Enter 20 to 30 random egg weights for collections of 50 eggs or more.")
+            if eggs_collected is not None and eggs_collected > 0:
+                if eggs_collected < 50:
+                    if len(weights) != eggs_collected:
+                        errors.append(
+                            f"Because fewer than 50 eggs were collected, enter the weight for all {eggs_collected} eggs."
+                        )
+                elif len(weights) < 20 or len(weights) > 30:
+                    errors.append("Enter 20 to 30 random egg weights for collections of 50 eggs or more.")
 
-            if weights and not errors:
-                average_egg_weight_g = (sum(weights) / Decimal(len(weights))).quantize(Decimal("0.01"))
+                if weights and not errors:
+                    average_egg_weight_g = (sum(weights) / Decimal(len(weights))).quantize(Decimal("0.01"))
 
         if errors:
             for error in errors:
@@ -954,8 +951,12 @@ def sick_record_egg(request):
                 collected_by=request.user,
                 sickness_report=selected_report,
             )
-            messages.success(request, "Sickbay: Egg collection saved.")
-            return redirect("sick_record_egg")
+            messages.success(
+                request,
+                f"Sickbay egg collection saved: {eggs_collected} eggs — "
+                f"{format_eggs_as_trays(eggs_collected)}. Awaiting supervisor review.",
+            )
+            return redirect("workersdash")
 
     from django.db.models import Q
     recent_egg_records = egg_collection.objects.filter(
@@ -963,7 +964,7 @@ def sick_record_egg(request):
         collection_date=timezone.localdate(),
     ).filter(Q(batch__in=batches) | Q(sickness_report__in=assigned_sick_reports)).select_related("batch__house", "sickness_report")[:10]
 
-    return render(request, "record_egg_sickbay.html", {"batches": batches, "today": timezone.localdate(), "recent_egg_records": recent_egg_records, "sick_reports": assigned_sick_reports})
+    return render(request, "record_egg_sickbay.html", {"batches": batches, "today": timezone.localdate(), "recent_egg_records": recent_egg_records, "sick_reports": assigned_sick_reports, "egg_weight_capture_enabled": EGG_WEIGHT_CAPTURE_ENABLED})
 
 
 @worker_required
@@ -1026,7 +1027,7 @@ def sick_record_feed(request):
                 sickness_report=selected_report,
             )
             messages.success(request, "Sickbay: Feed record saved.")
-            return redirect("sick_record_feed")
+            return redirect("workersdash")
 
     from django.db.models import Q
     recent_feed_records = FeedRecord.objects.filter(
@@ -1088,7 +1089,7 @@ def sick_record_cleaning(request):
                 sickness_report=selected_report,
             )
             messages.success(request, "Sickbay: Cleaning record saved.")
-            return redirect("sick_record_cleaning")
+            return redirect("workersdash")
 
     from django.db.models import Q
     recent_cleaning_records = CleaningRecord.objects.filter(
@@ -1147,7 +1148,7 @@ def sick_mortality(request):
                 reported_by=request.user,
             )
             messages.success(request, "Sickbay: Mortality record saved.")
-            return redirect("sick_mortality")
+            return redirect("workersdash")
 
     recent_records = MortalityRecord.objects.filter(
         reported_by=request.user,

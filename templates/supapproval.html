@@ -335,13 +335,16 @@
                 <input type="hidden" name="action" id="modalAction">
                 <div class="modal-header" id="modalHeader">
                     <h5 class="modal-title" id="modalTitle">Confirm Action</h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close review dialog"></button>
                 </div>
                 <div class="modal-body">
                     <p id="modalBody" class="mb-3"></p>
                     <div class="mb-3">
-                        <label class="form-label fw-semibold">Review Notes <span class="text-muted fw-normal">(optional)</span></label>
-                        <textarea name="review_notes" class="form-control" rows="3" placeholder="Add a note for the worker..."></textarea>
+                        <label for="reviewNotes" class="form-label fw-semibold">
+                            Review notes <span class="text-muted fw-normal" id="reviewNotesRequirement">(optional for approval)</span>
+                        </label>
+                        <textarea id="reviewNotes" name="review_notes" class="form-control" rows="3" placeholder="Add a note for the worker..." aria-describedby="reviewNotesHelp"></textarea>
+                        <div id="reviewNotesHelp" class="form-text">A rejection must explain what the worker should correct.</div>
                     </div>
                 </div>
                 <div class="modal-footer border-0">
@@ -370,6 +373,8 @@ document.addEventListener('DOMContentLoaded', function () {
         const title = document.getElementById('modalTitle');
         const body = document.getElementById('modalBody');
         const submitBtn = document.getElementById('modalSubmitBtn');
+        const reviewNotes = document.getElementById('reviewNotes');
+        const reviewNotesRequirement = document.getElementById('reviewNotesRequirement');
 
         if (action === 'approve') {
             header.className = 'modal-header bg-success text-white';
@@ -377,12 +382,16 @@ document.addEventListener('DOMContentLoaded', function () {
             body.innerHTML = '<i class="bi bi-check-circle-fill text-success me-2"></i>You are about to <strong>approve</strong>: ' + label;
             submitBtn.className = 'btn btn-success fw-semibold';
             submitBtn.textContent = 'Yes, Approve';
+            reviewNotes.required = false;
+            reviewNotesRequirement.textContent = '(optional for approval)';
         } else {
             header.className = 'modal-header bg-danger text-white';
             title.textContent = 'Reject Submission';
             body.innerHTML = '<i class="bi bi-x-circle-fill text-danger me-2"></i>You are about to <strong>reject</strong>: ' + label + '. The worker will see this status.';
             submitBtn.className = 'btn btn-danger fw-semibold';
             submitBtn.textContent = 'Yes, Reject';
+            reviewNotes.required = true;
+            reviewNotesRequirement.textContent = '(required for rejection)';
         }
     });
 });

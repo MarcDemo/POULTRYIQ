@@ -828,7 +828,7 @@ def worker_welfare(request):
                 request,
                 "Welfare request sent to the manager." if role_code == "SUPERVISOR" else "Welfare request sent to your supervisor.",
             )
-            return redirect("worker_welfare")
+            return redirect("supdash" if role_code == "SUPERVISOR" else "workersdash")
 
     welfare_requests = WelfareRequest.objects.filter(worker=request.user).select_related(
         "supervisor", "manager", "salary_payment", "advance_disbursed_by"
