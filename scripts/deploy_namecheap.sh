@@ -46,7 +46,7 @@ django.setup()
 from django.conf import settings
 
 database = settings.DATABASES["default"]
-if database["ENGINE"] == "django.db.backends.mysql":
+if database["ENGINE"] in {"django.db.backends.mysql", "mysql.connector.django"}:
     dump_program = shutil.which("mariadb-dump") or shutil.which("mysqldump")
     if not dump_program:
         raise RuntimeError("mariadb-dump or mysqldump is required before migrations")
