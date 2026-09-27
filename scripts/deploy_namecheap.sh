@@ -94,4 +94,14 @@ PY
 mkdir -p tmp
 touch tmp/restart.txt
 
+# LiteSpeed on Namecheap can keep existing lswsgi workers alive after the
+# Passenger restart marker changes. Stop only workers serving this exact app;
+# LiteSpeed starts fresh workers on the next request.
+while IFS= read -r worker_pid; do
+  worker_command="$(ps -p "$worker_pid" -o args= 2>/dev/null || true)"
+  if [[ "$worker_command" == *"lswsgi -m $APP_PATH/passenger_wsgi.py" ]]; then
+    kill "$worker_pid" 2>/dev/null || true
+  fi
+done < <(pgrep -u "$(id -u)" -x lswsgi 2>/dev/null || true)
+
 echo "Deployed $(git rev-parse --short HEAD) successfully."
