@@ -66,17 +66,10 @@
                            <select id="sickness_report" name="sickness_report" class="form-select mb-2">
                                     <option value="">-- select sickbay case --</option>
                                     {% for case in sick_reports %}
-                                    <option value="{{ case.pk }}" {% if case.batch %}data-batch="{{ case.batch.pk }}" data-house="{{ case.house_ref_id }}"{% endif %}>{{ case.house_label }} - {{ case.diagnosis_label }} ({{ case.case_label }})</option>
+                                    <option value="{{ case.pk }}" {% if case.batch %}data-batch="{{ case.batch.pk }}" data-house="{{ case.house_ref_id }}"{% endif %} {% if sick_reports|length == 1 %}selected{% endif %}>{{ case.house_label }} - {{ case.diagnosis_label }} ({{ case.case_label }})</option>
                                     {% endfor %}
                                 </select>
                                 
-                        </div>
-
-                        <div class="mb-3">
-                            <label for="record_date" class="form-label">
-                                <i class="bi bi-calendar me-1"></i>Date
-                            </label>
-                            <input type="date" id="record_date" name="record_date" class="form-control" value="{{ today|date:'Y-m-d' }}" required>
                         </div>
 
                         <div class="mb-4">

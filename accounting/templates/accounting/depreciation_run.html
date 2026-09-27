@@ -1,0 +1,54 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container-fluid">
+    <div class="page-header-row mb-4">
+        <div>
+            <h2 class="mb-1"><i class="bi bi-calculator me-2"></i>Depreciation Run</h2>
+            <small class="text-muted">Run and retain the monthly depreciation report. A month can be safely run again; posted assets are skipped.</small>
+        </div>
+        <a href="{% url 'fixed_assets' %}" class="btn btn-outline-primary"><i class="bi bi-building me-2"></i>Fixed Assets</a>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-body">
+            <form method="post" class="row g-3 align-items-end">
+                {% csrf_token %}
+                <div class="col-md-4"><label class="form-label">Month</label><input type="month" name="period" class="form-control" value="{{ period }}" required></div>
+                <div class="col-md-3"><button class="btn btn-success w-100"><i class="bi bi-play-fill me-1"></i>Run depreciation</button></div>
+                <div class="col-md-5 text-muted small">Only active, in-service depreciable assets are included. Each posted journal has an FDN in the journal register.</div>
+            </form>
+        </div>
+    </div>
+
+    {% if run %}
+    <div class="row g-3 mb-4">
+        <div class="col-md-3"><div class="card"><div class="card-body"><small class="text-muted">Status</small><div class="fw-semibold">{{ run.get_status_display }}</div></div></div></div>
+        <div class="col-md-3"><div class="card"><div class="card-body"><small class="text-muted">Posted</small><div class="fs-5 fw-semibold">{{ run.posted_count }}</div></div></div></div>
+        <div class="col-md-3"><div class="card"><div class="card-body"><small class="text-muted">Skipped</small><div class="fs-5 fw-semibold">{{ run.skipped_count }}</div></div></div></div>
+        <div class="col-md-3"><div class="card"><div class="card-body"><small class="text-muted">Total depreciation</small><div class="fs-5 fw-semibold">UGX {{ run.total_amount|floatformat:2 }}</div></div></div></div>
+    </div>
+    {% if run.error_summary %}<div class="alert alert-warning"><strong>Run notes</strong><br>{{ run.error_summary|linebreaksbr }}</div>{% endif %}
+    {% endif %}
+
+    <div class="card mb-4">
+        <div class="card-header">Posted journals for {{ period }}</div>
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light"><tr><th>Date</th><th>FDN</th><th>Reference</th><th>Description</th><th class="text-end">Debit</th><th class="text-end">Credit</th></tr></thead>
+                <tbody>
+                {% for entry in entries %}
+                    <tr><td>{{ entry.entry_date|date:'M d, Y' }}</td><td><code>{{ entry.fdn }}</code></td><td>{{ entry.reference }}</td><td>{{ entry.description }}</td><td class="text-end">{{ entry.total_debits|floatformat:2 }}</td><td class="text-end">{{ entry.total_credits|floatformat:2 }}</td></tr>
+                {% empty %}<tr><td colspan="6" class="text-center text-muted py-4">No depreciation journals for this month yet.</td></tr>{% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">Recent runs</div>
+        <div class="table-responsive"><table class="table table-sm mb-0"><thead class="table-light"><tr><th>Month</th><th>Status</th><th>Posted</th><th>Skipped</th><th class="text-end">Total</th><th></th></tr></thead><tbody>
+            {% for prior in runs %}<tr><td>{{ prior.period_year }}-{{ prior.period_month|stringformat:'02d' }}</td><td>{{ prior.get_status_display }}</td><td>{{ prior.posted_count }}</td><td>{{ prior.skipped_count }}</td><td class="text-end">{{ prior.total_amount|floatformat:2 }}</td><td class="text-end"><a href="?period={{ prior.period_year }}-{{ prior.period_month|stringformat:'02d' }}" class="btn btn-sm btn-outline-secondary">View</a></td></tr>{% empty %}<tr><td colspan="6" class="text-center text-muted py-3">No runs have been saved.</td></tr>{% endfor %}
+        </tbody></table></div>
+    </div>
+</div>
+{% endblock %}

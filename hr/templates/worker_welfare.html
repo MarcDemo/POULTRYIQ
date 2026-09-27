@@ -1,0 +1,229 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="container-fluid worker-field-page">
+    <div class="worker-hero d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+        <div>
+            <h3 class="mb-1"><i class="bi bi-heart me-2 text-danger"></i>{% if is_supervisor_requester %}Supervisor Welfare{% else %}Worker Welfare{% endif %}</h3>
+            <div class="worker-subtitle">
+                Ask for leave, salary advances, and track your salary.
+                {% if is_supervisor_requester %}<span class="text-muted">Requests go directly to the manager.</span>{% endif %}
+            </div>
+        </div>
+        <span class="badge bg-primary px-3 py-2">{{ today|date:"d M Y" }}</span>
+    </div>
+
+    <div class="row g-4 mb-4">
+
+<!--
+        TODO
+CHANGE THIS TO SALARY RECIEVED BY THE EMPLOYEE
+        -->
+<!-- salary paid -->
+        <div class="col-md-3">
+            <div class="card field-card h-100">
+                <div class="card-header"><i class="bi bi-cash-stack me-2"></i>Salary Paid</div>
+                <div class="card-body">
+                    <h3 class="fw-bold">UGX {{ paid_total|floatformat:0 }}</h3>
+                    <small class="text-muted">Total paid records visible to you.</small>
+                </div>
+            </div>
+        </div>
+
+        <!-- pending salaries -->
+        <div class="col-md-3">
+            <div class="card field-card h-100">
+                <div class="card-header"><i class="bi bi-hourglass-split me-2"></i>Pending Salary</div>
+                <div class="card-body">
+                    <h3 class="fw-bold">UGX {{ pending_total|floatformat:0 }}</h3>
+                    <small class="text-muted">Salary records awaiting payment.</small>
+                </div>
+            </div>
+        </div>
+
+        <!-- approved advances -->
+        <div class="col-md-3">
+            <div class="card field-card h-100">
+                <div class="card-header"><i class="bi bi-wallet2 me-2"></i>Approved Advances</div>
+                <div class="card-body">
+                    <h3 class="fw-bold">UGX {{ approved_advances|floatformat:0 }}</h3>
+                    <small class="text-muted">Approved, whether issued or awaiting payment.</small>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card field-card h-100 border-primary">
+                <div class="card-header"><i class="bi bi-cash-coin me-2"></i>Issued Advances</div>
+                <div class="card-body">
+                    <h3 class="fw-bold">UGX {{ issued_advances|floatformat:0 }}</h3>
+                    <small class="text-muted">Advances actually paid out to you.</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- the request form -->
+    <div class="row g-4">
+        <div class="col-lg-10">
+            <div class="card field-card">
+                <div class="card-header"><i class="bi bi-send me-2"></i>Make a new Request</div>
+                <div class="card-body">
+                    <form method="post" class="field-form js-welfare-form">
+                        {% csrf_token %}
+                        <div class="mb-3">
+                            <label class="form-label">Request Type</label>
+                            <select class="form-select" name="request_type" id="requestType" required>
+                                <option value="">-- Choose request --</option>
+                                {% for value, label in request_types %}
+                                <option value="{{ value }}">{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Reason for Request</label>
+                            <input type="text" class="form-control" name="title" maxlength="120" required>
+                        </div>
+                        <div class="row g-2 d-none" id="leaveFields">
+                            <div class="col-sm-6 mb-3">
+                                <label class="form-label">Leave Start</label>
+                                <input type="date" class="form-control" name="leave_start">
+                            </div>
+                            <div class="col-sm-6 mb-3">
+                                <label class="form-label">Leave End</label>
+                                <input type="date" class="form-control" name="leave_end">
+                            </div>
+                        </div>
+                        <div class="d-none" id="advanceField">
+                            <div class="mb-3">
+                                <label class="form-label">Advance Amount (UGX)</label>
+                                <input type="number" class="form-control" name="advance_amount" min="0" step="1000">
+                            </div>
+                            <div class="row g-2">
+                                <div class="col-sm-6 mb-3">
+                                    <label class="form-label">Advance Period Start</label>
+                                    <input type="date" class="form-control" name="advance_period_start">
+                                </div>
+                                <div class="col-sm-6 mb-3">
+                                    <label class="form-label">Advance Period End</label>
+                                    <input type="date" class="form-control" name="advance_period_end">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Details</label>
+                            <textarea class="form-control" name="details" rows="4" required></textarea>
+                        </div>
+                        <button class="btn btn-primary w-50">
+                            <i class="bi bi-check-circle me-1"></i>Submit Request
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="">
+            <div class="card field-card mb-4">
+                <div class="card-header"><i class="bi bi-list-check me-2"></i>My Welfare Requests</div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead><tr><th>Date</th><th>Request</th><th>Advance Issue & Recovery</th><th>Status</th><th>Notes</th></tr></thead>
+                            <tbody>
+                                {% for req in welfare_requests %}
+                                <tr>
+                                    <td>{{ req.created_at|date:"d M Y" }}</td>
+                                    <td>
+                                        <div class="fw-semibold">{{ req.title }}</div>
+                                        <small class="text-muted">{{ req.get_request_type_display }}</small>
+                                    </td>
+                                    <td>
+                                        {% if req.request_type == "SALARY_ADVANCE" %}
+                                        <div>UGX {{ req.advance_amount|floatformat:0 }}</div>
+                                        <div class="small text-muted">Intended: {% if req.advance_period_start %}{{ req.advance_period_start|date:"M Y" }}{% else %}-{% endif %}{% if req.advance_period_end and req.advance_period_end != req.advance_period_start %} to {{ req.advance_period_end|date:"M Y" }}{% endif %}</div>
+                                        {% if req.advance_disbursed_on %}
+                                        <div class="small mt-1"><strong>Issued:</strong> {{ req.advance_disbursed_on|date:"d M Y" }} · {{ req.get_advance_payment_method_display }}</div>
+                                        <div class="small text-muted">Ref: {{ req.advance_payment_reference }}</div>
+                                        {% for allocation in req.recovery_allocations %}
+                                        <div class="small">Recovered {{ allocation.salary_payment.period_month }}: UGX {{ allocation.amount|floatformat:0 }}</div>
+                                        {% empty %}{% if req.salary_payment %}<div class="small">Recovered from {{ req.salary_payment.period_month }}</div>{% endif %}{% endfor %}
+                                        {% else %}<div class="small text-warning mt-1">Not issued yet</div>{% endif %}
+                                        {% else %}-{% endif %}
+                                    </td>
+                                    <td><span class="badge bg-secondary">{{ req.get_status_display }}</span></td>
+                                    <td>
+                                        <small class="text-muted">
+                                            {% if req.supervisor_notes %}
+                                            {{ req.supervisor_notes|truncatechars:40 }}
+                                            {% elif req.manager_notes %}
+                                            {{ req.manager_notes|truncatechars:40 }}
+                                            {% else %}
+                                            -
+                                            {% endif %}
+                                        </small>
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr><td colspan="5" class="text-center text-muted py-3">No welfare requests yet.</td></tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card field-card">
+                <div class="card-header"><i class="bi bi-receipt me-2"></i>My Salary Records</div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead><tr><th>Month</th><th>Amount</th><th>Status</th></tr></thead>
+                            <tbody>
+                                {% for record in salary_records %}
+                                <tr>
+                                    <td>{{ record.period_month }}</td>
+                                    <td>UGX {{ record.amount|floatformat:0 }}</td>
+                                    <td>
+                                        {% if record.status == "PAID" %}
+                                        <span class="badge bg-success">Paid</span>
+                                        {% else %}
+                                        <span class="badge bg-warning text-dark">Pending</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr><td colspan="3" class="text-center text-muted py-3">No salary records yet.</td></tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+    const requestType = document.getElementById('requestType');
+    const leaveFields = document.getElementById('leaveFields');
+    const advanceField = document.getElementById('advanceField');
+    function syncFields() {
+        const type = requestType.value;
+        leaveFields.classList.toggle('d-none', type !== 'LEAVE');
+        advanceField.classList.toggle('d-none', type !== 'SALARY_ADVANCE');
+        advanceField.querySelectorAll('input').forEach(input => {
+            input.required = type === 'SALARY_ADVANCE';
+            if (type !== 'SALARY_ADVANCE') input.value = '';
+        });
+    }
+    if (requestType) {
+        requestType.addEventListener('change', syncFields);
+        syncFields();
+    }
+})();
+</script>
+{% endblock %}

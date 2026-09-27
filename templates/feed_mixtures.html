@@ -1,92 +1,448 @@
 {% extends "base.html" %}
 {% block content %}
 
+<style>
+    .mix-step {
+        border-left: 4px solid #0d6efd;
+    }
+    .step-number {
+        width: 2rem;
+        height: 2rem;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        background: #0d6efd;
+        color: #fff;
+        font-weight: 700;
+    }
+    .recipe-ok { color: #198754; }
+    .recipe-short { color: #dc3545; font-weight: 600; }
+    .stage-banner {
+        background: linear-gradient(135deg, #e8f1ff, #f8fbff);
+        border: 1px solid #b6d4fe;
+    }
+</style>
+
 <div class="container-fluid">
     <div class="page-header-row mb-4">
         <div>
             <h2 class="mb-1"><i class="bi bi-bag-plus me-2"></i>Feed Mixtures</h2>
-            <small class="text-muted">Record what was mixed today and which houses received it.</small>
+            <small class="text-muted">Choose a flock and formula, check stock, then distribute the completed mixture.</small>
         </div>
         <a href="{% url 'feedrec' %}" class="btn btn-light">
             <i class="bi bi-list-check me-1"></i>Feed Management
         </a>
     </div>
 
-    <div class="row g-4">
-        <div class="">
-            <div class="card">
-                <div class="card-header">
-                    <i class="bi bi-beaker me-2"></i>New Mixture
-                </div>
-                <div class="card-body">
-                    <form method="POST">
-                        {% csrf_token %}
+    <form method="POST" id="mixture-form">
+        {% csrf_token %}
+        <input type="hidden" name="mix_date" value="{{ today|date:'Y-m-d' }}">
 
-                        <div class="row g-3">
-                            <div class="col-md-5">
-                                <label class="form-label">Mixture Name</label>
-                                <input type="text" name="name" class="form-control" placeholder="e.g. Morning Layer Boost" required>
-                            </div>
-                            <div class="col-md-3">
-                                <label class="form-label">Date</label>
-                                <input type="date" name="mix_date" class="form-control" value="{{ today|date:'Y-m-d' }}" required>
-                            </div>
-                            <div class="col-md-4">
-                                <label class="form-label">Final Weighed Kg</label>
-                                <input type="number" name="total_weight_kg" class="form-control" placeholder="kg after mixing" min="0" step="0.01" inputmode="decimal" required>
-                            </div>
+        <div class="card mix-step mb-4">
+            <div class="card-header d-flex align-items-center gap-2">
+                <span class="step-number">1</span>
+                <strong>Choose the primary flock</strong>
+            </div>
+            <div class="card-body">
+                <div class="row g-3 align-items-end">
+                    <div class="col-lg-7">
+                        <label for="primary_batch" class="form-label">House / flock batch</label>
+                        <select id="primary_batch" name="primary_batch" class="form-select" required>
+                            <option value="">-- Select active flock --</option>
+                            {% for batch in batches %}
+                            <option value="{{ batch.pk }}" data-stage="{{ batch.formula_stage }}">
+                                {{ batch.house.house_code }}{% if batch.house.name %} - {{ batch.house.name }}{% endif %}
+                                / {{ batch.batch_code }} ({{ batch.age_weeks }} weeks)
+                            </option>
+                            {% endfor %}
+                        </select>
+                        {% if not batches %}
+                        <small class="text-danger">No active flocks are available in your assigned houses.</small>
+                        {% endif %}
+                    </div>
+                    <div class="col-lg-5">
+                        <div class="stage-banner rounded-3 p-3">
+                            <small class="text-muted d-block">Formula stage detected from flock age</small>
+                            <strong id="stage-label">Select a flock to detect its stage</strong>
+                            <div class="small text-muted" id="stage-age"></div>
                         </div>
-
-                        <h6 class="mt-4 mb-2">Ingredients Mixed</h6>
-                        {% for row in "12345" %}
-                        <div class="row g-2 mb-2">
-                            <div class="col-md-8">
-                                <select name="ingredient_item" class="form-select">
-                                    <option value="">-- Select feed stock item --</option>
-                                    {% for item in feed_items %}
-                                    <option value="{{ item.pk }}">{{ item.name }} ({{ item.available_kg|floatformat:2 }} {{ item.unit }} available)</option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-                            <div class="col-md-4">
-                                <input type="number" name="ingredient_quantity" class="form-control" placeholder="kg" min="0" step="0.01" inputmode="decimal">
-                            </div>
-                        </div>
-                        {% endfor %}
-
-                        <h6 class="mt-4 mb-2">House Distribution</h6>
-                        {% for row in "12345678" %}
-                        <div class="row g-2 mb-2">
-                            <div class="col-md-8">
-                                <select name="allocation_house" class="form-select">
-                                    <option value="">-- Select house --</option>
-                                    {% for house in houses %}
-                                    <option value="{{ house.pk }}">{{ house.house_code }}{% if house.name %} - {{ house.name }}{% endif %}</option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-                            <div class="col-md-4">
-                                <input type="number" name="allocation_quantity" class="form-control" placeholder="kg assigned" min="0" step="0.01" inputmode="decimal">
-                            </div>
-                        </div>
-                        {% endfor %}
-
-                        <div class="mt-3">
-                            <label class="form-label">Notes</label>
-                            <textarea name="notes" class="form-control" rows="3" placeholder="Optional"></textarea>
-                        </div>
-
-                        <div class="d-grid mt-4">
-                            <button type="submit" class="btn btn-primary">
-                                <i class="bi bi-check-circle me-1"></i>Save Mixture
-                            </button>
-                        </div>
-                    </form>
+                    </div>
                 </div>
             </div>
         </div>
 
+        <div class="card mix-step mb-4">
+            <div class="card-header d-flex align-items-center gap-2">
+                <span class="step-number">2</span>
+                <strong>Choose and size the formula</strong>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-lg-5">
+                        <label for="formula_template" class="form-label">Formula</label>
+                        <select id="formula_template" name="formula_template" class="form-select" required disabled>
+                            <option value="">-- Select formula --</option>
+                            {% for formula in formula_templates %}
+                            <option value="{{ formula.pk }}" data-stage="{{ formula.flock_stage }}">
+                                {{ formula.name }}{% if not formula.is_system %} · Saved custom{% endif %}
+                            </option>
+                            {% endfor %}
+                            <option value="custom" data-stage="ANY">Custom / different formula</option>
+                        </select>
+                        <small class="text-muted">Only recipes for the detected flock stage are selectable.</small>
+                    </div>
+                    <div class="col-lg-3">
+                        <label for="target_weight_kg" class="form-label">Planned mixture (kg)</label>
+                        <input type="number" id="target_weight_kg" name="target_weight_kg" class="form-control"
+                               min="0.01" step="0.01" inputmode="decimal" required>
+                    </div>
+                    <div class="col-lg-4">
+                        <label for="name" class="form-label">Mixture name <span class="text-muted">(optional)</span></label>
+                        <input type="text" id="name" name="name" class="form-control"
+                               placeholder="Generated from formula and stage">
+                    </div>
+                </div>
+
+                <div id="recipe-panel" class="mt-4 d-none">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h6 class="mb-0">Calculated ingredients</h6>
+                        <span class="badge bg-light text-dark border" id="reference-weight"></span>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle">
+                            <thead>
+                                <tr>
+                                    <th>Ingredient</th>
+                                    <th class="text-end">Required</th>
+                                    <th class="text-end">Available</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="recipe-body"></tbody>
+                            <tfoot>
+                                <tr class="fw-bold">
+                                    <td>Total</td>
+                                    <td class="text-end" id="recipe-total">0.00 kg</td>
+                                    <td colspan="2"></td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                    <div id="stock-warning" class="alert alert-danger py-2 d-none">
+                        Receive or adjust the missing stock before this mixture can be saved.
+                    </div>
+                </div>
+
+                <div id="custom-panel" class="mt-4 d-none">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h6 class="mb-0">Custom ingredients</h6>
+                        <button type="button" class="btn btn-sm btn-outline-primary" id="add-ingredient">
+                            <i class="bi bi-plus-circle me-1"></i>Add ingredient
+                        </button>
+                    </div>
+                    <div id="custom-ingredient-rows"></div>
+                    <div class="small text-muted mb-3">
+                        Custom ingredient quantities must total the planned mixture weight.
+                        Current total: <strong id="custom-total">0.00 kg</strong>
+                    </div>
+                    <div class="border rounded-3 p-3 bg-light">
+                        <div class="form-check mb-2">
+                            <input class="form-check-input" type="checkbox" id="save_custom" name="save_custom">
+                            <label class="form-check-label fw-semibold" for="save_custom">
+                                Save this formula for reuse at this flock stage
+                            </label>
+                        </div>
+                        <div id="custom-name-wrap" class="d-none">
+                            <label for="custom_formula_name" class="form-label">Reusable formula name</label>
+                            <input type="text" id="custom_formula_name" name="custom_formula_name"
+                                   class="form-control" placeholder="e.g. Farm Grower Formula">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mix-step mb-4">
+            <div class="card-header d-flex align-items-center gap-2">
+                <span class="step-number">3</span>
+                <strong>Record output and distribution</strong>
+            </div>
+            <div class="card-body">
+                <div class="row g-3 mb-4">
+                    <div class="col-lg-4">
+                        <label for="total_weight_kg" class="form-label">Final weighed mixture (kg)</label>
+                        <input type="number" id="total_weight_kg" name="total_weight_kg" class="form-control"
+                               min="0.01" step="0.01" inputmode="decimal" required>
+                        <small class="text-muted">May be lower than planned if there was mixing loss.</small>
+                    </div>
+                    <div class="col-lg-8">
+                        <label for="notes" class="form-label">Notes</label>
+                        <textarea id="notes" name="notes" class="form-control" rows="2" placeholder="Optional"></textarea>
+                    </div>
+                </div>
+
+                <h6>Flock distribution</h6>
+                <small class="text-muted d-block mb-2">Only flocks in the same age stage can share this mixture.</small>
+                <div id="allocation-rows">
+                    {% for row in "12345678" %}
+                    <div class="row g-2 mb-2 allocation-row">
+                        <div class="col-md-8">
+                            <select name="allocation_batch" class="form-select allocation-batch">
+                                <option value="">-- Select flock --</option>
+                                {% for batch in batches %}
+                                <option value="{{ batch.pk }}" data-stage="{{ batch.formula_stage }}">
+                                    {{ batch.house.house_code }}{% if batch.house.name %} - {{ batch.house.name }}{% endif %}
+                                    / {{ batch.batch_code }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <input type="number" name="allocation_quantity" class="form-control"
+                                   placeholder="kg assigned" min="0.01" step="0.01" inputmode="decimal">
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                <div class="small text-muted">
+                    Assigned total: <strong id="allocation-total">0.00 kg</strong>
+                </div>
+            </div>
+        </div>
+
+        <div class="d-grid mb-5">
+            <button type="submit" class="btn btn-primary btn-lg" {% if not batches %}disabled{% endif %}>
+                <i class="bi bi-check-circle me-1"></i>Save Mixture and Deduct Stock
+            </button>
+        </div>
+    </form>
+
+    {% if custom_templates %}
+    <div class="card mb-4">
+        <div class="card-header"><i class="bi bi-bookmark-star me-2"></i>Saved Custom Formulas</div>
+        <div class="card-body">
+            <div class="row g-3">
+                {% for formula in custom_templates %}
+                <div class="col-lg-4">
+                    <div class="border rounded-3 p-3 h-100">
+                        <div class="fw-bold">{{ formula.name }}</div>
+                        <small class="text-muted d-block mb-2">
+                            {{ formula.get_flock_stage_display }} · {{ formula.reference_weight_kg|floatformat:2 }} kg reference
+                        </small>
+                        {% if request.user.is_manager or request.user.is_investor or formula.created_by_id == request.user.pk %}
+                        <form method="POST" action="{% url 'archive_feed_formula' formula.pk %}">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-sm btn-outline-danger"
+                                    onclick="return confirm('Archive this custom formula? Past mixtures will be preserved.')">
+                                Archive
+                            </button>
+                        </form>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="card">
+        <div class="card-header"><i class="bi bi-clock-history me-2"></i>Recent Mixtures</div>
+        <div class="card-body">
+            <div class="row g-3">
+                {% for mixture in recent_mixtures %}
+                <div class="col-lg-6">
+                    <div class="border rounded-3 p-3 h-100">
+                        <div class="d-flex justify-content-between gap-2">
+                            <div>
+                                <div class="fw-bold">{{ mixture.name }}</div>
+                                <small class="text-muted">{{ mixture.formula_name_snapshot|default:"Legacy mixture" }} · {{ mixture.get_flock_stage_display|default:"Stage not recorded" }}</small>
+                            </div>
+                            <span class="badge bg-primary align-self-start">{{ mixture.total_weight_kg|floatformat:2 }} kg</span>
+                        </div>
+                        <div class="small mt-2">
+                            {% for allocation in mixture.allocations.all %}
+                            <span class="badge bg-info text-dark mb-1">
+                                {% if allocation.batch %}{{ allocation.batch.batch_code }}{% else %}{{ allocation.house.house_code }} (legacy){% endif %}
+                                : {{ allocation.quantity_kg|floatformat:2 }} kg
+                            </span>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+                {% empty %}
+                <div class="text-center text-muted py-4">No feed mixtures have been recorded yet.</div>
+                {% endfor %}
+            </div>
+        </div>
     </div>
 </div>
 
+{{ formula_payload|json_script:"feed-formula-data" }}
+{{ batch_payload|json_script:"feed-batch-data" }}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(() => {
+    const formulas = JSON.parse(document.getElementById('feed-formula-data').textContent);
+    const batches = JSON.parse(document.getElementById('feed-batch-data').textContent);
+    const formulaMap = new Map(formulas.map((formula) => [formula.id, formula]));
+    const batchMap = new Map(batches.map((batch) => [batch.id, batch]));
+
+    const primary = document.getElementById('primary_batch');
+    const formulaSelect = document.getElementById('formula_template');
+    const targetInput = document.getElementById('target_weight_kg');
+    const finalInput = document.getElementById('total_weight_kg');
+    const stageLabel = document.getElementById('stage-label');
+    const stageAge = document.getElementById('stage-age');
+    const recipePanel = document.getElementById('recipe-panel');
+    const recipeBody = document.getElementById('recipe-body');
+    const recipeTotal = document.getElementById('recipe-total');
+    const referenceWeight = document.getElementById('reference-weight');
+    const stockWarning = document.getElementById('stock-warning');
+    const customPanel = document.getElementById('custom-panel');
+    const customRows = document.getElementById('custom-ingredient-rows');
+    const customTotal = document.getElementById('custom-total');
+    const saveCustom = document.getElementById('save_custom');
+    const customNameWrap = document.getElementById('custom-name-wrap');
+    const customName = document.getElementById('custom_formula_name');
+    const allocationSelects = Array.from(document.querySelectorAll('.allocation-batch'));
+    const allocationInputs = Array.from(document.querySelectorAll('input[name="allocation_quantity"]'));
+    const allocationTotal = document.getElementById('allocation-total');
+    const feedItems = [
+        {% for item in feed_items %}
+        {id: "{{ item.pk }}", name: "{{ item.name|escapejs }}", available: Number("{{ item.available_kg }}")},
+        {% endfor %}
+    ];
+
+    function selectedBatch() {
+        return batchMap.get(primary.value);
+    }
+
+    function roundKg(value) {
+        return Math.round((Number(value) + Number.EPSILON) * 100) / 100;
+    }
+
+    function scaledRecipe(formula, target) {
+        if (!formula || !target || target <= 0) return [];
+        const scale = target / Number(formula.referenceWeight);
+        const lines = formula.ingredients
+            .map((line) => ({...line, scaled: roundKg(Number(line.quantity) * scale)}))
+            .filter((line) => line.scaled > 0);
+        if (!lines.length) return lines;
+        const total = roundKg(lines.reduce((sum, line) => sum + line.scaled, 0));
+        lines[lines.length - 1].scaled = roundKg(lines[lines.length - 1].scaled + roundKg(target - total));
+        return lines;
+    }
+
+    function updateRecipe() {
+        const isCustom = formulaSelect.value === 'custom';
+        const formula = formulaMap.get(formulaSelect.value);
+        customPanel.classList.toggle('d-none', !isCustom);
+        recipePanel.classList.toggle('d-none', !formula);
+        if (!formula) {
+            recipeBody.innerHTML = '';
+            return;
+        }
+
+        const target = Number(targetInput.value || 0);
+        const lines = scaledRecipe(formula, target);
+        let hasShortage = false;
+        recipeBody.innerHTML = lines.map((line) => {
+            const available = Number(line.available);
+            const enough = available >= line.scaled;
+            hasShortage = hasShortage || !enough;
+            return `<tr>
+                <td>${line.name}</td>
+                <td class="text-end">${line.scaled.toFixed(2)} kg</td>
+                <td class="text-end">${available.toFixed(2)} kg</td>
+                <td class="${enough ? 'recipe-ok' : 'recipe-short'}">${enough ? 'Ready' : 'Short stock'}</td>
+            </tr>`;
+        }).join('');
+        recipeTotal.textContent = `${roundKg(lines.reduce((sum, line) => sum + line.scaled, 0)).toFixed(2)} kg`;
+        referenceWeight.textContent = `${Number(formula.referenceWeight).toFixed(2)} kg reference`;
+        stockWarning.classList.toggle('d-none', !hasShortage);
+        if (target > 0 && !finalInput.value) finalInput.value = target.toFixed(2);
+    }
+
+    function filterForStage() {
+        const batch = selectedBatch();
+        const stage = batch?.stage || '';
+        formulaSelect.disabled = !stage;
+        stageLabel.textContent = batch ? batch.stageLabel : 'Select a flock to detect its stage';
+        stageAge.textContent = batch ? `${batch.ageDays} days old` : '';
+
+        Array.from(formulaSelect.options).forEach((option) => {
+            if (!option.value) return;
+            option.hidden = option.dataset.stage !== 'ANY' && option.dataset.stage !== stage;
+        });
+        if (formulaSelect.selectedOptions[0]?.hidden) formulaSelect.value = '';
+
+        allocationSelects.forEach((select, index) => {
+            Array.from(select.options).forEach((option) => {
+                if (!option.value) return;
+                option.hidden = option.dataset.stage !== stage;
+            });
+            if (select.selectedOptions[0]?.hidden) select.value = '';
+            if (index === 0 && batch) select.value = batch.id;
+        });
+        updateRecipe();
+    }
+
+    function addCustomRow() {
+        const row = document.createElement('div');
+        row.className = 'row g-2 mb-2 custom-ingredient-row';
+        const options = feedItems.map((item) =>
+            `<option value="${item.id}">${item.name} (${item.available.toFixed(2)} kg available)</option>`
+        ).join('');
+        row.innerHTML = `
+            <div class="col-md-7">
+                <select name="ingredient_item" class="form-select">
+                    <option value="">-- Select feed stock item --</option>${options}
+                </select>
+            </div>
+            <div class="col-md-4">
+                <input type="number" name="ingredient_quantity" class="form-control custom-quantity"
+                       placeholder="kg" min="0.01" step="0.01" inputmode="decimal">
+            </div>
+            <div class="col-md-1 d-grid">
+                <button type="button" class="btn btn-outline-danger remove-ingredient" aria-label="Remove ingredient">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </div>`;
+        row.querySelector('.remove-ingredient').addEventListener('click', () => {
+            row.remove();
+            updateCustomTotal();
+        });
+        row.querySelector('.custom-quantity').addEventListener('input', updateCustomTotal);
+        customRows.appendChild(row);
+    }
+
+    function updateCustomTotal() {
+        const total = Array.from(document.querySelectorAll('.custom-quantity'))
+            .reduce((sum, input) => sum + Number(input.value || 0), 0);
+        customTotal.textContent = `${roundKg(total).toFixed(2)} kg`;
+    }
+
+    function updateAllocationTotal() {
+        const total = allocationInputs.reduce((sum, input) => sum + Number(input.value || 0), 0);
+        allocationTotal.textContent = `${roundKg(total).toFixed(2)} kg`;
+    }
+
+    primary.addEventListener('change', filterForStage);
+    formulaSelect.addEventListener('change', updateRecipe);
+    targetInput.addEventListener('input', updateRecipe);
+    document.getElementById('add-ingredient').addEventListener('click', addCustomRow);
+    saveCustom.addEventListener('change', () => {
+        customNameWrap.classList.toggle('d-none', !saveCustom.checked);
+        customName.required = saveCustom.checked;
+    });
+    allocationInputs.forEach((input) => input.addEventListener('input', updateAllocationTotal));
+
+    addCustomRow();
+    filterForStage();
+})();
+</script>
 {% endblock %}

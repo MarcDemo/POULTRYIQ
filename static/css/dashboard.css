@@ -93,6 +93,75 @@ body {
     padding-left: 20px;
 }
 
+.sidebar .manager-nav {
+    gap: 2px;
+}
+
+.manager-nav-group {
+    position: relative;
+}
+
+.sidebar .manager-nav-trigger {
+    width: calc(100% - 20px);
+    border: 0;
+    text-align: left;
+}
+
+.manager-nav-trigger .manager-nav-chevron {
+    margin-left: auto;
+    font-size: 0.8rem;
+    transition: transform 0.2s ease;
+}
+
+.manager-nav-submenu {
+    max-height: 0;
+    overflow: hidden;
+    margin: 0 10px;
+    border-left: 1px solid rgba(255,255,255,0.16);
+    transition: max-height 0.25s ease, padding 0.25s ease;
+}
+
+.manager-nav-group:hover .manager-nav-submenu,
+.manager-nav-group:focus-within .manager-nav-submenu,
+.manager-nav-group.is-open .manager-nav-submenu,
+.manager-nav-trigger.active + .manager-nav-submenu {
+    max-height: 360px;
+    padding: 2px 0 6px;
+}
+
+.manager-nav-group:hover .manager-nav-chevron,
+.manager-nav-group:focus-within .manager-nav-chevron,
+.manager-nav-group.is-open .manager-nav-chevron,
+.manager-nav-trigger.active .manager-nav-chevron {
+    transform: rotate(90deg);
+}
+
+.manager-nav-subitem {
+    color: rgba(255,255,255,0.72);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin: 2px 0 2px 12px;
+    padding: 8px 12px;
+    border-radius: 7px;
+    font-size: 0.92rem;
+    line-height: 1.2;
+    text-decoration: none;
+    transition: var(--transition);
+}
+
+.manager-nav-subitem:hover,
+.manager-nav-subitem:focus {
+    background: rgba(255,255,255,0.12);
+    color: #fff;
+    outline: none;
+}
+
+.manager-nav-subitem.active {
+    background: rgba(255,193,7,0.18);
+    color: #fff;
+}
+
 /* Make scrollbar visible and subtle */
 .sidebar::-webkit-scrollbar {
     width: 10px;

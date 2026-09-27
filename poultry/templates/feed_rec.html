@@ -29,6 +29,11 @@
                                 <small class="text-muted">
                                     Mixed by {{ mixture.mixed_by.get_full_name|default:mixture.mixed_by.username }} on {{ mixture.mix_date }}
                                 </small>
+                                {% if mixture.formula_name_snapshot %}
+                                <small class="text-muted d-block">
+                                    {{ mixture.formula_name_snapshot }}{% if mixture.flock_stage %} · {{ mixture.get_flock_stage_display }}{% endif %}
+                                </small>
+                                {% endif %}
                             </div>
                             <span class="badge bg-warning text-dark align-self-start">
                                 {{ mixture.total_weight_kg|floatformat:1 }} kg weighed
@@ -50,7 +55,9 @@
                             <small class="fw-semibold text-muted d-block">Distributed To</small>
                             {% for allocation in mixture.allocations.all %}
                             <span class="badge bg-info text-dark mb-1">
-                                {{ allocation.house.house_code }}{% if allocation.house.name %} - {{ allocation.house.name }}{% endif %}: {{ allocation.quantity_kg|floatformat:1 }} kg
+                                {{ allocation.house.house_code }}{% if allocation.house.name %} - {{ allocation.house.name }}{% endif %}
+                                {% if allocation.batch %}/ {{ allocation.batch.batch_code }}{% else %}(legacy){% endif %}
+                                : {{ allocation.quantity_kg|floatformat:1 }} kg
                             </span>
                             {% empty %}
                             <span class="text-muted small">No house distribution recorded.</span>

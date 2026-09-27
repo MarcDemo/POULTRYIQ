@@ -1,0 +1,251 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+        <h3><i class="bi bi-person-vcard me-2"></i>{{ staff_user.display_name }}</h3>
+        {% if can_edit %}
+        <a class="btn btn-warning" href="{% url 'edit_staff_profile' staff_user.pk %}"><i class="bi bi-pencil-square me-1"></i>Edit Profile</a>
+        {% endif %}
+    </div>
+
+    <div class="row g-4">
+        <div class="col-lg-4">
+            <div class="card">
+                <div class="card-body">
+                    {% if profile.profile_photo %}
+                        <img src="{{ profile.profile_photo.url }}" class="img-fluid rounded mb-3" alt="{{ staff_user.display_name }}">
+                    {% endif %}
+                    <h5>{{ staff_user.display_name }}</h5>
+                    <div class="text-muted">{{ profile.job_title|default:staff_user.role.name }}</div>
+                    <hr>
+                    <div><strong>Phone:</strong> {{ staff_user.phone_number|default:"-" }}</div>
+                    <div><strong>Email:</strong> {{ staff_user.email|default:"-" }}</div>
+                    <div><strong>Date of Birth:</strong> {{ profile.date_of_birth|default:"-" }}</div>
+                    <div><strong>Employee ID:</strong> {{ profile.employee_number|default:"-" }}</div>
+                    <div><strong>TIN:</strong> {{ profile.tin_number|default:"-" }}</div>
+                    <div><strong>NSSF:</strong> {{ profile.nssf_number|default:"-" }}</div>
+                    <div><strong>National ID:</strong> {{ profile.national_id|default:"-" }}</div>
+                    <div><strong>Hire Date:</strong> {{ profile.hire_date|default:"-" }}</div>
+                    <div><strong>Status:</strong> {{ profile.get_employment_status_display }}</div>
+                    <div><strong>Pay Basis:</strong> {{ profile.get_pay_basis_display }}</div>
+                    {% if profile.pay_basis == "HOURLY" %}
+                    <div><strong>Hourly Wage:</strong> UGX {{ profile.hourly_rate|floatformat:0 }}</div>
+                    {% endif %}
+                    <div><strong>Contract:</strong>
+                        {% if profile.contract_end_date %}
+                            {% if profile.contract_is_expired %}<span class="badge bg-danger">Expired {{ profile.contract_end_date }}</span>
+                            {% elif profile.contract_expiring_soon %}<span class="badge bg-warning text-dark">Expires {{ profile.contract_end_date }}</span>
+                            {% else %}<span class="badge bg-success">Expires {{ profile.contract_end_date }}</span>{% endif %}
+                        {% else %}-{% endif %}
+                    </div>
+                    <hr>
+                    <div><strong>Next of Kin:</strong> {{ profile.next_of_kin_name|default:"-" }}</div>
+                    <div><strong>Kin Contact:</strong> {{ profile.next_of_kin_contact|default:"-" }}</div>
+                    <div><strong>Emergency:</strong> {{ profile.emergency_contact|default:"-" }}</div>
+                    <div><strong>Address:</strong> {{ profile.physical_address|default:"-" }}</div>
+                    {% if can_edit %}
+                    <hr>
+                    {% if profile.pay_basis == "MONTHLY" %}<div><strong>Monthly Salary:</strong> UGX {{ profile.monthly_salary|floatformat:0 }}</div>{% endif %}
+                    <div><strong>Pays NSSF:</strong> {{ profile.pay_nssf|yesno:"Yes,No" }}</div>
+                    <div><strong>Pays PAYE:</strong> {{ profile.pay_paye|yesno:"Yes,No" }}</div>
+                    <div><strong>Eligible for LST:</strong> {{ profile.pay_lst|yesno:"Yes,No" }}{% if profile.lst_local_government %} — {{ profile.lst_local_government }}{% endif %}</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-8">
+            {% if can_edit %}
+            <div class="card mb-4">
+                <div class="card-header"><i class="bi bi-wallet2 me-2"></i>Salary Payment History</div>
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead><tr><th>Month</th><th>Gross</th><th>PAYE</th><th>NSSF</th><th>Advances</th><th>Net</th><th>Status</th></tr></thead>
+                        <tbody>
+                            {% for salary in salary_history %}
+                            <tr>
+                                <td>{{ salary.period_month }}</td>
+                                <td>{{ salary.gross_salary|floatformat:0 }}</td>
+                                <td>{{ salary.paye_tax|floatformat:0 }}</td>
+                                <td>{{ salary.nssf_employee|floatformat:0 }}</td>
+                                <td>{{ salary.advances_deducted|floatformat:0 }}</td>
+                                <td>{{ salary.net_pay|default:salary.amount|floatformat:0 }}</td>
+                                <td>{{ salary.get_status_display }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="7" class="text-center text-muted py-3">No salary records yet.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            {% endif %}
+
+            <div class="card mb-4">
+                <div class="card-header"><i class="bi bi-calendar2-check me-2"></i>Leave History</div>
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead><tr><th>Title</th><th>Dates</th><th>Status</th><th>Manager Notes</th></tr></thead>
+                        <tbody>
+                            {% for leave in leave_history %}
+                            <tr>
+                                <td>{{ leave.title }}</td>
+                                <td>{{ leave.leave_start|default:"-" }} to {{ leave.leave_end|default:"-" }}</td>
+                                <td>{{ leave.get_status_display }}</td>
+                                <td>{{ leave.manager_notes|default:"-" }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="4" class="text-center text-muted py-3">No leave history yet.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            {% if can_edit %}
+            <div class="card mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+                    <span><i class="bi bi-cash-stack me-2"></i>Salary Advance History</span>
+                    <a class="btn btn-sm btn-outline-primary" href="{% url 'advance_register' %}">Open Advance Register</a>
+                </div>
+                <div class="card-body border-bottom">
+                    <div class="row text-center g-2">
+                        <div class="col-md-3"><small class="text-muted d-block">Approved</small><strong>UGX {{ advance_approved_total|floatformat:0 }}</strong></div>
+                        <div class="col-md-3"><small class="text-muted d-block">Actually Issued</small><strong>UGX {{ advance_issued_total|floatformat:0 }}</strong></div>
+                        <div class="col-md-3"><small class="text-muted d-block">Recovered in Salary</small><strong>UGX {{ advance_allocated_total|floatformat:0 }}</strong></div>
+                        <div class="col-md-3"><small class="text-muted d-block">Still Receivable</small><strong>UGX {{ advance_outstanding_total|floatformat:0 }}</strong></div>
+                    </div>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead><tr><th>Requested</th><th>What & Why</th><th>Amount</th><th>Intended Salary Month(s)</th><th>Issue Details</th><th>Recovery / Salary Status</th></tr></thead>
+                        <tbody>
+                            {% for advance in advance_history %}
+                            <tr>
+                                <td>{{ advance.created_at|date:"d M Y" }}</td>
+                                <td><strong>{{ advance.title }}</strong><div class="small text-muted">{{ advance.details|truncatechars:90 }}</div></td>
+                                <td>UGX {{ advance.advance_amount|floatformat:0 }}</td>
+                                <td>
+                                    {% if advance.advance_period_start %}{{ advance.advance_period_start|date:"M Y" }}{% else %}-{% endif %}
+                                    {% if advance.advance_period_end and advance.advance_period_end != advance.advance_period_start %} to {{ advance.advance_period_end|date:"M Y" }}{% endif %}
+                                </td>
+                                <td>
+                                    {% if advance.advance_disbursed_on %}
+                                    <div>{{ advance.advance_disbursed_on|date:"d M Y" }}</div>
+                                    <div class="small">{{ advance.get_advance_payment_method_display }} · {{ advance.advance_payment_reference }}</div>
+                                    {% if advance.advance_journal_reference %}<div class="small text-muted">Journal {{ advance.advance_journal_reference }}</div>{% endif %}
+                                    {% elif advance.status == "MANAGER_APPROVED" %}
+                                    <span class="text-warning small">Approved; not yet issued</span>
+                                    {% else %}-{% endif %}
+                                </td>
+                                <td>
+                                    <div><span class="badge bg-secondary">{{ advance.get_status_display }}</span></div>
+                                    {% for allocation in advance.recovery_allocations %}
+                                    <div class="small mt-1">{{ allocation.salary_payment.period_month }} — UGX {{ allocation.amount|floatformat:0 }} ({{ allocation.salary_payment.get_status_display }})</div>
+                                    {% empty %}
+                                        {% if advance.salary_payment %}
+                                        <div class="small mt-1">Allocated to {{ advance.salary_payment.period_month }} — {{ advance.salary_payment.get_status_display }}</div>
+                                        {% elif advance.advance_disbursed_on %}
+                                        <div class="small text-warning mt-1">Issued; awaiting salary-month allocation</div>
+                                        {% endif %}
+                                    {% endfor %}
+                                    {% if advance.advance_disbursed_on %}<div class="small mt-1">Outstanding: UGX {{ advance.advance_outstanding_amount|floatformat:0 }}</div>{% endif %}
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="6" class="text-center text-muted py-3">No advances yet.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="card mb-4">
+                <div class="card-header"><i class="bi bi-person-x me-2"></i>Away Without Pay</div>
+                <div class="card-body border-bottom">
+                    <form method="post" action="{% url 'record_unpaid_absence' staff_user.pk %}" class="row g-2 align-items-end">
+                        {% csrf_token %}
+                        <div class="col-md-4"><label class="form-label">Date</label><input class="form-control" type="date" name="absence_date" max="{{ today|date:'Y-m-d' }}" required></div>
+                        <div class="col-md-6"><label class="form-label">Reason</label><input class="form-control" name="reason" maxlength="500" placeholder="Reason for the unpaid day"></div>
+                        <div class="col-md-2 d-grid"><button class="btn btn-outline-danger" type="submit">Record Day</button></div>
+                    </form>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead><tr><th>Date</th><th>Reason</th><th>Recorded By</th></tr></thead>
+                        <tbody>
+                            {% for absence in unpaid_absences %}
+                            <tr><td>{{ absence.absence_date }}</td><td>{{ absence.reason|default:"-" }}</td><td>{{ absence.recorded_by.display_name }}</td></tr>
+                            {% empty %}
+                            <tr><td colspan="3" class="text-center text-muted py-3">No away-without-pay days recorded.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="card mb-4">
+                <div class="card-header"><i class="bi bi-file-earmark-arrow-up me-2"></i>Employee Documents</div>
+                <div class="card-body border-bottom">
+                    <form method="post" enctype="multipart/form-data" action="{% url 'upload_employee_document' staff_user.pk %}" class="row g-2 align-items-end">
+                        {% csrf_token %}
+                        <div class="col-md-3"><label class="form-label">Type</label><select class="form-select" name="document_type" required>{% for value, label in document_type_choices %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select></div>
+                        <div class="col-md-3"><label class="form-label">Title</label><input class="form-control" name="title" maxlength="150" required></div>
+                        <div class="col-md-3"><label class="form-label">File</label><input class="form-control" type="file" name="document" required></div>
+                        <div class="col-md-2"><label class="form-label">Expiry</label><input class="form-control" type="date" name="expiry_date"></div>
+                        <div class="col-md-1 d-grid"><button class="btn btn-primary" type="submit">Upload</button></div>
+                    </form>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead><tr><th>Document</th><th>Type</th><th>Expiry</th><th>Uploaded</th></tr></thead>
+                        <tbody>
+                            {% for employee_document in documents %}
+                            <tr>
+                                <td><a href="{{ employee_document.document.url }}" target="_blank" rel="noopener">{{ employee_document.title }}</a></td>
+                                <td>{{ employee_document.get_document_type_display }}</td>
+                                <td>{% if employee_document.expiry_date %}{% if employee_document.is_expired %}<span class="text-danger">Expired {{ employee_document.expiry_date }}</span>{% else %}{{ employee_document.expiry_date }}{% endif %}{% else %}-{% endif %}</td>
+                                <td>{{ employee_document.uploaded_at|date:"d M Y" }} by {{ employee_document.uploaded_by.display_name }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="4" class="text-center text-muted py-3">No employee documents uploaded.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header"><i class="bi bi-arrow-repeat me-2"></i>Contract Renewal History</div>
+                <div class="card-body border-bottom">
+                    <form method="post" enctype="multipart/form-data" action="{% url 'renew_staff_contract' staff_user.pk %}" class="row g-2 align-items-end">
+                        {% csrf_token %}
+                        <div class="col-md-3"><label class="form-label">Renewal Start</label><input class="form-control" type="date" name="renewed_contract_start_date" required></div>
+                        <div class="col-md-3"><label class="form-label">Renewal Expiry</label><input class="form-control" type="date" name="renewed_contract_end_date" required></div>
+                        <div class="col-md-3"><label class="form-label">Signed Renewal</label><input class="form-control" type="file" name="renewal_document"></div>
+                        <div class="col-md-2"><label class="form-label">Notes</label><input class="form-control" name="renewal_notes"></div>
+                        <div class="col-md-1 d-grid"><button class="btn btn-success" type="submit">Renew</button></div>
+                    </form>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead><tr><th>Previous Expiry</th><th>New Period</th><th>Notes</th><th>Recorded</th></tr></thead>
+                        <tbody>
+                            {% for renewal in contract_renewals %}
+                            <tr>
+                                <td>{{ renewal.previous_contract_end_date|default:"-" }}</td>
+                                <td>{{ renewal.renewed_contract_start_date }} to {{ renewal.renewed_contract_end_date }}{% if renewal.renewal_document %}<div class="small"><a href="{{ renewal.renewal_document.url }}" target="_blank" rel="noopener">Open signed renewal</a></div>{% endif %}</td>
+                                <td>{{ renewal.notes|default:"-" }}</td><td>{{ renewal.renewed_at|date:"d M Y" }} by {{ renewal.renewed_by.display_name }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="4" class="text-center text-muted py-3">No contract renewals recorded.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

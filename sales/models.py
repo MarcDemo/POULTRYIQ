@@ -1,4 +1,5 @@
 from django.db import models
+from django.utils import timezone
 from decimal import Decimal
 from django.conf import settings
 from django.core.validators import MinValueValidator
@@ -9,15 +10,30 @@ from django.core.validators import MinValueValidator
 
 
 class Customer(models.Model):
+    class PaymentMethod(models.TextChoices):
+        CASH = "CASH", "Cash"
+        MOMO = "MOMO", "Mobile Money"
+        BANK = "BANK", "Bank"
+        CREDIT = "CREDIT", "Credit"
+
     customer_id = models.BigAutoField(primary_key=True)
     name = models.CharField(max_length=150, unique=True)
     contact_person = models.CharField(max_length=120, blank=True)
     phone_number = models.CharField(max_length=30, blank=True)
     email = models.EmailField(blank=True)
     address = models.CharField(max_length=255, blank=True)
+    preferred_payment_method = models.CharField(
+        max_length=10,
+        choices=PaymentMethod.choices,
+        default=PaymentMethod.CASH,
+    )
+    momo_receiving_number = models.CharField(max_length=50, blank=True)
+    bank_account_number = models.CharField(max_length=80, blank=True)
+    credit_repayment_plan = models.TextField(blank=True)
 
     # Credit controls
     allow_credit = models.BooleanField(default=True)
+    pay_wht = models.BooleanField(default=False)
     credit_limit = models.DecimalField(
         max_digits=14, decimal_places=2, default=Decimal("0.00"),
         validators=[MinValueValidator(Decimal("0.00"))]
@@ -33,6 +49,10 @@ class Customer(models.Model):
 
     def __str__(self) -> str:
         return self.name
+
+    @property
+    def display_id(self) -> str:
+        return f"CUST-{self.customer_id}"
 
 
 class SaleInvoice(models.Model):
@@ -56,6 +76,11 @@ class SaleInvoice(models.Model):
     due_date = models.DateField(null=True, blank=True, db_index=True)
 
     currency = models.CharField(max_length=10, default="UGX")
+    payment_method = models.CharField(
+        max_length=10,
+        choices=Customer.PaymentMethod.choices,
+        default=Customer.PaymentMethod.CASH,
+    )
 
     # Totals
     subtotal = models.DecimalField(
@@ -67,6 +92,10 @@ class SaleInvoice(models.Model):
         validators=[MinValueValidator(Decimal("0.00"))]
     )
     total_amount = models.DecimalField(
+        max_digits=14, decimal_places=2, default=Decimal("0.00"),
+        validators=[MinValueValidator(Decimal("0.00"))]
+    )
+    wht_amount = models.DecimalField(
         max_digits=14, decimal_places=2, default=Decimal("0.00"),
         validators=[MinValueValidator(Decimal("0.00"))]
     )
@@ -109,6 +138,20 @@ class SaleItem(models.Model):
     # Optional: link revenue to a specific batch for profitability
     batch = models.ForeignKey(
         "poultry.PoultryBatch", on_delete=models.PROTECT, null=True, blank=True, related_name="sale_items"
+    )
+    category = models.ForeignKey(
+        "accounting.TransactionCategory",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="sales",
+    )
+    account = models.ForeignKey(
+        "accounting.ChartOfAccount",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="sale_items",
     )
 
     product_name = models.CharField(max_length=120)  # e.g. Eggs, Off-layers, Manure
@@ -167,6 +210,59 @@ class ReceivableLedger(models.Model):
     def __str__(self) -> str:
         return f"{self.invoice.invoice_no} balance {self.balance}"
 
+    @property
+    def is_settled(self):
+        return self.balance <= Decimal("0.00")
+
+    @property
+    def is_overdue(self):
+        due_date = self.invoice.due_date
+        return bool(self.balance > 0 and due_date and due_date < timezone.localdate())
+
+
+class ReceivableEntry(models.Model):
+    """Immutable customer receivable movements for an invoice ledger."""
+
+    class EntryType(models.TextChoices):
+        INVOICE = "INVOICE", "Invoice charge"
+        PAYMENT = "PAYMENT", "Customer payment"
+        ADJUSTMENT = "ADJUSTMENT", "Approved adjustment"
+
+    receivable_entry_id = models.BigAutoField(primary_key=True)
+    receivable = models.ForeignKey(
+        ReceivableLedger,
+        on_delete=models.CASCADE,
+        related_name="entries",
+    )
+    entry_date = models.DateField(db_index=True)
+    entry_type = models.CharField(max_length=16, choices=EntryType.choices, db_index=True)
+    amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal("0.00"))],
+    )
+    balance_after = models.DecimalField(max_digits=14, decimal_places=2)
+    reference = models.CharField(max_length=100, blank=True)
+    notes = models.TextField(blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="receivable_entries_created",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-entry_date", "-receivable_entry_id"]
+        indexes = [
+            models.Index(fields=["receivable", "entry_date"]),
+            models.Index(fields=["entry_type", "entry_date"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.receivable.invoice.invoice_no} / {self.get_entry_type_display()} / {self.amount}"
+
 
 class CustomerPayment(models.Model):
     """
@@ -176,6 +272,7 @@ class CustomerPayment(models.Model):
         CASH = "CASH", "Cash"
         MOMO = "MOMO", "Mobile Money"
         BANK = "BANK", "Bank"
+        CREDIT = "CREDIT", "Credit"
         OTHER = "OTHER", "Other"
 
     payment_id = models.BigAutoField(primary_key=True)

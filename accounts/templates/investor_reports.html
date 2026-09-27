@@ -1,125 +1,103 @@
 {% extends 'base.html' %}
 {% block content %}
 
-<style>.report-card {
-    cursor: pointer;
-    transition: 0.3s;
-    border-radius: 12px;
-}
-
-.report-card:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 8px 20px rgba(0,0,0,0.15);
-}
-</style>
 <div class="container-fluid">
-
-<h3 class="mb-4">Reports Center</h3>
-
-<div class="row g-4">
-
-    <!-- Egg Production -->
-    <div class="col-md-3">
-        <a href="#" class="text-decoration-none text-dark">
-            <div class="card border-success report-card text-center p-4">
-                <h5>Egg Production</h5>
-                <p class="text-muted">Daily, house & trends</p>
-            </div>
-        </a>
+    <div class="page-header-row mb-4">
+        <div>
+            <h3 class="mb-1"><i class="bi bi-graph-up-arrow me-2"></i>Investor Reports</h3>
+            <small class="text-muted">Profitability and balance sheet snapshot with depreciation impact</small>
+        </div>
     </div>
 
-    <!-- Sales Report -->
-    <div class="col-md-3">
-        <a href="#" class="text-decoration-none text-dark">
-            <div class="card border-primary report-card text-center p-4">
-                <h5>Sales Report</h5>
-                <p class="text-muted">Revenue & transactions</p>
-            </div>
-        </a>
+    <div class="card mb-4">
+        <div class="card-body">
+            <form method="get" class="row g-3">
+                <div class="col-md-3">
+                    <label class="form-label">From Date</label>
+                    <input type="date" name="start_date" value="{{ start_date }}" class="form-control">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">To Date</label>
+                    <input type="date" name="end_date" value="{{ end_date }}" class="form-control">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">&nbsp;</label>
+                    <button type="submit" class="btn btn-primary w-100">Filter</button>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">&nbsp;</label>
+                    <a href="{% url 'investor_reports' %}" class="btn btn-outline-secondary w-100">Clear</a>
+                </div>
+            </form>
+        </div>
     </div>
 
-    <!-- Expenses -->
-    <div class="col-md-3">
-        <a href="#" class="text-decoration-none text-dark">
-            <div class="card border-danger report-card text-center p-4">
-                <h5>Expense Report</h5>
-                <p class="text-muted">Spending analysis</p>
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            <div class="card h-100 border-primary">
+                <div class="card-body">
+                    <small class="text-muted">Net Profit / Loss</small>
+                    <h5 class="mb-0">{{ pl_data.totals.profit_loss|floatformat:2 }}</h5>
+                </div>
             </div>
-        </a>
+        </div>
+        <div class="col-md-3">
+            <div class="card h-100 border-warning">
+                <div class="card-body">
+                    <small class="text-muted">Period Depreciation (P&L)</small>
+                    <h5 class="mb-0">{{ pl_data.totals.depreciation|floatformat:2 }}</h5>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card h-100 border-danger">
+                <div class="card-body">
+                    <small class="text-muted">Accumulated Depreciation (BS)</small>
+                    <h5 class="mb-0">{{ accumulated_depreciation_total|floatformat:2 }}</h5>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card h-100 border-success">
+                <div class="card-body">
+                    <small class="text-muted">Net Book Value</small>
+                    <h5 class="mb-0">{{ net_book_value|floatformat:2 }}</h5>
+                </div>
+            </div>
+        </div>
     </div>
 
-    <!-- Profit -->
-    <div class="col-md-3">
-        <a href="#" class="text-decoration-none text-dark">
-            <div class="card border-dark report-card text-center p-4">
-                <h5>Profit & Loss</h5>
-                <p class="text-muted">Revenue vs Expenses</p>
+    <div class="row g-4">
+        <div class="col-lg-6">
+            <div class="card">
+                <div class="card-header"><i class="bi bi-cash-coin me-2"></i>P&L Summary</div>
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <tbody>
+                            <tr><td>Total Income</td><td class="text-end">{{ pl_data.totals.total_income|floatformat:2 }}</td></tr>
+                            <tr><td>Total Expenses</td><td class="text-end">{{ pl_data.totals.total_expenses|floatformat:2 }}</td></tr>
+                            <tr><td>Depreciation</td><td class="text-end">{{ pl_data.totals.depreciation|floatformat:2 }}</td></tr>
+                            <tr class="fw-bold"><td>Net Profit / Loss</td><td class="text-end">{{ pl_data.totals.profit_loss|floatformat:2 }}</td></tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
-        </a>
-    </div>
-
-    <!-- Mortality -->
-    <div class="col-md-3">
-        <a href="#" class="text-decoration-none text-dark">
-            <div class="card border-warning report-card text-center p-4">
-                <h5>Mortality Report</h5>
-                <p class="text-muted">Deaths & trends</p>
+        </div>
+        <div class="col-lg-6">
+            <div class="card">
+                <div class="card-header"><i class="bi bi-building me-2"></i>Fixed Assets Snapshot</div>
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <tbody>
+                            <tr><td>Gross Fixed Assets</td><td class="text-end">{{ fixed_assets_total|floatformat:2 }}</td></tr>
+                            <tr><td>Accumulated Depreciation</td><td class="text-end">{{ accumulated_depreciation_total|floatformat:2 }}</td></tr>
+                            <tr class="fw-bold"><td>Net Book Value</td><td class="text-end">{{ net_book_value|floatformat:2 }}</td></tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
-        </a>
+        </div>
     </div>
-
-    <!-- Feed -->
-    <div class="col-md-3">
-        <a href="#" class="text-decoration-none text-dark">
-            <div class="card border-info report-card text-center p-4">
-                <h5>Feed Usage</h5>
-                <p class="text-muted">Consumption tracking</p>
-            </div>
-        </a>
-    </div>
-
-    <!-- Stock -->
-    <div class="col-md-3">
-        <a href="#" class="text-decoration-none text-dark">
-            <div class="card border-secondary report-card text-center p-4">
-                <h5>Stock Report</h5>
-                <p class="text-muted">Eggs, birds, feed</p>
-            </div>
-        </a>
-    </div>
-
-    <!-- Creditors -->
-    <div class="col-md-3">
-        <a href="#" class="text-decoration-none text-dark">
-            <div class="card border-danger report-card text-center p-4">
-                <h5>Creditors</h5>
-                <p class="text-muted">Outstanding balances</p>
-            </div>
-        </a>
-    </div>
-
-    <!-- Bookings -->
-    <div class="col-md-3">
-        <a href="#" class="text-decoration-none text-dark">
-            <div class="card border-primary report-card text-center p-4">
-                <h5>Bookings</h5>
-                <p class="text-muted">Future orders</p>
-            </div>
-        </a>
-    </div>
-
-    <!-- Staff Activity -->
-    <div class="col-md-3">
-        <a href="#" class="text-decoration-none text-dark">
-            <div class="card border-dark report-card text-center p-4">
-                <h5>Staff Activity</h5>
-                <p class="text-muted">User actions</p>
-            </div>
-        </a>
-    </div>
-
-</div>
-
 </div>
 
 {% endblock %}

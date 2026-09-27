@@ -11,7 +11,7 @@
     <!-- Bootstrap Icons -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
     <!-- Custom CSS -->
-    <link rel="stylesheet" href="{% static 'css/auth.css' %}">
+    <link rel="stylesheet" href="{% static 'css/auth.css' %}?v=hen-photo-1">
 </head>
 <body>
 
@@ -20,6 +20,12 @@
         <!-- Left Side - Branding -->
         <div class="auth-branding">
             <div class="branding-content">
+                <img
+                    class="login-hen-image"
+                    src="{% static 'images/login-hen-nest.png' %}"
+                    alt="Brown hen sitting on eggs in a straw nest"
+                    width="1254"
+                    height="1254">
                 <div class="logo-circle">
                     <i class="bi bi-graph-up-arrow"></i>
                 </div>

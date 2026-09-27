@@ -1,0 +1,144 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+        <h3><i class="bi bi-pencil-square me-2"></i>Edit Staff Profile</h3>
+        <a class="btn btn-light" href="{% url 'staff_profile_detail' staff_user.pk %}">Back</a>
+    </div>
+
+    <form method="post" enctype="multipart/form-data" class="card">
+        {% csrf_token %}
+        <div class="card-body">
+            <div class="alert alert-info" role="note">
+                <i class="bi bi-info-circle me-1"></i>
+                This is the employee's bio-data and employment record. The Employee ID is system-issued and cannot be changed.
+            </div>
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label">Full Names</label>
+                    <input class="form-control" name="full_name" value="{{ form_data.full_name }}" required>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Contact</label>
+                    <input class="form-control" name="phone_number" value="{{ form_data.phone_number }}">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Email</label>
+                    <input class="form-control" type="email" name="email" value="{{ form_data.email }}">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Date of Birth</label>
+                    <input class="form-control" type="date" name="date_of_birth" value="{{ form_data.date_of_birth }}">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Profile Picture</label>
+                    <input class="form-control" type="file" name="profile_photo" accept="image/*">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Employee ID</label>
+                    <input class="form-control" value="{{ profile.employee_number }}" readonly>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Job Title</label>
+                    <input class="form-control" name="job_title" value="{{ form_data.job_title }}">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">TIN</label>
+                    <input class="form-control" name="tin_number" value="{{ form_data.tin_number }}">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">NSSF Number</label>
+                    <input class="form-control" name="nssf_number" value="{{ form_data.nssf_number }}">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">National ID</label>
+                    <input class="form-control" name="national_id" value="{{ form_data.national_id }}">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Hire Date</label>
+                    <input class="form-control" type="date" name="hire_date" value="{{ form_data.hire_date }}">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Next of Kin Name</label>
+                    <input class="form-control" name="next_of_kin_name" value="{{ form_data.next_of_kin_name }}">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Next of Kin Contact</label>
+                    <input class="form-control" name="next_of_kin_contact" value="{{ form_data.next_of_kin_contact }}">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Emergency Contact</label>
+                    <input class="form-control" name="emergency_contact" value="{{ form_data.emergency_contact }}">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Pay Basis</label>
+                    <select class="form-select" name="pay_basis">
+                        {% for value, label in pay_basis_choices %}
+                        <option value="{{ value }}" {% if form_data.pay_basis == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Monthly Salary (UGX)</label>
+                    <input class="form-control" type="number" min="0" step="0.01" name="monthly_salary" value="{{ form_data.monthly_salary }}">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Hourly Wage (UGX)</label>
+                    <input class="form-control" type="number" min="0" step="0.01" name="hourly_rate" value="{{ form_data.hourly_rate }}">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label d-block">Payroll Deductions</label>
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="checkbox" id="pay_nssf" name="pay_nssf" {% if form_data.pay_nssf != "False" %}checked{% endif %}>
+                        <label class="form-check-label" for="pay_nssf">Pays NSSF</label>
+                    </div>
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="checkbox" id="pay_paye" name="pay_paye" {% if form_data.pay_paye != "False" %}checked{% endif %}>
+                        <label class="form-check-label" for="pay_paye">Pays PAYE</label>
+                    </div>
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="checkbox" id="pay_lst" name="pay_lst" {% if form_data.pay_lst != "False" %}checked{% endif %}>
+                        <label class="form-check-label" for="pay_lst">Eligible for LST</label>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">LST Local Government</label>
+                    <input class="form-control" name="lst_local_government" maxlength="120" value="{{ form_data.lst_local_government }}" placeholder="e.g. Kira Municipal Council">
+                    <small class="text-muted">Uganda Local Service Tax uses the statutory income band and, where applicable, payroll deducts it in four July–October instalments. Enable it only where the relevant local authority rules apply.</small>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Employment Status</label>
+                    <select class="form-select" name="employment_status">
+                        {% for value, label in employment_status_choices %}
+                        <option value="{{ value }}" {% if form_data.employment_status == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Contract Start</label>
+                    <input class="form-control" type="date" name="contract_start_date" value="{{ form_data.contract_start_date }}">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Contract Expiry</label>
+                    <input class="form-control" type="date" name="contract_end_date" value="{{ form_data.contract_end_date }}">
+                </div>
+                <div class="col-12">
+                    <label class="form-label">Contract Notes</label>
+                    <textarea class="form-control" name="contract_notes" rows="2">{{ form_data.contract_notes }}</textarea>
+                </div>
+                <div class="col-12">
+                    <label class="form-label">Physical Address</label>
+                    <input class="form-control" name="physical_address" value="{{ form_data.physical_address }}">
+                </div>
+                <div class="col-12">
+                    <label class="form-label">Notes</label>
+                    <textarea class="form-control" name="notes" rows="3">{{ form_data.notes }}</textarea>
+                </div>
+            </div>
+        </div>
+        <div class="card-footer text-end">
+            <button class="btn btn-primary" type="submit"><i class="bi bi-check-circle me-1"></i>Save Profile</button>
+        </div>
+    </form>
+</div>
+{% endblock %}

@@ -66,7 +66,7 @@
                                 <select id="sickness_report" name="sickness_report" class="form-select mb-2">
                                     <option value="">-- select sickbay case --</option>
                                     {% for case in sick_reports %}
-                                        <option value="{{ case.pk }}" {% if case.batch %}data-batch="{{ case.batch.pk }}" data-house="{{ case.house_ref_id }}"{% endif %}>{{ case.house_label }} - {{ case.diagnosis_label }} ({{ case.case_label }})</option>
+                                        <option value="{{ case.pk }}" {% if case.batch %}data-batch="{{ case.batch.pk }}" data-house="{{ case.house_ref_id }}"{% endif %} {% if sick_reports|length == 1 %}selected{% endif %}>{{ case.house_label }} - {{ case.diagnosis_label }} ({{ case.case_label }})</option>
                                     {% endfor %}
                                 </select>
                                
@@ -136,13 +136,6 @@ document.addEventListener('DOMContentLoaded', function(){
 {% endblock %}
 
                         <div class="mb-3">
-                            <label for="record_date" class="form-label">
-                                <i class="bi bi-calendar me-1"></i>Date
-                            </label>
-                            <input type="date" id="record_date" name="record_date" class="form-control" value="{{ today|date:'Y-m-d' }}" required>
-                        </div>
-
-                        <div class="mb-3">
                             <label for="feed_type" class="form-label">
                                 <i class="bi bi-bag me-1"></i>Feed Type
                             </label>
@@ -158,14 +151,6 @@ document.addEventListener('DOMContentLoaded', function(){
                                 <i class="bi bi-box me-1"></i>Quantity Given (kg)
                             </label>
                             <input type="number" id="quantity" step="0.1" name="quantity" class="form-control" placeholder="0.0" required min="0">
-                        </div>
-
-                        <div class="mb-3">
-                            <label for="time_given" class="form-label">
-                                <i class="bi bi-clock me-1"></i>Time Given
-                            </label>
-                            <input type="time" id="time_given" name="time_given" class="form-control">
-                            <small class="form-text text-muted">Leave empty for current time</small>
                         </div>
 
                         <div class="mb-3">

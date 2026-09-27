@@ -26,16 +26,11 @@
                         {% csrf_token %}
 
                         <div class="mb-3">
-                            <label for="date" class="form-label"><i class="bi bi-calendar3 me-1"></i>Today <span class="luganda">Leero</span></label>
-                            <input id="date" type="date" name="date" class="form-control" value="{{ today|date:'Y-m-d' }}" required>
-                        </div>
-
-                        <div class="mb-3">
                             <label for="house" class="form-label"><i class="bi bi-house-door me-1"></i>House <span class="luganda">Ennyumba</span></label>
                             <select id="house" name="house" class="form-select" required>
                                 <option value="">-- Choose house --</option>
                                 {% for h in houses %}
-                                <option value="{{ h.pk }}">{{ h.name|default:h.house_code }}</option>
+                                <option value="{{ h.pk }}" {% if houses|length == 1 %}selected{% endif %}>{{ h.name|default:h.house_code }}</option>
                                 {% endfor %}
                             </select>
                         </div>

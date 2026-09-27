@@ -233,13 +233,18 @@
 
 			<div class="row g-3">
 				<div class="col-md-6">
-					<label class="form-label">Customer Name</label>
-					<input type="text" class="form-control" name="customer" required>
+					<label class="form-label">Customer</label>
+					<select class="form-select" name="customer" id="customerName" required>
+						<option value="">Select Customer</option>
+						{% for customer in customers %}
+						<option value="{{ customer.customer_id }}">{{ customer.display_id }} — {{ customer.name }}</option>
+						{% endfor %}
+					</select>
 				</div>
 
 				<div class="col-md-6">
 					<label class="form-label">Phone</label>
-					<input type="text" class="form-control" name="phone">
+					<input type="text" class="form-control" name="phone" id="customerPhone">
 				</div>
 
 				<div class="col-md-4">
@@ -280,10 +285,10 @@
 
 				<div class="col-md-6">
 					<label class="form-label">Payment Method</label>
-					<select class="form-select" name="payment_method">
-						<option value="CASH">Cash</option>
-						<option value="MOMO">Mobile Money</option>
-						<option value="BANK">Bank</option>
+					<select class="form-select" name="payment_method" id="paymentMethod">
+						{% for value, label in payment_method_choices %}
+						<option value="{{ value }}">{{ label }}</option>
+						{% endfor %}
 					</select>
 				</div>
 
@@ -315,6 +320,12 @@
 					<div class="kpi-pill">
 						<div class="label">Amount Paid</div>
 						<div class="value" id="kpiPaid">UGX 0.00</div>
+					</div>
+				</div>
+				<div class="col-md-4">
+					<div class="kpi-pill">
+						<div class="label">WHT</div>
+						<div class="value" id="kpiWht">UGX 0.00</div>
 					</div>
 				</div>
 				<div class="col-md-4">
@@ -357,7 +368,7 @@
 							<strong>{{ order.invoice_no }}</strong>
 							<span class="badge bg-warning text-dark">UGX {{ order.receivable.balance|default:"0.00" }}</span>
 						</div>
-						<div class="small text-muted">{{ order.customer.name }}</div>
+						<div class="small text-muted">{{ order.customer.display_id }} — {{ order.customer.name }}</div>
 						<div class="small">Pickup: {{ order.due_date|default:"Instant" }} | Total: UGX {{ order.total_amount }}</div>
 					</div>
 					{% empty %}
@@ -391,7 +402,7 @@
 					{% for row in recent_sales %}
 					<tr>
 						<td>{{ row.invoice.invoice_no }}</td>
-						<td>{{ row.invoice.customer.name }}</td>
+						<td>{{ row.invoice.customer.display_id }} — {{ row.invoice.customer.name }}</td>
 						<td>{{ row.product_name }}</td>
 						<td>{{ row.quantity }} {{ row.unit }}</td>
 						<td>UGX {{ row.unit_price }}</td>
@@ -432,6 +443,7 @@
 {% endblock %}
 
 {% block extra_js %}
+{{ customer_payment_defaults|json_script:"customer-payment-defaults" }}
 <script>
 (() => {
 	const $ = id => document.getElementById(id);
@@ -446,7 +458,12 @@
 	const balanceEl = $('balance');
 	const kpiTotalEl = $('kpiTotal');
 	const kpiPaidEl = $('kpiPaid');
+	const kpiWhtEl = $('kpiWht');
 	const kpiBalanceEl = $('kpiBalance');
+	const customerNameEl = $('customerName');
+	const customerPhoneEl = $('customerPhone');
+	const paymentMethodEl = $('paymentMethod');
+	const customerDefaults = JSON.parse($('customer-payment-defaults').textContent);
 
 	function money(v) {
 		return Number(v || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -473,17 +490,30 @@
 
 		const total = q * p;
 		const paid = d;
-		const bal = total - paid;
+		const customer = customerDefaults[customerNameEl.value.trim()];
+		const wht = customer && customer.pay_wht ? total * 0.06 : 0;
+		const bal = total - wht - paid;
 
 		totalEl.value = total.toFixed(2);
 		balanceEl.value = bal.toFixed(2);
 		kpiTotalEl.textContent = `UGX ${money(total)}`;
 		kpiPaidEl.textContent = `UGX ${money(paid)}`;
+		kpiWhtEl.textContent = `UGX ${money(wht)}`;
 		kpiBalanceEl.textContent = `UGX ${money(bal)}`;
 	}
 
 	function toggleDelivery() {
 		deliveryWrapEl.style.display = saleTypeEl.value === 'booking' ? '' : 'none';
+	}
+
+	function applyCustomerDefaults() {
+		const customer = customerDefaults[customerNameEl.value.trim()];
+		if (!customer) return;
+		customerPhoneEl.value = customer.phone || '';
+		if (customer.preferred_payment_method) {
+			paymentMethodEl.value = customer.preferred_payment_method;
+		}
+		recalc();
 	}
 
 	['input', 'change'].forEach(evt => {
@@ -498,6 +528,7 @@
 	});
 
 	saleTypeEl.addEventListener('change', toggleDelivery);
+	customerNameEl.addEventListener('change', applyCustomerDefaults);
 
 	updateProductMeta();
 	toggleDelivery();

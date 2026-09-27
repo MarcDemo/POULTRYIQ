@@ -1,0 +1,454 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container-fluid">
+    <div class="page-header-row mb-4">
+        <h2 class="mb-1">
+            <i class="bi bi-receipt me-2"></i>Financial Transactions
+        </h2>
+        <small class="text-muted">Record purchases, expenses, or manage salaries</small>
+    </div>
+
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        {% endfor %}
+    {% endif %}
+
+    <!-- Tab Navigation -->
+    <div class="mb-4">
+        <div class="btn-group w-100" role="tablist">
+            <button class="btn btn-outline-primary {% if active_tab != 'purchases' and active_tab != 'salaries' %}active{% endif %}" id="expenses-tab" data-bs-toggle="tab" data-bs-target="#expenses-panel" type="button">
+                <i class="bi bi-bag me-2"></i>Expenses
+            </button>
+            <button class="btn btn-outline-primary {% if active_tab == 'purchases' %}active{% endif %}" id="purchases-tab" data-bs-toggle="tab" data-bs-target="#purchases-panel" type="button">
+                <i class="bi bi-cart me-2"></i>Purchases
+            </button>
+            <button class="btn btn-outline-primary {% if active_tab == 'salaries' %}active{% endif %}" id="salaries-tab" data-bs-toggle="tab" data-bs-target="#salaries-panel" type="button">
+                <i class="bi bi-person-fill me-2"></i>Salaries
+            </button>
+        </div>
+    </div>
+
+    <div class="tab-content">
+        <!-- EXPENSES TAB -->
+        <div class="tab-pane fade {% if active_tab != 'purchases' and active_tab != 'salaries' %}show active{% endif %}" id="expenses-panel">
+            <div class="row">
+                <div class="col-lg-8">
+                    <div class="d-flex flex-wrap gap-2 mb-3">
+                        <a href="{% url 'fixed_assets' %}" class="btn btn-outline-primary">
+                            <i class="bi bi-building me-2"></i>Record Fixed Asset
+                        </a>
+                        <a href="{% url 'asset_construction_projects' %}" class="btn btn-outline-success">
+                            <i class="bi bi-hammer me-2"></i>Asset Construction
+                        </a>
+                    </div>
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0">Record Expense</h5>
+                        </div>
+                        <div class="card-body">
+                            <form method="POST">
+                                {% csrf_token %}
+                                <input type="hidden" name="type" value="expense">
+                                
+                                <div class="row mb-3">
+                                    <div class="col-md-12">
+                                        <label class="form-label">Expense <span class="text-danger">*</span></label>
+                                        <select name="account" class="form-select" id="expense-account" required>
+                                            <option value="">-- Select Account --</option>
+                                            {% for account in expense_accounts %}
+                                                {% if account.account_type.legacy_code == "EXPENSES" %}
+                                                    <option value="{{ account.id }}" data-name="{{ account.account_name }}">{{ account.account_name }}</option>
+                                                {% endif %}
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label class="form-label">Description <span class="text-danger">*</span></label>
+                                    <textarea name="description" class="form-control" rows="3" required></textarea>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label class="form-label">Amount <span class="text-danger">*</span></label>
+                                    <input type="number" name="amount" step="0.01" class="form-control" required>
+                                </div>
+
+                                <div class="row mb-3 d-none" id="expense-prepayment-period">
+                                    <div class="col-md-6">
+                                        <label class="form-label">Prepayment Start <span class="text-danger">*</span></label>
+                                        <input type="date" name="prepayment_start_date" class="form-control">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">Prepayment End <span class="text-danger">*</span></label>
+                                        <input type="date" name="prepayment_end_date" class="form-control">
+                                    </div>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label class="form-label">Payment Method</label>
+                                    <select name="payment_method" class="form-select">
+                                        <option value="Cash">Cash</option>
+                                        <option value="Mobile Money">Mobile Money</option>
+                                        <option value="Bank">Bank</option>
+                                        <option value="Credit">Credit</option>
+                                        <option value="Check">Check</option>
+                                    </select>
+                                </div>
+                                
+                                <button type="submit" class="btn btn-primary">Record Expense</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-lg-4">
+                    <div class="card mb-3">
+                        <div class="card-body">
+                            <h6 class="card-title">Today's Expenses</h6>
+                            <h3 class="text-danger">{{ today_total|floatformat:2 }}</h3>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="card-body">
+                            <h6 class="card-title">This Month Total</h6>
+                            <h3>{{ this_month_total|floatformat:2 }}</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- PURCHASES TAB -->
+        <div class="tab-pane fade {% if active_tab == 'purchases' %}show active{% endif %}" id="purchases-panel">
+            <div class="row">
+                <div class="col-lg-8">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0">Record Purchase</h5>
+                        </div>
+                        <div class="card-body">
+                            <form method="POST">
+                                {% csrf_token %}
+                                <input type="hidden" name="type" value="purchase">
+                                
+                                <div class="row mb-3">
+                                    <div class="col-md-12">
+                                        <label class="form-label">Supplier <span class="text-danger">*</span></label>
+                                        <select name="supplier" class="form-select" id="supplier-select" required>
+                                            <option value="">-- Select Supplier --</option>
+                                            {% for supplier in suppliers %}
+                                                <option value="{{ supplier.id }}">{{ supplier.name }}</option>
+                                            {% endfor %}
+                                        </select>
+                                        {% if not suppliers %}
+                                            <small class="text-danger">Add an active supplier before recording purchases.</small>
+                                        {% endif %}
+                                    </div>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label class="form-label">Product / Account <span class="text-danger">*</span></label>
+                                    <select name="supplier_product" class="form-select" id="purchase-account" required disabled>
+                                        <option value="">-- Select Supplier First --</option>
+                                    </select>
+                                </div>
+
+                                <div class="row mb-3">
+                                    <div class="col-md-3">
+                                        <label class="form-label">Quantity <span class="text-danger">*</span></label>
+                                        <input type="number" name="quantity" id="purchase-quantity" step="0.001" min="0.001" class="form-control" required>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label">Unit</label>
+                                        <input type="text" name="unit" id="purchase-unit" class="form-control" value="unit">
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label">Unit Price <span class="text-danger">*</span></label>
+                                        <input type="number" name="unit_price" id="purchase-unit-price" step="0.01" min="0" class="form-control" required>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label">Total Amount</label>
+                                        <input type="number" name="amount" id="purchase-total" step="0.01" class="form-control" readonly value="0.00">
+                                    </div>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label class="form-label">Description <span class="text-danger">*</span></label>
+                                    <textarea name="description" class="form-control" rows="3" placeholder="Purchase details, invoice number, etc." required></textarea>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label class="form-label">Payment Method</label>
+                                    <select name="payment_method" class="form-select">
+                                        <option value="Cash">Cash</option>
+                                        <option value="Mobile Money">Mobile Money</option>
+                                        <option value="Bank">Bank</option>
+                                        <option value="Credit">Credit</option>
+                                        <option value="Check">Check</option>
+                                    </select>
+                                </div>
+
+                                <div class="row mb-3" id="purchase-credit-terms" style="display:none;">
+                                    <div class="col-md-12">
+                                        <label class="form-label">Repayment Plan</label>
+                                        <textarea name="credit_repayment_plan" id="purchase-credit-repayment-plan" class="form-control" rows="2" placeholder="e.g., Pay 50% after 2 weeks, balance after 30 days"></textarea>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label">Paid Upfront (%)</label>
+                                        <input type="number" name="credit_paid_upfront" id="purchase-credit-paid-upfront" class="form-control" min="0" max="100" step="0.01" placeholder="e.g., 50">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label">Grace Period</label>
+                                        <input type="number" name="credit_grace_period_days" id="purchase-credit-grace-period-days" class="form-control" min="0" step="1" placeholder="Days">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label">Credit Period</label>
+                                        <input type="text" name="credit_period" id="purchase-credit-period" class="form-control" placeholder="e.g., 30 days">
+                                    </div>
+                                </div>
+
+                                <div class="mb-3" id="purchase-bank-terms" style="display:none;">
+                                    <label class="form-label">Bank Account Number</label>
+                                    <input type="text" name="bank_account_number" id="purchase-bank-account-number" class="form-control" placeholder="Account number">
+                                </div>
+
+                                <div class="mb-3" id="purchase-momo-terms" style="display:none;">
+                                    <label class="form-label">MoMo Receiving Number</label>
+                                    <input type="text" name="momo_receiving_number" id="purchase-momo-receiving-number" class="form-control" placeholder="+256...">
+                                </div>
+                                
+                                <button type="submit" class="btn btn-primary" {% if not suppliers %}disabled{% endif %}>Record Purchase</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-lg-4">
+                    <div class="alert alert-info">
+                        <h6>
+                            <i class="bi bi-info-circle me-2"></i>About Purchases
+                        </h6>
+                        <p class="mb-0">
+                            Record all supplier purchases here. Purchases are categorized as Cost of Revenue and tracked with supplier information for procurement analysis.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SALARIES TAB -->
+        <div class="tab-pane fade {% if active_tab == 'salaries' %}show active{% endif %}" id="salaries-panel">
+            <div class="row">
+                <div class="col-lg-8">
+                    <div class="card">
+                        <div class="card-body text-center py-5">
+                            <i class="bi bi-info-circle" style="font-size: 3rem; color: #0dcaf0;"></i>
+                            <h5 class="mt-3">Manage Salaries Separately</h5>
+                            <p class="text-muted">Salaries are managed in the Payroll module to ensure proper tracking and compliance.</p>
+                            <a href="{% url 'salaries' %}" class="btn btn-info btn-lg">
+                                <i class="bi bi-arrow-right me-2"></i>Go to Payroll
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-lg-4">
+                    <div class="card">
+                        <div class="card-header bg-info">
+                            <h5 class="mb-0 text-white">Why Separate?</h5>
+                        </div>
+                        <div class="card-body">
+                            <ul class="list-unstyled">
+                                <li class="mb-2">
+                                    <i class="bi bi-check-circle text-success me-2"></i>
+                                    <strong>Compliance:</strong> Proper wage and tax tracking
+                                </li>
+                                <li class="mb-2">
+                                    <i class="bi bi-check-circle text-success me-2"></i>
+                                    <strong>Accuracy:</strong> Employee-specific records
+                                </li>
+                                <li class="mb-2">
+                                    <i class="bi bi-check-circle text-success me-2"></i>
+                                    <strong>Control:</strong> Deductions and bonuses management
+                                </li>
+                                <li>
+                                    <i class="bi bi-check-circle text-success me-2"></i>
+                                    <strong>Reporting:</strong> Dedicated payroll reports
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .btn-group .btn {
+        border-radius: 0.375rem 0 0 0.375rem;
+        border-right: 1px solid #dee2e6;
+    }
+    
+    .btn-group .btn:not(:first-child) {
+        border-radius: 0;
+    }
+    
+    .btn-group .btn:last-child {
+        border-radius: 0 0.375rem 0.375rem 0;
+    }
+    
+    .btn-group .btn.active {
+        background-color: #0d6efd;
+        color: white;
+        border-color: #0d6efd;
+    }
+</style>
+
+{{ supplier_account_map|json_script:"supplier-account-map-data" }}
+{{ supplier_payment_terms|json_script:"supplier-payment-terms-data" }}
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const expenseTab = document.getElementById('expenses-tab');
+        const purchasesTab = document.getElementById('purchases-tab');
+        const salariesTab = document.getElementById('salaries-tab');
+        const expenseAccountSelect = document.getElementById('expense-account');
+        const expenseDescriptionInput = document.querySelector('#expenses-panel textarea[name="description"]');
+        const expensePrepaymentPeriod = document.getElementById('expense-prepayment-period');
+        const expensePrepaymentStartInput = expensePrepaymentPeriod ? expensePrepaymentPeriod.querySelector('input[name="prepayment_start_date"]') : null;
+        const expensePrepaymentEndInput = expensePrepaymentPeriod ? expensePrepaymentPeriod.querySelector('input[name="prepayment_end_date"]') : null;
+        const supplierSelect = document.getElementById('supplier-select');
+        const purchaseAccountSelect = document.getElementById('purchase-account');
+        const quantityInput = document.getElementById('purchase-quantity');
+        const unitInput = document.getElementById('purchase-unit');
+        const unitPriceInput = document.getElementById('purchase-unit-price');
+        const totalInput = document.getElementById('purchase-total');
+        const purchasePaymentSelect = document.querySelector('#purchases-panel select[name="payment_method"]');
+        const purchaseCreditTerms = document.getElementById('purchase-credit-terms');
+        const purchaseBankTerms = document.getElementById('purchase-bank-terms');
+        const purchaseMomoTerms = document.getElementById('purchase-momo-terms');
+        const purchaseBankAccountInput = document.getElementById('purchase-bank-account-number');
+        const purchaseMomoReceivingInput = document.getElementById('purchase-momo-receiving-number');
+        const purchaseRepaymentPlanInput = document.getElementById('purchase-credit-repayment-plan');
+        const purchaseCreditPaidUpfrontInput = document.getElementById('purchase-credit-paid-upfront');
+        const purchaseGracePeriodInput = document.getElementById('purchase-credit-grace-period-days');
+        const purchaseCreditPeriodInput = document.getElementById('purchase-credit-period');
+        const supplierAccountMap = JSON.parse(document.getElementById('supplier-account-map-data').textContent);
+        const supplierPaymentTerms = JSON.parse(document.getElementById('supplier-payment-terms-data').textContent);
+        
+        [expenseTab, purchasesTab, salariesTab].forEach(tab => {
+            tab.addEventListener('shown.bs.tab', function(e) {
+                this.classList.add('active');
+            });
+        });
+
+        function resetSelect(select, placeholder, disabled = true) {
+            select.innerHTML = '';
+            const option = document.createElement('option');
+            option.value = '';
+            option.textContent = placeholder;
+            select.appendChild(option);
+            select.disabled = disabled;
+        }
+
+        function updatePurchaseAccounts() {
+            const supplierId = supplierSelect.value;
+            const accounts = supplierAccountMap[supplierId] || [];
+            resetSelect(purchaseAccountSelect, '-- Select Product / Account --', !supplierId || accounts.length === 0);
+            accounts.forEach(account => {
+                const option = document.createElement('option');
+                option.value = account.id;
+                option.textContent = `${account.name} - ${account.account} (${account.unit})`;
+                option.dataset.unit = account.unit || 'unit';
+                purchaseAccountSelect.appendChild(option);
+            });
+            syncPurchaseUnit();
+        }
+
+        function syncPurchaseUnit() {
+            const selected = purchaseAccountSelect.selectedOptions[0];
+            unitInput.value = selected && selected.dataset.unit ? selected.dataset.unit : 'unit';
+        }
+
+        function togglePurchasePaymentTerms() {
+            const isCredit = purchasePaymentSelect.value === 'Credit';
+            const isBank = purchasePaymentSelect.value === 'Bank';
+            const isMomo = purchasePaymentSelect.value === 'Mobile Money';
+            purchaseCreditTerms.style.display = isCredit ? '' : 'none';
+            purchaseBankTerms.style.display = isBank ? '' : 'none';
+            purchaseMomoTerms.style.display = isMomo ? '' : 'none';
+            purchaseBankAccountInput.required = isBank;
+            purchaseMomoReceivingInput.required = isMomo;
+            purchaseRepaymentPlanInput.required = isCredit;
+            purchaseCreditPaidUpfrontInput.required = isCredit;
+            purchaseGracePeriodInput.required = isCredit;
+            purchaseCreditPeriodInput.required = isCredit;
+            if (!isBank) purchaseBankAccountInput.value = '';
+            if (!isMomo) purchaseMomoReceivingInput.value = '';
+            if (!isCredit) {
+                purchaseRepaymentPlanInput.value = '';
+                purchaseCreditPaidUpfrontInput.value = '';
+                purchaseGracePeriodInput.value = '';
+                purchaseCreditPeriodInput.value = '';
+            }
+        }
+
+        function applySupplierPaymentTerms() {
+            const terms = supplierPaymentTerms[supplierSelect.value];
+            if (!terms) return;
+            purchasePaymentSelect.value = terms.payment_method || 'Cash';
+            purchaseBankAccountInput.value = terms.bank_account_number || '';
+            purchaseMomoReceivingInput.value = terms.momo_receiving_number || '';
+            purchaseRepaymentPlanInput.value = terms.credit_repayment_plan || '';
+            purchaseCreditPaidUpfrontInput.value = terms.credit_paid_upfront || '';
+            purchaseGracePeriodInput.value = terms.credit_grace_period_days ?? '';
+            purchaseCreditPeriodInput.value = terms.credit_period || '';
+            togglePurchasePaymentTerms();
+        }
+
+        function updatePurchaseTotal() {
+            const quantity = parseFloat(quantityInput.value || '0') || 0;
+            const unitPrice = parseFloat(unitPriceInput.value || '0') || 0;
+            totalInput.value = (quantity * unitPrice).toFixed(2);
+        }
+
+        function syncExpensePrepaymentPeriod() {
+            if (!expenseAccountSelect || !expensePrepaymentPeriod) return;
+            const selected = expenseAccountSelect.selectedOptions[0];
+            const text = [
+                selected ? selected.dataset.name : '',
+                expenseDescriptionInput ? expenseDescriptionInput.value : ''
+            ].join(' ').toLowerCase();
+            const isPrepayment = text.includes('rent') || text.includes('electric') || text.includes('umeme') || text.includes('power') || text.includes('water');
+            expensePrepaymentPeriod.classList.toggle('d-none', !isPrepayment);
+            if (expensePrepaymentStartInput) expensePrepaymentStartInput.required = isPrepayment;
+            if (expensePrepaymentEndInput) expensePrepaymentEndInput.required = isPrepayment;
+            if (!isPrepayment) {
+                if (expensePrepaymentStartInput) expensePrepaymentStartInput.value = '';
+                if (expensePrepaymentEndInput) expensePrepaymentEndInput.value = '';
+            }
+        }
+
+        supplierSelect.addEventListener('change', function () {
+            updatePurchaseAccounts();
+            applySupplierPaymentTerms();
+        });
+        if (expenseAccountSelect) expenseAccountSelect.addEventListener('change', syncExpensePrepaymentPeriod);
+        if (expenseDescriptionInput) expenseDescriptionInput.addEventListener('input', syncExpensePrepaymentPeriod);
+        quantityInput.addEventListener('input', updatePurchaseTotal);
+        purchaseAccountSelect.addEventListener('change', syncPurchaseUnit);
+        unitPriceInput.addEventListener('input', updatePurchaseTotal);
+        purchasePaymentSelect.addEventListener('change', togglePurchasePaymentTerms);
+        updatePurchaseAccounts();
+        updatePurchaseTotal();
+        togglePurchasePaymentTerms();
+        syncExpensePrepaymentPeriod();
+    });
+</script>
+{% endblock %}

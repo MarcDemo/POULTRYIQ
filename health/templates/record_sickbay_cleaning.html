@@ -21,19 +21,12 @@
                             <select id="sickness_report" name="sickness_report" class="form-select" required>
                                 <option value="">-- Select sickbay case --</option>
                                 {% for report in sickbay_reports %}
-                                <option value="{{ report.pk }}">
+                                <option value="{{ report.pk }}" {% if sickbay_reports|length == 1 %}selected{% endif %}>
                                     {{ report.house_label }} - {{ report.case_label }} - {{ report.isolation_name }}
                                 </option>
                                 {% endfor %}
                             </select>
                             <div class="form-text">Only sickbay cases from your assigned houses are listed.</div>
-                        </div>
-
-                        <div class="mb-3">
-                            <label for="record_date" class="form-label">
-                                <i class="bi bi-calendar me-1"></i>Date
-                            </label>
-                            <input type="date" id="record_date" name="record_date" class="form-control" value="{{ today|date:'Y-m-d' }}" required>
                         </div>
 
                         <div class="mb-4">

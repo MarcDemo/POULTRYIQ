@@ -227,10 +227,23 @@
                         <td>{{ rec.record_date }}</td>
                         <td>
                             {% if rec.house_cleaned %}<span class="badge bg-success me-1"><i class="bi bi-check me-1"></i>Cleaned</span>{% endif %}
+                            {% if rec.house_raked %}<span class="badge bg-success me-1"><i class="bi bi-check me-1"></i>Raked</span>{% endif %}
+                            {% if rec.house_dusted %}<span class="badge bg-success me-1"><i class="bi bi-check me-1"></i>Dusted</span>{% endif %}
+                            {% if rec.nipples_washed %}<span class="badge bg-success me-1"><i class="bi bi-check me-1"></i>Nipples</span>{% endif %}
                             {% if rec.disinfection_done %}<span class="badge bg-info me-1"><i class="bi bi-shield-check me-1"></i>Disinfected</span>{% endif %}
                             {% if rec.water_changed %}<span class="badge bg-primary"><i class="bi bi-droplet me-1"></i>Water Changed</span>{% endif %}
                         </td>
-                        <td><small class="text-muted">{{ rec.notes|default:"-"|truncatechars:30 }}</small></td>
+                        <td>
+                            <small class="text-muted d-block">{{ rec.notes|default:"-"|truncatechars:30 }}</small>
+                            <small class="text-muted d-block">
+                                <i class="bi bi-camera me-1"></i>{{ rec.photos.count }} photo{{ rec.photos.count|pluralize }}
+                                {% if rec.notes_audio %}
+                                <a href="{{ rec.notes_audio.url }}" class="ms-2" target="_blank" rel="noopener">
+                                    <i class="bi bi-volume-up me-1"></i>Voice
+                                </a>
+                                {% endif %}
+                            </small>
+                        </td>
                         <td>
                             <div class="d-flex gap-2 justify-content-center">
                                 <button class="btn btn-success btn-sm fw-semibold" data-bs-toggle="modal" data-bs-target="#approveModal"
@@ -322,13 +335,16 @@
                 <input type="hidden" name="action" id="modalAction">
                 <div class="modal-header" id="modalHeader">
                     <h5 class="modal-title" id="modalTitle">Confirm Action</h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close review dialog"></button>
                 </div>
                 <div class="modal-body">
                     <p id="modalBody" class="mb-3"></p>
                     <div class="mb-3">
-                        <label class="form-label fw-semibold">Review Notes <span class="text-muted fw-normal">(optional)</span></label>
-                        <textarea name="review_notes" class="form-control" rows="3" placeholder="Add a note for the worker..."></textarea>
+                        <label for="reviewNotes" class="form-label fw-semibold">
+                            Review notes <span class="text-muted fw-normal" id="reviewNotesRequirement">(optional for approval)</span>
+                        </label>
+                        <textarea id="reviewNotes" name="review_notes" class="form-control" rows="3" placeholder="Add a note for the worker..." aria-describedby="reviewNotesHelp"></textarea>
+                        <div id="reviewNotesHelp" class="form-text">A rejection must explain what the worker should correct.</div>
                     </div>
                 </div>
                 <div class="modal-footer border-0">
@@ -357,6 +373,8 @@ document.addEventListener('DOMContentLoaded', function () {
         const title = document.getElementById('modalTitle');
         const body = document.getElementById('modalBody');
         const submitBtn = document.getElementById('modalSubmitBtn');
+        const reviewNotes = document.getElementById('reviewNotes');
+        const reviewNotesRequirement = document.getElementById('reviewNotesRequirement');
 
         if (action === 'approve') {
             header.className = 'modal-header bg-success text-white';
@@ -364,12 +382,16 @@ document.addEventListener('DOMContentLoaded', function () {
             body.innerHTML = '<i class="bi bi-check-circle-fill text-success me-2"></i>You are about to <strong>approve</strong>: ' + label;
             submitBtn.className = 'btn btn-success fw-semibold';
             submitBtn.textContent = 'Yes, Approve';
+            reviewNotes.required = false;
+            reviewNotesRequirement.textContent = '(optional for approval)';
         } else {
             header.className = 'modal-header bg-danger text-white';
             title.textContent = 'Reject Submission';
             body.innerHTML = '<i class="bi bi-x-circle-fill text-danger me-2"></i>You are about to <strong>reject</strong>: ' + label + '. The worker will see this status.';
             submitBtn.className = 'btn btn-danger fw-semibold';
             submitBtn.textContent = 'Yes, Reject';
+            reviewNotes.required = true;
+            reviewNotesRequirement.textContent = '(required for rejection)';
         }
     });
 });

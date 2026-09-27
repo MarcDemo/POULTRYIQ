@@ -3,13 +3,15 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>{% block title %}PoultryIQ - Poultry Farm Management System{% endblock %}</title>
 
+    <script src="{% static 'js/theme-init.js' %}"></script>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="{% static 'css/theme.css' %}">
     <link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
-    <link rel="stylesheet" href="{% static 'css/responsive-ui.css' %}">
+    <link rel="stylesheet" href="{% static 'css/responsive-ui.css' %}?v=mobile-shell-2">
     <link rel="stylesheet" href="{% static 'css/alerts-bell.css' %}">
     {% if request.user.is_authenticated and request.user.is_worker %}
     <link rel="stylesheet" href="{% static 'css/worker-field-ui.css' %}">
@@ -20,6 +22,7 @@
     {% block extra_css %}{% endblock %}
 </head>
 <body>
+<a class="skip-link" href="#main-content">Skip to main content</a>
 
 {% if request.user.is_authenticated and request.user.is_investor %}
 
@@ -54,15 +57,23 @@
                 </a>
             </li>
             <li class="nav-item">
-                <a class="nav-link d-flex align-items-center text-warning" href="{% url 'logout' %}" onclick="return confirm('Are you sure you want to logout?')">
+                <button type="button" class="nav-link d-flex align-items-center border-0 bg-transparent" data-theme-toggle aria-label="Theme" title="Theme">
+                    <i class="bi bi-circle-half me-1 theme-toggle-icon" data-theme-icon></i><span data-theme-label>System</span>
+                </button>
+            </li>
+            <li class="nav-item">
+                <form method="post" action="{% url 'logout' %}">
+                    {% csrf_token %}
+                    <button class="nav-link d-flex align-items-center text-warning border-0 bg-transparent" type="submit">
                     <i class="bi bi-box-arrow-right me-1"></i>Logout
-                </a>
+                    </button>
+                </form>
             </li>
         </ul>
     </div>
 </nav>
 
-<div class="container-fluid p-4 bg-light min-vh-100">
+<main class="container-fluid p-4 bg-light min-vh-100" id="main-content" tabindex="-1">
 
 {% else %}
 
@@ -104,6 +115,10 @@
     {% endif %}
 
     {% if request.user.is_authenticated %}
+    <button type="button" class="btn btn-outline-secondary btn-sm theme-toggle-btn" data-theme-toggle aria-label="Theme" title="Theme">
+        <i class="bi bi-circle-half theme-toggle-icon" data-theme-icon></i>
+        <span class="d-none d-sm-inline ms-1" data-theme-label>System</span>
+    </button>
     <a href="{% url 'alerts:inbox' %}" class="alerts-bell-link" data-alert-bell aria-label="No unread alerts">
         <span class="alerts-bell-icon"><i class="bi bi-bell-fill"></i></span>
         <span class="alerts-bell-badge">0</span>
@@ -165,9 +180,7 @@
             </li>
         </ul>
         <div class="text-center mt-4 mb-3">
-            <a href="{% url 'logout' %}" class="btn btn-light btn-sm" onclick="return confirm('Are you sure you want to logout?')">
-                <i class="bi bi-box-arrow-right me-1"></i>Logout
-            </a>
+            <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button type="submit" class="btn btn-light btn-sm"><i class="bi bi-box-arrow-right me-1"></i>Logout</button></form>
         </div>
     </div>
     {% elif request.user.is_authenticated and request.user.is_supervisor %}
@@ -181,74 +194,64 @@
                 <small>{{ request.user.get_full_name|default:request.user.username }}</small>
             </div>
         </div>
-        <ul class="nav flex-column">
+        <ul class="nav flex-column manager-nav">
             <li class="nav-item">
                 <a class="nav-link {% if request.resolver_match.url_name == 'supdash' %}active{% endif %}" href="{% url 'supdash' %}">
                     <i class="bi bi-speedometer2"></i><span>Dashboard</span>
                 </a>
             </li>
-            <li class="nav-item">
-                <a class="nav-link {% if request.resolver_match.url_name == 'supapproval' %}active{% endif %}" href="{% url 'supapproval' %}">
-                    <i class="bi bi-clipboard-check"></i><span>Approvals</span>
-                </a>
+            <li class="nav-item manager-nav-group">
+                <button class="nav-link manager-nav-trigger {% if request.resolver_match.url_name == 'supapproval' or request.resolver_match.url_name == 'worker_welfare' or request.resolver_match.url_name == 'supervisor_welfare' or request.resolver_match.url_name == 'supervisor_review_welfare' %}active{% endif %}" type="button">
+                    <i class="bi bi-clipboard-check"></i><span>Reviews</span><i class="bi bi-chevron-right manager-nav-chevron"></i>
+                </button>
+                <div class="manager-nav-submenu">
+                    <a class="manager-nav-subitem {% if request.resolver_match.url_name == 'supapproval' %}active{% endif %}" href="{% url 'supapproval' %}"><i class="bi bi-dot"></i>Approvals</a>
+                    <a class="manager-nav-subitem {% if request.resolver_match.url_name == 'supervisor_welfare' or request.resolver_match.url_name == 'supervisor_review_welfare' %}active{% endif %}" href="{% url 'supervisor_welfare' %}"><i class="bi bi-dot"></i>Team Welfare</a>
+                    <a class="manager-nav-subitem {% if request.resolver_match.url_name == 'worker_welfare' %}active{% endif %}" href="{% url 'worker_welfare' %}"><i class="bi bi-dot"></i>My Welfare</a>
+                </div>
             </li>
-            <li class="nav-item">
-                <a class="nav-link" href="{% url 'alerts:inbox' %}" {% if request.resolver_match.app_name == 'alerts' %}class="active"{% endif %}>
-                        <i class="bi bi-bell"></i> Alerts
-                    </a>
+            <li class="nav-item manager-nav-group">
+                <button class="nav-link manager-nav-trigger {% if request.resolver_match.url_name == 'sales' or request.resolver_match.url_name == 'orders' or request.resolver_match.url_name == 'orderview' or request.resolver_match.url_name == 'receivables' %}active{% endif %}" type="button">
+                    <i class="bi bi-graph-up"></i><span>Sales</span><i class="bi bi-chevron-right manager-nav-chevron"></i>
+                </button>
+                <div class="manager-nav-submenu">
+                    <a class="manager-nav-subitem {% if request.resolver_match.url_name == 'sales' %}active{% endif %}" href="{% url 'sales' %}"><i class="bi bi-dot"></i>Make a Sale</a>
+                    <a class="manager-nav-subitem {% if request.resolver_match.url_name == 'orders' or request.resolver_match.url_name == 'orderview' %}active{% endif %}" href="{% url 'orders' %}"><i class="bi bi-dot"></i>Orders</a>
+                    <a class="manager-nav-subitem {% if request.resolver_match.url_name == 'receivables' %}active{% endif %}" href="{% url 'receivables' %}"><i class="bi bi-dot"></i>Receivables</a>
+                </div>
             </li>
-            <li class="nav-item">
-                <a class="nav-link {% if request.resolver_match.url_name == 'sales' %}active{% endif %}" href="{% url 'sales' %}">
-                    <i class="bi bi-graph-up"></i><span>Make a Sale</span>
-                </a>
+            <li class="nav-item manager-nav-group">
+                <button class="nav-link manager-nav-trigger {% if request.resolver_match.url_name == 'feed_mixtures' or request.resolver_match.url_name == 'feedrec' or request.resolver_match.url_name == 'supervisor_requisitions' %}active{% endif %}" type="button">
+                    <i class="bi bi-bag-fill"></i><span>Production</span><i class="bi bi-chevron-right manager-nav-chevron"></i>
+                </button>
+                <div class="manager-nav-submenu">
+                    <a class="manager-nav-subitem {% if request.resolver_match.url_name == 'feed_mixtures' %}active{% endif %}" href="{% url 'feed_mixtures' %}"><i class="bi bi-dot"></i>Feed Mixtures</a>
+                    <a class="manager-nav-subitem {% if request.resolver_match.url_name == 'feedrec' %}active{% endif %}" href="{% url 'feedrec' %}"><i class="bi bi-dot"></i>Feed Management</a>
+                    <a class="manager-nav-subitem {% if request.resolver_match.url_name == 'supervisor_requisitions' %}active{% endif %}" href="{% url 'supervisor_requisitions' %}"><i class="bi bi-dot"></i>Inventory Requisitions</a>
+                </div>
             </li>
-            <li class="nav-item">
-                <a class="nav-link {% if request.resolver_match.url_name == 'orders' %}active{% endif %}" href="{% url 'orders' %}">
-                    <i class="bi bi-box-seam"></i><span>Orders</span>
-                </a>
+            <li class="nav-item manager-nav-group">
+                <button class="nav-link manager-nav-trigger {% if request.resolver_match.url_name == 'view_sickness' or request.resolver_match.url_name == 'report_sickness' or request.resolver_match.url_name == 'treatment' or request.resolver_match.url_name == 'vaccination' or request.resolver_match.url_name == 'vaccine_report' %}active{% endif %}" type="button">
+                    <i class="bi bi-heart-pulse"></i><span>Health</span><i class="bi bi-chevron-right manager-nav-chevron"></i>
+                </button>
+                <div class="manager-nav-submenu">
+                    <a class="manager-nav-subitem {% if request.resolver_match.url_name == 'view_sickness' %}active{% endif %}" href="{% url 'view_sickness' %}"><i class="bi bi-dot"></i>Sickness Records</a>
+                    <a class="manager-nav-subitem {% if request.resolver_match.url_name == 'report_sickness' %}active{% endif %}" href="{% url 'report_sickness' %}"><i class="bi bi-dot"></i>Record Sick Bird</a>
+                    <a class="manager-nav-subitem {% if request.resolver_match.url_name == 'treatment' %}active{% endif %}" href="{% url 'treatment' %}"><i class="bi bi-dot"></i>Treatment Plan</a>
+                    <a class="manager-nav-subitem {% if request.resolver_match.url_name == 'vaccination' or request.resolver_match.url_name == 'vaccine_report' %}active{% endif %}" href="{% url 'vaccination' %}"><i class="bi bi-dot"></i>Vaccination</a>
+                </div>
             </li>
-            <li class="nav-item">
-                <a class="nav-link {% if request.resolver_match.url_name == 'feed_mixtures' %}active{% endif %}" href="{% url 'feed_mixtures' %}">
-                    <i class="bi bi-bag-plus"></i><span>Feed Mixtures</span>
-                </a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link {% if request.resolver_match.url_name == 'feedrec' %}active{% endif %}" href="{% url 'feedrec' %}">
-                    <i class="bi bi-bag-fill"></i><span>Feed Management</span>
-                </a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link" href="{% url 'view_sickness' %}" {% if request.resolver_match.url_name == 'view_sickness' %}class="active"{% endif %}>
-                    <i class="bi bi-clipboard2-pulse"></i> Sickness Records
-                </a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link" href="{% url 'report_sickness' %}" {% if request.resolver_match.url_name == 'report_sickness' %}class="active"{% endif %}>
-                    <i class="bi bi-heart-pulse"></i> Record Sick Bird
-    </a>
-    <li class="nav-item">
- <a class="nav-link" href="{% url 'treatment' %}" {% if request.resolver_match.url_name == 'treatment' %}class="active"{% endif %}>
-        <i class="bi bi-capsule-pill"></i> Treatment Plan
-    </a>
-    </li>
-
-
-    </li>
-            <!-- <li class="nav-item">
-                <a class="nav-link {% if request.resolver_match.url_name == 'treatment' %}active{% endif %}" href="{% url 'treatment' %}">
-                    <i class="bi bi-heart-pulse"></i><span>Treatment Records</span>
-                </a>
-            </li> -->
-            <li class="nav-item">
-                <a class="nav-link {% if request.resolver_match.url_name == 'vaccination' %}active{% endif %}" href="{% url 'vaccination' %}">
-                    <i class="bi bi-capsule"></i><span>Vaccination Scheduler</span>
-                </a>
+            <li class="nav-item manager-nav-group">
+                <button class="nav-link manager-nav-trigger {% if request.resolver_match.app_name == 'alerts' %}active{% endif %}" type="button">
+                    <i class="bi bi-chat-dots"></i><span>Communication</span><i class="bi bi-chevron-right manager-nav-chevron"></i>
+                </button>
+                <div class="manager-nav-submenu">
+                    <a class="manager-nav-subitem {% if request.resolver_match.app_name == 'alerts' and request.resolver_match.url_name == 'inbox' %}active{% endif %}" href="{% url 'alerts:inbox' %}"><i class="bi bi-dot"></i>Alerts</a>
+                </div>
             </li>
         </ul>
         <div class="text-center mt-4 mb-3">
-            <a href="{% url 'logout' %}" class="btn btn-light btn-sm" onclick="return confirm('Are you sure you want to logout?')">
-                <i class="bi bi-box-arrow-right me-1"></i>Logout
-            </a>
+            <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button type="submit" class="btn btn-light btn-sm"><i class="bi bi-box-arrow-right me-1"></i>Logout</button></form>
         </div>
     </div>
     {% else %}
@@ -264,73 +267,93 @@
             </div>
         </div>
         {% endif %}
-        <ul class="nav flex-column">
+        <ul class="nav flex-column manager-nav">
             <li class="nav-item">
                 <a class="nav-link {% if request.resolver_match.url_name == 'managerdash' %}active{% endif %}" href="{% url 'managerdash' %}">
                     <i class="bi bi-speedometer2"></i><span>Dashboard</span>
                 </a>
             </li>
-            <li class="nav-item">
-                <a class="nav-link {% if request.resolver_match.url_name == 'birds' %}active{% endif %}" href="{% url 'birds' %}">
-                    <i class="bi bi-egg"></i><span>Birds</span>
-                </a>
+            <li class="nav-item manager-nav-group">
+                <button class="nav-link manager-nav-trigger {% if request.resolver_match.url_name == 'birds' or request.resolver_match.url_name == 'eggrec' or request.resolver_match.url_name == 'feedrec' or request.resolver_match.url_name == 'feed_mixtures' %}active{% endif %}" type="button">
+                    <i class="bi bi-egg"></i><span>Production</span><i class="bi bi-chevron-right manager-nav-chevron"></i>
+                </button>
+                <div class="manager-nav-submenu">
+                    <a class="manager-nav-subitem {% if request.resolver_match.url_name == 'birds' %}active{% endif %}" href="{% url 'birds' %}"><i class="bi bi-dot"></i>Birds</a>
+                    <a class="manager-nav-subitem {% if request.resolver_match.url_name == 'eggrec' %}active{% endif %}" href="{% url 'eggrec' %}"><i class="bi bi-dot"></i>Egg Collection</a>
+                    <a class="manager-nav-subitem {% if request.resolver_match.url_name == 'feedrec' %}active{% endif %}" href="{% url 'feedrec' %}"><i class="bi bi-dot"></i>Feed Records</a>
+                  
+                </div>
             </li>
-            <li class="nav-item">
-                <a class="nav-link {% if request.resolver_match.url_name == 'eggrec' %}active{% endif %}" href="{% url 'eggrec' %}">
-                    <i class="bi bi-basket"></i><span>Egg Collection</span>
-                </a>
+            <li class="nav-item manager-nav-group">
+                <button class="nav-link manager-nav-trigger {% if request.resolver_match.url_name == 'view_sickness' or request.resolver_match.url_name == 'report_sickness' or request.resolver_match.url_name == 'treatment' or request.resolver_match.url_name == 'vaccine_report' or request.resolver_match.url_name == 'vaccination' or request.resolver_match.url_name == 'mortality' or request.resolver_match.url_name == 'sickbay' %}active{% endif %}" type="button">
+                    <i class="bi bi-heart-pulse"></i><span>Health</span><i class="bi bi-chevron-right manager-nav-chevron"></i>
+                </button>
+                <div class="manager-nav-submenu">
+                    <a class="manager-nav-subitem {% if request.resolver_match.url_name == 'view_sickness' %}active{% endif %}" href="{% url 'view_sickness' %}"><i class="bi bi-dot"></i>Health Records</a>
+                    <a class="manager-nav-subitem {% if request.resolver_match.url_name == 'vaccine_report' or request.resolver_match.url_name == 'vaccination' %}active{% endif %}" href="{% url 'vaccine_report' %}"><i class="bi bi-dot"></i>Vaccination</a>
+                  
+                </div>
             </li>
-            <li class="nav-item">
-                <a class="nav-link {% if request.resolver_match.url_name == 'feedrec' %}active{% endif %}" href="{% url 'feedrec' %}">
-                    <i class="bi bi-bag-fill"></i><span>Feed Management</span>
-                </a>
+            <li class="nav-item manager-nav-group">
+                <button class="nav-link manager-nav-trigger {% if request.resolver_match.url_name == 'inventory_management' or request.resolver_match.url_name == 'store' or request.resolver_match.url_name == 'suppliers' or request.resolver_match.url_name == 'manager_requisitions' or request.resolver_match.url_name == 'manager_review_requisition' %}active{% endif %}" type="button">
+                    <i class="bi bi-boxes"></i><span>Inventory</span><i class="bi bi-chevron-right manager-nav-chevron"></i>
+                </button>
+                <div class="manager-nav-submenu">
+                    <a class="manager-nav-subitem {% if request.resolver_match.url_name == 'inventory_management' %}active{% endif %}" href="{% url 'inventory_management' %}"><i class="bi bi-dot"></i>Inventory Overview</a>
+                    <a class="manager-nav-subitem {% if request.resolver_match.url_name == 'store' %}active{% endif %}" href="{% url 'store' %}"><i class="bi bi-dot"></i>Store Issue</a>
+                    <a class="manager-nav-subitem {% if request.resolver_match.url_name == 'suppliers' %}active{% endif %}" href="{% url 'suppliers' %}"><i class="bi bi-dot"></i>Suppliers</a>
+                    <a class="manager-nav-subitem {% if request.resolver_match.url_name == 'manager_requisitions' or request.resolver_match.url_name == 'manager_review_requisition' %}active{% endif %}" href="{% url 'manager_requisitions' %}"><i class="bi bi-dot"></i>Requisitions</a>
+                </div>
             </li>
-            <li class="nav-item">
-                <a class="nav-link {% if request.resolver_match.url_name == 'suppliers' %}active{% endif %}" href="{% url 'suppliers' %}">
-                    <i class="bi bi-shop"></i><span>Suppliers Records</span>
-                </a>
+            <li class="nav-item manager-nav-group">
+                <button class="nav-link manager-nav-trigger {% if request.resolver_match.url_name == 'expenses' or request.resolver_match.url_name == 'expense_form' or request.resolver_match.url_name == 'sales' or request.resolver_match.url_name == 'customers' or request.resolver_match.url_name == 'customer_profile' or request.resolver_match.url_name == 'orders' or request.resolver_match.url_name == 'orderview' or request.resolver_match.url_name == 'receivables' or request.resolver_match.url_name == 'reports' or request.resolver_match.url_name == 'chart_of_accounts' or request.resolver_match.url_name == 'balance_sheet' or request.resolver_match.url_name == 'trial_balance' or request.resolver_match.url_name == 'cash_flow' or request.resolver_match.url_name == 'journal_entries' or request.resolver_match.url_name == 'budgets' or request.resolver_match.url_name == 'fixed_assets' or request.resolver_match.url_name == 'depreciation_run' or request.resolver_match.url_name == 'asset_disposal' or request.resolver_match.url_name == 'asset_revaluation' %}active{% endif %}" type="button">
+                    <i class="bi bi-cash-coin"></i><span>Accounting</span><i class="bi bi-chevron-right manager-nav-chevron"></i>
+                </button> 
+                <div class="manager-nav-submenu">
+                    <a class="manager-nav-subitem {% if request.resolver_match.url_name == 'expenses' or request.resolver_match.url_name == 'expense_form' %}active{% endif %}" href="{% url 'expense_form' %}"><i class="bi bi-dot"></i>Expenses</a>
+                    <a class="manager-nav-subitem {% if request.resolver_match.url_name == 'sales' %}active{% endif %}" href="{% url 'sales' %}"><i class="bi bi-dot"></i>Sales</a>
+                    <a class="manager-nav-subitem {% if request.resolver_match.url_name == 'customers' or request.resolver_match.url_name == 'customer_profile' %}active{% endif %}" href="{% url 'customers' %}"><i class="bi bi-dot"></i>Customers</a>
+                    <a class="manager-nav-subitem {% if request.resolver_match.url_name == 'orders' or request.resolver_match.url_name == 'orderview' %}active{% endif %}" href="{% url 'orders' %}"><i class="bi bi-dot"></i>Orders</a>
+                    <a class="manager-nav-subitem {% if request.resolver_match.url_name == 'receivables' %}active{% endif %}" href="{% url 'receivables' %}"><i class="bi bi-dot"></i>Receivables</a>
+                    <a class="manager-nav-subitem {% if request.resolver_match.url_name == 'reports' %}active{% endif %}" href="{% url 'reports' %}"><i class="bi bi-dot"></i>Reports</a>
+                    <a class="manager-nav-subitem {% if request.resolver_match.url_name == 'balance_sheet' %}active{% endif %}" href="{% url 'balance_sheet' %}"><i class="bi bi-dot"></i>Balance Sheet</a>
+                    <a class="manager-nav-subitem {% if request.resolver_match.url_name == 'trial_balance' %}active{% endif %}" href="{% url 'trial_balance' %}"><i class="bi bi-dot"></i>Trial Balance</a>
+                    <a class="manager-nav-subitem {% if request.resolver_match.url_name == 'cash_flow' %}active{% endif %}" href="{% url 'cash_flow' %}"><i class="bi bi-dot"></i>Cash Flow</a>
+                    <a class="manager-nav-subitem {% if request.resolver_match.url_name == 'journal_entries' %}active{% endif %}" href="{% url 'journal_entries' %}"><i class="bi bi-dot"></i>Journal Entries</a>
+                    <a class="manager-nav-subitem {% if request.resolver_match.url_name == 'budgets' %}active{% endif %}" href="{% url 'budgets' %}"><i class="bi bi-dot"></i>Budgets</a>
+                    <a class="manager-nav-subitem {% if request.resolver_match.url_name == 'fixed_assets' or request.resolver_match.url_name == 'depreciation_run' or request.resolver_match.url_name == 'asset_disposal' or request.resolver_match.url_name == 'asset_revaluation' %}active{% endif %}" href="{% url 'fixed_assets' %}"><i class="bi bi-dot"></i>Fixed Assets</a>
+                </div>
             </li>
-            <li class="nav-item">
-                <a class="nav-link {% if request.resolver_match.url_name == 'view_sickness' %}active{% endif %}" href="{% url 'view_sickness' %}">
-                    <i class="bi bi-heart-pulse"></i><span>Health Records</span>
-                </a>
+            <li class="nav-item manager-nav-group">
+                <button class="nav-link manager-nav-trigger {% if request.resolver_match.url_name == 'salaries' or request.resolver_match.url_name == 'hourly_wages' or request.resolver_match.url_name == 'manager_welfare' or request.resolver_match.url_name == 'manager_review_welfare' or request.resolver_match.url_name == 'advance_register' or request.resolver_match.url_name == 'disburse_salary_advance' %}active{% endif %}" type="button">
+                    <i class="bi bi-wallet2"></i><span>Payroll</span><i class="bi bi-chevron-right manager-nav-chevron"></i>
+                </button>
+                <div class="manager-nav-submenu">
+                    <a class="manager-nav-subitem {% if request.resolver_match.url_name == 'salaries' %}active{% endif %}" href="{% url 'salaries' %}"><i class="bi bi-dot"></i>Salaries</a>
+                    <a class="manager-nav-subitem {% if request.resolver_match.url_name == 'hourly_wages' %}active{% endif %}" href="{% url 'hourly_wages' %}"><i class="bi bi-dot"></i>Hourly Wages</a>
+                    <a class="manager-nav-subitem {% if request.resolver_match.url_name == 'manager_welfare' or request.resolver_match.url_name == 'manager_review_welfare' %}active{% endif %}" href="{% url 'manager_welfare' %}"><i class="bi bi-dot"></i>Welfare Requests</a>
+                    <a class="manager-nav-subitem {% if request.resolver_match.url_name == 'advance_register' or request.resolver_match.url_name == 'disburse_salary_advance' %}active{% endif %}" href="{% url 'advance_register' %}"><i class="bi bi-dot"></i>Salary Advances</a>
+                </div>
+            </li>
+            <li class="nav-item manager-nav-group">
+                <button class="nav-link manager-nav-trigger {% if request.resolver_match.url_name == 'staff_profiles' or request.resolver_match.url_name == 'staff_profile_detail' or request.resolver_match.url_name == 'edit_staff_profile' or request.resolver_match.url_name == 'upload_employee_document' or request.resolver_match.url_name == 'record_unpaid_absence' or request.resolver_match.url_name == 'renew_staff_contract' or request.resolver_match.url_name == 'manage_users' or request.resolver_match.url_name == 'add_user' or request.resolver_match.url_name == 'edit_user' %}active{% endif %}" type="button">
+                    <i class="bi bi-people-fill"></i><span>People</span><i class="bi bi-chevron-right manager-nav-chevron"></i>
+                </button>
+                <div class="manager-nav-submenu">
+                    <a class="manager-nav-subitem {% if request.resolver_match.url_name == 'staff_profiles' or request.resolver_match.url_name == 'staff_profile_detail' or request.resolver_match.url_name == 'edit_staff_profile' or request.resolver_match.url_name == 'upload_employee_document' or request.resolver_match.url_name == 'record_unpaid_absence' or request.resolver_match.url_name == 'renew_staff_contract' %}active{% endif %}" href="{% url 'staff_profiles' %}"><i class="bi bi-dot"></i>Staff Profiles</a>
+                    <a class="manager-nav-subitem {% if request.resolver_match.url_name == 'add_user' %}active{% endif %}" href="{% url 'add_user' %}"><i class="bi bi-dot"></i>Add User</a>
 
+                </div>
             </li>
-            <li class="nav-item">
-                <a class="nav-link {% if request.resolver_match.url_name == 'vaccine_report' %}active{% endif %}" href="{% url 'vaccine_report' %}">
-                    <i class="bi bi-capsule"></i><span>Vaccination</span>
-                </a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link {% if request.resolver_match.url_name == 'inventory_management' %}active{% endif %}" href="{% url 'inventory_management' %}">
-                    <i class="bi bi-boxes"></i><span>Inventory</span>
-                </a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link {% if request.resolver_match.url_name == 'store' %}active{% endif %}" href="{% url 'store' %}">
-                    <i class="bi bi-box-arrow-up"></i><span>Store</span>
-                </a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link {% if request.resolver_match.url_name == 'reports' %}active{% endif %}" href="{% url 'reports' %}">
-                    <i class="bi bi-file-earmark-pdf"></i><span>Reports</span>
-                </a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link {% if request.resolver_match.url_name == 'expense_form' or request.resolver_match.url_name == 'expenses' %}active{% endif %}" href="{% url 'expenses' %}">
-                    <i class="bi bi-cash-coin"></i><span>Expenses</span>
-                </a>
-            </li>
-
-            <li class="nav-item">
-                <a class="nav-link {% if request.resolver_match.url_name == 'salaries' %}active{% endif %}" href="{% url 'salaries' %}">
-                    <i class="bi bi-currency-dollar"></i><span>Salaries</span>
-                </a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link {% if request.resolver_match.url_name == 'manage_users' %}active{% endif %}" href="{% url 'manage_users' %}">
-                    <i class="bi bi-people-fill"></i><span>Manage Users</span>
-                </a>
+            <li class="nav-item manager-nav-group">
+                <button class="nav-link manager-nav-trigger {% if request.resolver_match.app_name == 'alerts' %}active{% endif %}" type="button">
+                    <i class="bi bi-chat-dots"></i><span>Communication</span><i class="bi bi-chevron-right manager-nav-chevron"></i>
+                </button>
+                <div class="manager-nav-submenu">
+                    <a class="manager-nav-subitem {% if request.resolver_match.app_name == 'alerts' and request.resolver_match.url_name == 'inbox' %}active{% endif %}" href="{% url 'alerts:inbox' %}"><i class="bi bi-dot"></i>Inbox</a>
+                    <a class="manager-nav-subitem {% if request.resolver_match.app_name == 'alerts' and request.resolver_match.url_name == 'send_message' %}active{% endif %}" href="{% url 'alerts:send_message' %}"><i class="bi bi-dot"></i>Send Message</a>
+                    <a class="manager-nav-subitem {% if request.resolver_match.app_name == 'alerts' and request.resolver_match.url_name == 'send_bulk_message' %}active{% endif %}" href="{% url 'alerts:send_bulk_message' %}"><i class="bi bi-dot"></i>Bulk Message</a>
+                </div>
             </li>
             <li class="nav-item">
                 <a class="nav-link {% if request.resolver_match.url_name == 'end_of_day' %}active{% endif %}" href="{% url 'end_of_day' %}">
@@ -339,15 +362,17 @@
             </li>
         </ul>
         <div class="text-center mt-4 mb-3">
-            <a href="{% url 'logout' %}" class="btn btn-light btn-sm" onclick="return confirm('Are you sure you want to logout?')">
-                <i class="bi bi-box-arrow-right me-1"></i>Logout
-            </a>
+            <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button type="submit" class="btn btn-light btn-sm"><i class="bi bi-box-arrow-right me-1"></i>Logout</button></form>
         </div>
     </div>
     {% endif %}
 
     {% if request.user.is_authenticated %}
     <div class="desktop-notif-bar">
+        <button type="button" class="alerts-sound-toggle" data-theme-toggle aria-label="Theme" title="Theme">
+            <i class="bi bi-circle-half theme-toggle-icon" data-theme-icon></i>
+            <span class="d-none" data-theme-label>System</span>
+        </button>
         <button type="button" class="alerts-sound-toggle" data-alert-sound-toggle aria-label="Mute alert sound">
             <i class="bi bi-volume-up-fill"></i>
         </button>
@@ -358,7 +383,7 @@
     </div>
     {% endif %}
 
-    <div class="main-content">
+    <main class="main-content" id="main-content" tabindex="-1">
 {% endif %}
 
 {% if messages %}
@@ -375,11 +400,35 @@
 {% endblock %}
 
 {% if request.user.is_authenticated and request.user.is_investor %}
-</div>
+</main>
 {% else %}
-    </div>
+    </main>
 </div>
 
+{% endif %}
+
+{% if request.user.is_authenticated and not request.user.is_investor %}
+<nav class="mobile-bottom-nav" aria-label="Role quick navigation">
+    {% if request.user.is_worker %}
+        <a class="mobile-nav-item {% if request.resolver_match.url_name == 'workersdash' %}active{% endif %}" href="{% url 'workersdash' %}"><i class="bi bi-house-door"></i><span>Home</span></a>
+        <a class="mobile-nav-item {% if request.resolver_match.url_name == 'record_egg' %}active{% endif %}" href="{% url 'record_egg' %}"><i class="bi bi-basket"></i><span>Eggs</span></a>
+        <a class="mobile-nav-item {% if request.resolver_match.url_name == 'record_feed' %}active{% endif %}" href="{% url 'record_feed' %}"><i class="bi bi-bag-fill"></i><span>Feed</span></a>
+        <a class="mobile-nav-item {% if request.resolver_match.url_name == 'record_cleaning' %}active{% endif %}" href="{% url 'record_cleaning' %}"><i class="bi bi-broom"></i><span>Clean</span></a>
+        <button class="mobile-nav-item" type="button" data-sidebar-toggle="workerSidebar" aria-controls="workerSidebar" aria-expanded="false"><i class="bi bi-grid"></i><span>More</span></button>
+    {% elif request.user.is_supervisor %}
+        <a class="mobile-nav-item {% if request.resolver_match.url_name == 'supdash' %}active{% endif %}" href="{% url 'supdash' %}"><i class="bi bi-house-door"></i><span>Home</span></a>
+        <a class="mobile-nav-item {% if request.resolver_match.url_name == 'supapproval' %}active{% endif %}" href="{% url 'supapproval' %}"><i class="bi bi-clipboard-check"></i><span>Review</span></a>
+        <a class="mobile-nav-item {% if request.resolver_match.url_name == 'feed_mixtures' %}active{% endif %}" href="{% url 'feed_mixtures' %}"><i class="bi bi-bag-plus"></i><span>Feed mix</span></a>
+        <a class="mobile-nav-item {% if request.resolver_match.url_name == 'view_sickness' %}active{% endif %}" href="{% url 'view_sickness' %}"><i class="bi bi-heart-pulse"></i><span>Health</span></a>
+        <button class="mobile-nav-item" type="button" data-sidebar-toggle="supervisorSidebar" aria-controls="supervisorSidebar" aria-expanded="false"><i class="bi bi-grid"></i><span>More</span></button>
+    {% else %}
+        <a class="mobile-nav-item {% if request.resolver_match.url_name == 'managerdash' %}active{% endif %}" href="{% url 'managerdash' %}"><i class="bi bi-house-door"></i><span>Home</span></a>
+        <a class="mobile-nav-item {% if request.resolver_match.url_name == 'supapproval' %}active{% endif %}" href="{% url 'supapproval' %}"><i class="bi bi-clipboard-check"></i><span>Review</span></a>
+        <a class="mobile-nav-item {% if request.resolver_match.url_name == 'orders' %}active{% endif %}" href="{% url 'orders' %}"><i class="bi bi-truck"></i><span>Orders</span></a>
+        <a class="mobile-nav-item {% if request.resolver_match.url_name == 'inventory_management' %}active{% endif %}" href="{% url 'inventory_management' %}"><i class="bi bi-boxes"></i><span>Stock</span></a>
+        <button class="mobile-nav-item" type="button" data-sidebar-toggle="managerSidebar" aria-controls="managerSidebar" aria-expanded="false"><i class="bi bi-grid"></i><span>More</span></button>
+    {% endif %}
+</nav>
 {% endif %}
 
 {% if request.user.is_authenticated %}
@@ -405,6 +454,7 @@
 {% endif %}
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="{% static 'js/theme-toggle.js' %}"></script>
 {% if not request.user.is_authenticated or not request.user.is_investor %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="{% static 'js/dashboard.js' %}"></script>

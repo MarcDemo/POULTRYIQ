@@ -29,17 +29,9 @@
                             <select id="batch" name="batch" class="form-select" required>
                                 <option value="">-- Choose house --</option>
                                 {% for batch in batches %}
-                                <option value="{{ batch.pk }}" data-house="{{ batch.house_id }}">{{ batch.house.name|default:batch.house.house_code }} - {{ batch.batch_code }}</option>
+                                <option value="{{ batch.pk }}" data-house="{{ batch.house_id }}" {% if batches|length == 1 %}selected{% endif %}>{{ batch.house.name|default:batch.house.house_code }} - {{ batch.batch_code }}</option>
                                 {% endfor %}
                             </select>
-                        </div>
-
-                        <div class="mb-3">
-                            <label for="record_date" class="form-label">
-                                <i class="bi bi-calendar me-1"></i>Today
-                                <span class="luganda">Leero</span>
-                            </label>
-                            <input type="date" id="record_date" name="record_date" class="form-control" value="{{ today|date:'Y-m-d' }}" required>
                         </div>
 
                         <div class="mb-3">
@@ -50,7 +42,9 @@
                             <select id="feed_mixture" name="feed_mixture" class="form-select" required>
                                 <option value="">-- Choose supervisor mixture --</option>
                                 {% for mixture in feed_mixtures %}
-                                <option value="{{ mixture.pk }}" data-houses="{% for allocation in mixture.allocations.all %}{{ allocation.house_id }} {% endfor %}">
+                                <option value="{{ mixture.pk }}"
+                                        data-batches="{% for allocation in mixture.allocations.all %}{% if allocation.batch_id %}{{ allocation.batch_id }} {% endif %}{% endfor %}"
+                                        data-legacy-houses="{% for allocation in mixture.allocations.all %}{% if not allocation.batch_id %}{{ allocation.house_id }} {% endif %}{% endfor %}">
                                     {{ mixture.name }} - mixed by {{ mixture.mixed_by.get_full_name|default:mixture.mixed_by.username }}
                                 </option>
                                 {% endfor %}
@@ -64,15 +58,6 @@
                                 <span class="luganda">Kiro eziweereddwa</span>
                             </label>
                             <input type="number" id="quantity" step="0.1" name="quantity" class="form-control" placeholder="0.0" required min="0" inputmode="decimal">
-                        </div>
-
-                        <div class="mb-3">
-                            <label for="time_given" class="form-label">
-                                <i class="bi bi-clock me-1"></i>Time
-                                <span class="luganda">Essaawa</span>
-                            </label>
-                            <input type="time" id="time_given" name="time_given" class="form-control">
-                            <small class="form-text text-muted">You can leave this empty. / Osobola okukireka nga kikalu.</small>
                         </div>
 
                         <div class="mb-3">
@@ -161,14 +146,18 @@ const mixtureSelect = document.getElementById('feed_mixture');
 function filterMixturesForHouse() {
     if (!batchSelect || !mixtureSelect) return;
 
+    const selectedBatch = batchSelect.value || '';
     const selectedHouse = batchSelect.selectedOptions[0]?.dataset.house || '';
     Array.from(mixtureSelect.options).forEach((option) => {
         if (!option.value) {
             option.hidden = false;
             return;
         }
-        const houses = option.dataset.houses || '';
-        option.hidden = selectedHouse ? !houses.split(/\s+/).includes(selectedHouse) : false;
+        const assignedBatches = (option.dataset.batches || '').split(/\s+/);
+        const legacyHouses = (option.dataset.legacyHouses || '').split(/\s+/);
+        option.hidden = selectedBatch
+            ? !assignedBatches.includes(selectedBatch) && !legacyHouses.includes(selectedHouse)
+            : false;
     });
 
     if (mixtureSelect.selectedOptions[0]?.hidden) {

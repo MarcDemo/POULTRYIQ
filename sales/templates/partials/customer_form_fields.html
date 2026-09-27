@@ -1,0 +1,85 @@
+<div class="row g-3">
+    <div class="col-12">
+        <label class="form-label">Customer Name</label>
+        <input class="form-control" name="name" value="{{ form_data.name }}" required>
+    </div>
+    <div class="col-md-6">
+        <label class="form-label">Contact Person</label>
+        <input class="form-control" name="contact_person" value="{{ form_data.contact_person }}">
+    </div>
+    <div class="col-md-6">
+        <label class="form-label">Phone</label>
+        <input class="form-control" name="phone_number" value="{{ form_data.phone_number }}">
+    </div>
+    <div class="col-md-6">
+        <label class="form-label">Email</label>
+        <input class="form-control" type="email" name="email" value="{{ form_data.email }}">
+    </div>
+    <div class="col-md-6">
+        <label class="form-label">Preferred Payment</label>
+        <select class="form-select js-customer-payment-method" name="preferred_payment_method" required>
+            {% for value, label in payment_method_choices %}
+            <option value="{{ value }}" {% if form_data.preferred_payment_method == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="col-md-6 js-customer-momo">
+        <label class="form-label">MoMo Receiving Number</label>
+        <input class="form-control" name="momo_receiving_number" value="{{ form_data.momo_receiving_number }}">
+    </div>
+    <div class="col-md-6 js-customer-bank">
+        <label class="form-label">Bank Account Number</label>
+        <input class="form-control" name="bank_account_number" value="{{ form_data.bank_account_number }}">
+    </div>
+    <div class="col-12 js-customer-credit">
+        <label class="form-label">Credit Repayment Plan</label>
+        <textarea class="form-control" name="credit_repayment_plan" rows="2">{{ form_data.credit_repayment_plan }}</textarea>
+    </div>
+    <div class="col-md-6">
+        <label class="form-label">Credit Limit <small class="text-muted">(0 = no configured ceiling)</small></label>
+        <input class="form-control" type="number" min="0" step="0.01" name="credit_limit" value="{{ form_data.credit_limit }}">
+    </div>
+    <div class="col-md-6">
+        <label class="form-label">Credit Days</label>
+        <input class="form-control" type="number" min="0" name="credit_days" value="{{ form_data.credit_days }}">
+    </div>
+    <div class="col-12">
+        <label class="form-label">Address</label>
+        <input class="form-control" name="address" value="{{ form_data.address }}">
+    </div>
+    <div class="col-md-6">
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox" id="allow_credit_{{ customer.pk|default:'new' }}" name="allow_credit" {% if form_data.allow_credit %}checked{% endif %}>
+            <label class="form-check-label" for="allow_credit_{{ customer.pk|default:'new' }}">Allow credit</label>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox" id="pay_wht_{{ customer.pk|default:'new' }}" name="pay_wht" {% if form_data.pay_wht %}checked{% endif %}>
+            <label class="form-check-label" for="pay_wht_{{ customer.pk|default:'new' }}">Pay WHT</label>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox" id="is_active_{{ customer.pk|default:'new' }}" name="is_active" {% if form_data.is_active %}checked{% endif %}>
+            <label class="form-check-label" for="is_active_{{ customer.pk|default:'new' }}">Active customer</label>
+        </div>
+    </div>
+</div>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    document.querySelectorAll('.js-customer-payment-method').forEach(function (select) {
+        const form = select.closest('form');
+        const momo = form.querySelector('.js-customer-momo');
+        const bank = form.querySelector('.js-customer-bank');
+        const credit = form.querySelector('.js-customer-credit');
+        function syncFields() {
+            if (momo) momo.style.display = select.value === 'MOMO' ? '' : 'none';
+            if (bank) bank.style.display = select.value === 'BANK' ? '' : 'none';
+            if (credit) credit.style.display = select.value === 'CREDIT' ? '' : 'none';
+        }
+        select.addEventListener('change', syncFields);
+        syncFields();
+    });
+});
+</script>

@@ -9,7 +9,7 @@
 body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     background: #f8f9fa;
-    min-height: 100vh;
+    min-height: 100dvh;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -20,7 +20,7 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    min-height: 100vh;
+    min-height: 100dvh;
     padding: 1rem;
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
 }
@@ -50,6 +50,16 @@ body {
 
 .branding-content {
     text-align: center;
+}
+
+.login-hen-image {
+    display: block;
+    width: min(100%, 16rem);
+    height: auto;
+    max-height: 14rem;
+    margin: -0.75rem auto 0.75rem;
+    object-fit: contain;
+    filter: drop-shadow(0 1rem 1.15rem rgba(42, 22, 70, 0.28));
 }
 
 .logo-circle {
@@ -414,13 +424,96 @@ body {
 
 /* Mobile Responsive */
 @media (max-width: 768px) {
+    body {
+        display: block;
+        background: #f4f6fb;
+    }
+
+    .auth-container {
+        align-items: flex-start;
+        min-height: 100dvh;
+        padding: 0;
+        background: #f4f6fb;
+    }
+
     .auth-wrapper {
         grid-template-columns: 1fr;
-        min-height: auto;
+        width: 100%;
+        min-height: 100dvh;
+        border-radius: 0;
+        box-shadow: none;
+        overflow: visible;
     }
 
     .auth-branding {
+        display: flex;
+        min-height: 230px;
+        padding: max(1rem, env(safe-area-inset-top)) 1.25rem 1rem;
+        align-items: flex-end;
+        border-radius: 0 0 28px 28px;
+        overflow: hidden;
+        position: relative;
+        isolation: isolate;
+    }
+
+    .auth-branding::after {
+        content: '';
+        position: absolute;
+        inset: auto -15% -50% 30%;
+        height: 14rem;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.1);
+        z-index: -1;
+    }
+
+    .branding-content {
+        width: 100%;
+        display: grid;
+        grid-template-columns: minmax(120px, 44%) 1fr;
+        grid-template-areas:
+            "hen title"
+            "hen subtitle";
+        align-items: end;
+        column-gap: 0.75rem;
+        text-align: left;
+    }
+
+    .login-hen-image {
+        grid-area: hen;
+        width: min(45vw, 180px);
+        max-height: 190px;
+        margin: 0 0 -1.25rem -0.4rem;
+        align-self: end;
+        filter: drop-shadow(0 0.8rem 0.8rem rgba(40, 22, 67, 0.25));
+    }
+
+    .logo-circle,
+    .features {
         display: none;
+    }
+
+    .branding-content h1 {
+        grid-area: title;
+        align-self: end;
+        margin: 0;
+        font-size: clamp(1.75rem, 8vw, 2.25rem);
+        line-height: 1;
+        letter-spacing: -0.04em;
+    }
+
+    .branding-content p {
+        grid-area: subtitle;
+        align-self: start;
+        margin: 0.5rem 0 1.25rem;
+        max-width: 17rem;
+        font-size: 0.86rem;
+        line-height: 1.35;
+        opacity: 0.9;
+    }
+
+    .auth-form-wrapper {
+        align-items: flex-start;
+        padding: 1.5rem max(1.25rem, env(safe-area-inset-left)) calc(1.5rem + env(safe-area-inset-bottom));
     }
 
     .auth-form-container {
@@ -428,7 +521,8 @@ body {
     }
 
     .auth-title {
-        font-size: 1.5rem;
+        font-size: 1.55rem;
+        letter-spacing: -0.025em;
     }
 
     .row {
@@ -446,7 +540,20 @@ body {
     }
 
     .btn {
-        font-size: 0.95rem;
+        min-height: 50px;
+        font-size: 1rem;
+    }
+
+    .form-control,
+    .form-select {
+        min-height: 52px;
+        font-size: 16px;
+    }
+
+    .btn-toggle-password {
+        min-width: 48px;
+        min-height: 48px;
+        right: 0.15rem;
     }
 
     .password-requirements {
@@ -456,19 +563,15 @@ body {
 
 @media (max-width: 480px) {
     .auth-container {
-        padding: 0.5rem;
+        padding: 0;
     }
 
     .auth-form-wrapper {
-        padding: 1.5rem 1rem;
-    }
-
-    .auth-title {
-        font-size: 1.25rem;
+        padding: 1.35rem 1rem calc(1.5rem + env(safe-area-inset-bottom));
     }
 
     .auth-subtitle {
-        font-size: 0.85rem;
+        font-size: 0.9rem;
     }
 
     .form-control,

@@ -1,0 +1,143 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container-fluid">
+    <div class="page-header-row mb-4">
+        <div>
+            <h2 class="mb-1"><i class="bi bi-pie-chart me-2"></i>Budgets</h2>
+            <small class="text-muted">Set monthly account budgets, approve a version, and compare it with posted actuals.</small>
+        </div>
+        <a href="{% url 'journal_entries' %}" class="btn btn-outline-primary"><i class="bi bi-journal-text me-2"></i>Journal Entries</a>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-lg-4">
+            <div class="card mb-4">
+                <div class="card-header">Create a budget version</div>
+                <div class="card-body">
+                    <form method="post" class="row g-3">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="create_budget">
+                        <div class="col-md-7">
+                            <label class="form-label">Fiscal year</label>
+                            <input name="fiscal_year" type="number" min="2000" max="9999" class="form-control" value="{{ current_year }}" required>
+                        </div>
+                        <div class="col-md-5">
+                            <label class="form-label">Version</label>
+                            <input name="version" type="number" min="1" class="form-control" placeholder="Auto">
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Name <span class="text-muted">(optional)</span></label>
+                            <input name="name" maxlength="150" class="form-control" placeholder="e.g. FY 2027 Operating Budget">
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Notes <span class="text-muted">(optional)</span></label>
+                            <textarea name="notes" rows="2" class="form-control"></textarea>
+                        </div>
+                        <div class="col-12"><button class="btn btn-primary w-100">Create draft budget</button></div>
+                    </form>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">Budget versions</div>
+                <div class="list-group list-group-flush">
+                    {% for budget in budgets %}
+                    <a href="?budget={{ budget.pk }}" class="list-group-item list-group-item-action {% if selected_budget and selected_budget.pk == budget.pk %}active{% endif %}">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <span>{{ budget.name }}</span>
+                            <span class="badge {% if budget.status == 'DRAFT' %}text-bg-secondary{% elif budget.status == 'APPROVED' %}text-bg-success{% else %}text-bg-dark{% endif %}">{{ budget.get_status_display }}</span>
+                        </div>
+                        <small class="{% if selected_budget and selected_budget.pk == budget.pk %}text-white-50{% else %}text-muted{% endif %}">FY {{ budget.fiscal_year }} · version {{ budget.version }}</small>
+                    </a>
+                    {% empty %}
+                    <div class="list-group-item text-muted">No budget versions yet.</div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-8">
+            {% if selected_budget %}
+            <div class="card mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <div>
+                        <strong>{{ selected_budget.name }}</strong>
+                        <span class="text-muted ms-2">FY {{ selected_budget.fiscal_year }} · version {{ selected_budget.version }}</span>
+                    </div>
+                    <div class="d-flex gap-2 align-items-center">
+                        <span class="badge {% if selected_budget.status == 'DRAFT' %}text-bg-secondary{% elif selected_budget.status == 'APPROVED' %}text-bg-success{% else %}text-bg-dark{% endif %}">{{ selected_budget.get_status_display }}</span>
+                        {% if selected_budget.status == 'DRAFT' %}
+                        <form method="post">{% csrf_token %}<input type="hidden" name="action" value="approve"><input type="hidden" name="budget_id" value="{{ selected_budget.pk }}"><button class="btn btn-sm btn-success">Approve</button></form>
+                        {% elif selected_budget.status == 'APPROVED' %}
+                        <form method="post">{% csrf_token %}<input type="hidden" name="action" value="lock"><input type="hidden" name="budget_id" value="{{ selected_budget.pk }}"><button class="btn btn-sm btn-dark">Lock version</button></form>
+                        {% endif %}
+                    </div>
+                </div>
+                {% if selected_budget.notes %}<div class="card-body border-bottom text-muted">{{ selected_budget.notes }}</div>{% endif %}
+                <div class="card-body">
+                    {% if selected_budget.is_editable %}
+                    <form method="post" class="row g-3 align-items-end">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="save_line">
+                        <input type="hidden" name="budget_id" value="{{ selected_budget.pk }}">
+                        <div class="col-md-5">
+                            <label class="form-label">Ledger account</label>
+                            <select name="account_id" class="form-select" required>
+                                <option value="">-- Select account --</option>
+                                {% for account in accounts %}<option value="{{ account.pk }}">{{ account.code }} — {{ account.account_name }}</option>{% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Month</label>
+                            <select name="fiscal_period_id" class="form-select" required>
+                                {% for period in periods %}<option value="{{ period.pk }}">{{ period.label }}</option>{% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Budget (UGX)</label>
+                            <input name="amount" type="number" min="0" step="0.01" class="form-control" required>
+                        </div>
+                        <div class="col-md-2"><button class="btn btn-primary w-100">Save line</button></div>
+                        <div class="col-12"><input name="notes" maxlength="255" class="form-control" placeholder="Optional line note"></div>
+                    </form>
+                    {% else %}
+                    <p class="mb-0 text-muted">This version is {{ selected_budget.get_status_display|lower }} and cannot be edited. Create a new version to revise it.</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="row g-3 mb-4">
+                <div class="col-md-4"><div class="card"><div class="card-body"><small class="text-muted">Budget total</small><div class="fs-5 fw-semibold">UGX {{ variance.budget_total|floatformat:2 }}</div></div></div></div>
+                <div class="col-md-4"><div class="card"><div class="card-body"><small class="text-muted">Posted actuals</small><div class="fs-5 fw-semibold">UGX {{ variance.actual_total|floatformat:2 }}</div></div></div></div>
+                <div class="col-md-4"><div class="card"><div class="card-body"><small class="text-muted">Variance</small><div class="fs-5 fw-semibold {% if variance.variance_total > 0 %}text-danger{% elif variance.variance_total < 0 %}text-success{% endif %}">UGX {{ variance.variance_total|floatformat:2 }}</div></div></div></div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">Actual vs budget</div>
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light"><tr><th>Month</th><th>Account</th><th>Note</th><th class="text-end">Budget</th><th class="text-end">Actual</th><th class="text-end">Variance</th></tr></thead>
+                        <tbody>
+                            {% for row in variance.rows %}
+                            <tr>
+                                <td>{{ row.fiscal_period.label }}</td>
+                                <td><small class="text-muted">{{ row.account.code }}</small><br>{{ row.account.account_name }}</td>
+                                <td>{{ row.line.notes|default:'-' }}</td>
+                                <td class="text-end">{{ row.budget_amount|floatformat:2 }}</td>
+                                <td class="text-end">{{ row.actual_amount|floatformat:2 }}</td>
+                                <td class="text-end {% if row.variance > 0 %}text-danger{% elif row.variance < 0 %}text-success{% endif %}">{{ row.variance|floatformat:2 }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="6" class="text-center text-muted py-4">Add monthly account lines to begin tracking this budget.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            {% else %}
+            <div class="card"><div class="card-body text-center text-muted py-5">Create a draft budget to set monthly account limits and compare actuals.</div></div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
