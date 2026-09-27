@@ -1,0 +1,4 @@
+Django==5.2.11
+PyMySQL==1.2.0
+Pillow==12.2.0
+whitenoise==6.12.0

@@ -1,7 +1,7 @@
 // Egg Production Chart
 const eggCtx = document.getElementById('eggChart');
 
-new Chart(eggCtx, {
+if (window.Chart && eggCtx) new Chart(eggCtx, {
     type: 'line',
     data: {
         labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
@@ -19,7 +19,7 @@ new Chart(eggCtx, {
 // Feed Consumption Chart
 const feedCtx = document.getElementById('feedChart');
 
-new Chart(feedCtx, {
+if (window.Chart && feedCtx) new Chart(feedCtx, {
     type: 'bar',
     data: {
         labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
@@ -35,7 +35,7 @@ new Chart(feedCtx, {
 const weightCtx = document.getElementById('weightChart');
 
 
-new Chart(weightCtx, {
+if (window.Chart && weightCtx) new Chart(weightCtx, {
     type: 'line',
     data: {
         labels: ['week 1', 'week 2', 'week 3', 'week 4', 'week 5', 'week 6', 'week 7'],

@@ -9,14 +9,17 @@ from inventory.models import InventoryTransaction, Item, ItemCategory, Store
 from poultry.models import ApprovalStatus, PoultryBatch, PoultryHouse, egg_collection
 from accounting.models import AccountingCode
 from accounting.services import get_bs_data
+from accounts.models import Role
 from sales.models import Customer, CustomerPayment, ReceivableEntry, ReceivableLedger, SaleInvoice, SaleItem
 
 
 class SalesPageTests(TestCase):
 	def setUp(self):
+		manager_role = Role.objects.create(code=Role.RoleCode.MANAGER, name="Farm Manager")
 		self.user = get_user_model().objects.create_user(
 			username="sales-user",
 			password="pass1234",
+			role=manager_role,
 		)
 
 		self.house = PoultryHouse.objects.create(

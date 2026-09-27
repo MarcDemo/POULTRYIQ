@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load poultry_units %}
 
 {% block extra_css %}
 <style>
@@ -21,6 +22,7 @@
     transform: translateY(-2px) scale(0.98) !important;
     transition: transform 0.08s ease !important;
 }
+.tabular-nums { font-variant-numeric: tabular-nums; }
 
 /* ── Particle base ── */
 .particle {
@@ -96,6 +98,15 @@
     50%  { box-shadow: 0 0 0 16px rgba(220,53,69,0),    0 8px 24px rgba(0,0,0,0.18); }
     100% { box-shadow: 0 0 0  0   rgba(220,53,69,0),    0 8px 24px rgba(0,0,0,0.18); }
 }
+
+@media (prefers-reduced-motion: reduce) {
+    .action-btn,
+    .btn-mortality:hover {
+        animation: none !important;
+        transition: none !important;
+        transform: none !important;
+    }
+}
 </style>
 {% endblock %}
 
@@ -127,7 +138,48 @@
         </span>
     </div>
 
-   
+    <section class="row g-3 mb-4" aria-labelledby="today-summary-title">
+        <h2 id="today-summary-title" class="visually-hidden">Today's farm summary</h2>
+        <div class="col-6 col-xl-3">
+            <div class="card shadow-sm h-100">
+                <div class="card-body">
+                    <div class="small text-muted">Eggs submitted today</div>
+                    <div class="fs-4 fw-bold tabular-nums">{{ today_eggs }} eggs</div>
+                    <div class="small text-primary">{{ today_eggs|egg_trays }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-xl-3">
+            <div class="card shadow-sm h-100">
+                <div class="card-body">
+                    <div class="small text-muted">Current birds</div>
+                    <div class="fs-4 fw-bold tabular-nums">{{ total_birds }}</div>
+                    <div class="small text-muted">Across assigned houses</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-xl-3">
+            <div class="card shadow-sm h-100">
+                <div class="card-body">
+                    <div class="small text-muted">Deaths submitted today</div>
+                    <div class="fs-4 fw-bold tabular-nums">{{ today_deaths }}</div>
+                    <div class="small text-muted">All review statuses</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-xl-3">
+            <div class="card shadow-sm h-100">
+                <div class="card-body">
+                    <div class="small text-muted mb-2">My egg reviews today</div>
+                    <div class="d-flex flex-wrap gap-1">
+                        <span class="badge bg-warning text-dark">{{ egg_approval_counts.pending }} pending</span>
+                        <span class="badge bg-success">{{ egg_approval_counts.approved }} approved</span>
+                        <span class="badge bg-danger">{{ egg_approval_counts.rejected }} rejected</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
 
     <!-- ── Quick Actions ── -->
     <div class="card shadow-sm mb-4">
@@ -165,13 +217,6 @@
                         <span class="action-subtitle">Enkoko ezifudde</span>
                     </a>
                 </div>
-                <!-- <div class="col-6 col-md-3">
-                    <a href="{% url 'report_sickness' %}" class="btn btn-info text-white w-100 action-btn worker-action-btn d-flex flex-column align-items-center justify-content-center gap-2">
-                        <i class="bi bi-heart-pulse fs-2"></i>
-                        <span class="action-title">Sick birds</span>
-                        <span class="action-subtitle">Enkoko endwadde</span>
-                    </a>
-                </div> -->
                 <div class="col-6 col-md-3">
                     <a href="{% url 'sickbay' %}" class="btn btn-secondary w-100 action-btn worker-action-btn d-flex flex-column align-items-center justify-content-center gap-2">
                         <i class="bi bi-hospital fs-2"></i>
@@ -250,19 +295,20 @@
 
     <div class="card shadow-sm">
         <div class="card-header">
-            <i class="bi bi-clock-history me-2"></i>My egg records today
-            <span class="luganda">Amagi gewawandiise leero</span>
+            <i class="bi bi-clock-history me-2"></i>My recent egg submissions
+            <span class="luganda">Amagi ge wawandiise gye buvuddeko</span>
         </div>
         <div class="card-body p-0">
             <div class="table-responsive">
                 <table class="table table-hover mb-0">
                     <thead>
                         <tr>
-                            <th>Date</th>
-                            <th>House</th>
-                            <th>Collected</th>
-                            <th>Rejected</th>
-                            <th>Avg Weight</th>
+                            <th scope="col">Date</th>
+                            <th scope="col">House</th>
+                            <th scope="col">Collected</th>
+                            <th scope="col">Rejected</th>
+                            <th scope="col">Avg Weight</th>
+                            <th scope="col">Review status</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -270,7 +316,10 @@
                         <tr>
                             <td>{{ rec.collection_date }}</td>
                             <td><strong>{{ rec.batch.house.name|default:rec.batch.house.house_code }}</strong></td>
-                            <td><span class="badge bg-primary">{{ rec.eggs_collected }}</span></td>
+                            <td>
+                                <span class="badge bg-primary">{{ rec.eggs_collected }} eggs</span>
+                                <div class="small text-muted mt-1">{{ rec.eggs_collected|egg_trays }}</div>
+                            </td>
                             <td>
                                 {% if rec.eggs_rejected > 0 %}
                                     <span class="badge bg-warning text-dark">{{ rec.eggs_rejected }}</span>
@@ -285,10 +334,24 @@
                                     <span class="text-muted">-</span>
                                 {% endif %}
                             </td>
+                            <td>
+                                {% if rec.status == "APPROVED" %}
+                                    <span class="badge bg-success">Approved</span>
+                                {% elif rec.status == "REJECTED" %}
+                                    <span class="badge bg-danger">Needs correction</span>
+                                {% else %}
+                                    <span class="badge bg-warning text-dark">Awaiting review</span>
+                                {% endif %}
+                                {% if rec.review_notes %}
+                                    <div class="small text-muted mt-1">{{ rec.review_notes }}</div>
+                                {% endif %}
+                            </td>
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="5" class="text-center text-muted py-3">oops!!! looks like you havent collected any eggs today!</td>
+                            <td colspan="6" class="text-center text-muted py-4">
+                                No egg submissions yet. Use the Eggs button above after collection.
+                            </td>
                         </tr>
                         {% endfor %}
                     </tbody>

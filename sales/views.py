@@ -14,6 +14,7 @@ from poultry.models import ApprovalStatus, egg_collection
 from poultryiq.pagination import paginate
 from accounting.models import AccountingCode, ChartOfAccount
 from accounting.services import account_by_system_code, payment_account_for_method, post_customer_payment, post_sale, post_sale_delivery
+from accounts.decorators import sales_access_required
 from .models import Customer, CustomerPayment, ReceivableEntry, ReceivableLedger, SaleInvoice, SaleItem
 
 
@@ -453,7 +454,7 @@ def _save_customer_from_form(form_data, credit_limit, credit_days, customer=None
     return customer
 
 
-@login_required(login_url="login")
+@sales_access_required
 def customers(request):
     customers_qs = Customer.objects.annotate(
         outstanding_balance=Coalesce(
@@ -514,7 +515,7 @@ def customers(request):
     )
 
 
-@login_required(login_url="login")
+@sales_access_required
 def customer_profile(request, pk):
     customer = get_object_or_404(Customer, pk=pk)
     if request.method == "POST":
@@ -574,7 +575,7 @@ def customer_profile(request, pk):
     )
 
 
-@login_required(login_url="login")
+@sales_access_required
 def receivables(request):
     """A focused customer-credit register with balances and payment history links."""
     query = request.GET.get("q", "").strip()
@@ -620,7 +621,7 @@ def receivables(request):
     )
 
 
-@login_required(login_url="login")
+@sales_access_required
 def sales(request):
     stock = _build_product_stock()
     pending_orders = _pending_orders_queryset()
@@ -863,7 +864,7 @@ def sales(request):
     return render(request, "sales.html", context)
 
 
-@login_required(login_url="login")
+@sales_access_required
 def orderview(request):
     pending_orders = _pending_orders_queryset()
     _attach_order_item_displays(pending_orders)
@@ -877,7 +878,7 @@ def orderview(request):
     return render(request, "orderview.html", context)
 
 
-@login_required(login_url="login")
+@sales_access_required
 def orders(request):
     if request.method == "POST":
         action = request.POST.get("action", "").strip().lower()
@@ -993,7 +994,7 @@ def orders(request):
     return render(request, 'orders.html', context)
 
 
-@login_required(login_url="login")
+@sales_access_required
 def record_receivable_payment(request, receivable_id):
     if request.method != "POST":
         return redirect("receivables")

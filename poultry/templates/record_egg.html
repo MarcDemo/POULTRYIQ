@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load poultry_units %}
 {% block content %}
 
 <div class="container mt-4 worker-field-page">
@@ -41,6 +42,7 @@
                             </label>
                             <input type="number" id="total_eggs" name="total_eggs" class="form-control" placeholder="0" required min="0" inputmode="numeric">
                             <small class="form-text text-muted">Count all good eggs collected today. / Bala amagi amalungi gonna aga leero.</small>
+                            <div id="egg_tray_preview" class="small fw-semibold text-primary mt-2" aria-live="polite">Enter an egg count to see trays and loose eggs.</div>
                         </div>
 
                         <div class="mb-3">
@@ -52,6 +54,7 @@
                             <small class="form-text text-muted">Put 0 if none broke. / Teka 0 bwe watali agamenyese.</small>
                         </div>
 
+                        {% if egg_weight_capture_enabled %}
                         <div class="mb-3">
                             <label class="form-label">
                                 <i class="bi bi-speedometer2 me-2"></i>Average egg weight
@@ -78,6 +81,7 @@
                                 </small>
                             </div>
                         </div>
+                        {% endif %}
 
                         <div class="mb-3">
                             <label for="notes" class="form-label">
@@ -125,7 +129,10 @@
                                 <tr>
                                     <td>{{ rec.collection_date }}</td>
                                     <td>{{ rec.batch.house.name|default:rec.batch.house.house_code }}</td>
-                                    <td>{{ rec.eggs_collected }}</td>
+                                    <td>
+                                        <strong>{{ rec.eggs_collected }} eggs</strong>
+                                        <div class="small text-muted">{{ rec.eggs_collected|egg_trays }}</div>
+                                    </td>
                                     <td>{{ rec.eggs_rejected }}</td>
                                     <td>
                                         {% if rec.average_egg_weight_g %}
@@ -141,6 +148,9 @@
                                             <span class="badge bg-danger"><i class="bi bi-x-circle me-1"></i>Rejected</span>
                                         {% else %}
                                             <span class="badge bg-warning text-dark"><i class="bi bi-hourglass-split me-1"></i>Pending</span>
+                                        {% endif %}
+                                        {% if rec.review_notes %}
+                                            <div class="small text-muted mt-1">{{ rec.review_notes }}</div>
                                         {% endif %}
                                     </td>
                                 </tr>
@@ -163,7 +173,7 @@
 <script>
 document.querySelectorAll('.js-confirm-submit').forEach((form) => {
     form.addEventListener('submit', (event) => {
-        if (!calculateAverageWeight(true)) {
+        if (eggWeightCaptureEnabled && !calculateAverageWeight(true)) {
             event.preventDefault();
             return;
         }
@@ -174,12 +184,26 @@ document.querySelectorAll('.js-confirm-submit').forEach((form) => {
     });
 });
 
+const eggWeightCaptureEnabled = {{ egg_weight_capture_enabled|yesno:"true,false" }};
 const totalEggsInput = document.getElementById('total_eggs');
 const weightList = document.getElementById('egg_weight_list');
 const weightRuleText = document.getElementById('weight_rule_text');
 const avgWeightButton = document.getElementById('calculate_avg_weight');
 const avgWeightOutput = document.getElementById('average_egg_weight');
 const avgWeightHint = document.getElementById('average_weight_hint');
+const trayPreview = document.getElementById('egg_tray_preview');
+
+function formatEggTrays(eggCount) {
+    if (!Number.isFinite(eggCount) || eggCount < 0) {
+        return 'Enter an egg count to see trays and loose eggs.';
+    }
+    const trays = Math.floor(eggCount / 30);
+    const looseEggs = eggCount % 30;
+    const parts = [];
+    if (trays) parts.push(`${trays} ${trays === 1 ? 'tray' : 'trays'}`);
+    if (looseEggs) parts.push(`${looseEggs} ${looseEggs === 1 ? 'egg' : 'eggs'}`);
+    return parts.length ? parts.join(' and ') : '0 eggs';
+}
 
 function setAverageHint(message, state) {
     avgWeightHint.textContent = message;
@@ -269,6 +293,14 @@ function calculateAverageWeight(showErrors) {
     avgWeightOutput.value = `${average.toFixed(1)} g`;
     setAverageHint(`Calculated from ${weights.length} egg weight${weights.length === 1 ? '' : 's'}.`, 'text-success');
     return true;
+}
+
+if (totalEggsInput && trayPreview) {
+    const updateTrayPreview = () => {
+        trayPreview.textContent = formatEggTrays(currentEggCount());
+    };
+    totalEggsInput.addEventListener('input', updateTrayPreview);
+    updateTrayPreview();
 }
 
 if (totalEggsInput && weightList && avgWeightButton && avgWeightOutput && avgWeightHint) {

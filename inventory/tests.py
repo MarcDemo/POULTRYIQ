@@ -21,7 +21,7 @@ class StoreOutTests(TestCase):
         self.client.force_login(self.user)
 
         self.store = Store.objects.create(name="Main Store")
-        self.category = ItemCategory.objects.create(code="FEED", name="Feed")
+        self.category, _ = ItemCategory.objects.get_or_create(code="FEED", defaults={"name": "Feed"})
         self.item = Item.objects.create(
             name="Layer Feed",
             category=self.category,
