@@ -2,7 +2,7 @@ from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 
 from .forms import PoultryUserChangeForm, PoultryUserCreationForm
-from .models import InvestorCapitalTransaction, Role, User
+from .models import EndOfDayNote, InvestorCapitalTransaction, Role, User
 
 
 @admin.register(Role)
@@ -67,3 +67,12 @@ class InvestorCapitalTransactionAdmin(admin.ModelAdmin):
     list_filter = ("transaction_type", "transaction_date")
     search_fields = ("notes", "recorded_by__username", "recorded_by__first_name", "recorded_by__last_name")
     ordering = ("-transaction_date", "-created_at")
+
+
+@admin.register(EndOfDayNote)
+class EndOfDayNoteAdmin(admin.ModelAdmin):
+    list_display = ("summary_date", "updated_by", "updated_at")
+    search_fields = ("notes", "updated_by__username", "updated_by__first_name", "updated_by__last_name")
+    date_hierarchy = "summary_date"
+    ordering = ("-summary_date",)
+    readonly_fields = ("created_at", "updated_at")
