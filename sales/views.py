@@ -8,6 +8,7 @@ from django.db import transaction
 from django.db.models import DecimalField, Q, Sum, Value
 from django.db.models.functions import Coalesce
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils.text import slugify
 
 from inventory.models import InventoryTransaction
 from poultry.models import ApprovalStatus, egg_collection
@@ -640,9 +641,7 @@ def sales(request):
         errors = []
 
         customer = _customer_from_sale_value(customer_value)
-        if not customer_value:
-            errors.append("Customer is required.")
-        elif not customer:
+        if customer_value and not customer:
             errors.append("Please select a valid active customer.")
 
         if product_key not in stock:
@@ -674,6 +673,8 @@ def sales(request):
 
         payment_method = _payment_method_from_post(payment_method_raw)
 
+        line_total = (quantity * unit_price).quantize(Decimal("0.01"))
+
         delivery_date = None
         if sale_type == "booking" and delivery_date_raw:
             try:
@@ -691,7 +692,6 @@ def sales(request):
                 messages.error(request, err)
         else:
             today = date.today()
-            line_total = (quantity * unit_price).quantize(Decimal("0.01"))
             amount_paid = deposit
             product_name = stock[product_key]["label"]
             sale_account = account_by_system_code(SALE_ACCOUNT_SYSTEM_CODES.get(product_key, ""))
@@ -704,23 +704,30 @@ def sales(request):
                 "BANK": "Bank",
             }
             payment_label = payment_aliases.get(payment_method, payment_method)
-            if amount_paid > 0 and not payment_account_for_method(payment_method):
-                messages.error(request, f"The built-in {payment_label} payment account is missing.")
-                return redirect("sales")
-            if line_total > amount_paid and not ChartOfAccount.objects.filter(account_type__legacy_code="RECEIVABLE", is_active=True).exists():
-                messages.error(request, "No receivable account is configured for unpaid or partially paid sales.")
-                return redirect("sales")
 
             wht_amount = (line_total * WHT_RATE).quantize(Decimal("0.01")) if customer and customer.pay_wht else Decimal("0.00")
             customer_amount_due = (line_total - wht_amount).quantize(Decimal("0.01"))
+            change_due = Decimal("0.00")
             if amount_paid > customer_amount_due:
-                messages.error(
-                    request,
-                    f"Amount paid cannot exceed {customer_amount_due} because this customer has withholding tax.",
-                )
+                if payment_method == Customer.PaymentMethod.CASH:
+                    change_due = (amount_paid - customer_amount_due).quantize(Decimal("0.01"))
+                    amount_paid = customer_amount_due
+                else:
+                    messages.error(request, f"Amount received cannot exceed the amount due of UGX {customer_amount_due:,.2f}.")
+                    return redirect("sales")
+
+            if not customer and amount_paid < customer_amount_due:
+                messages.error(request, "Select a customer for an unpaid or partially paid sale.")
                 return redirect("sales")
 
-            credit_error = _credit_validation_error(customer, customer_amount_due - amount_paid)
+            if amount_paid > 0 and not payment_account_for_method(payment_method):
+                messages.error(request, f"The built-in {payment_label} payment account is missing.")
+                return redirect("sales")
+            if customer_amount_due > amount_paid and not ChartOfAccount.objects.filter(account_type__legacy_code="RECEIVABLE", is_active=True).exists():
+                messages.error(request, "No receivable account is configured for unpaid or partially paid sales.")
+                return redirect("sales")
+
+            credit_error = _credit_validation_error(customer, customer_amount_due - amount_paid) if customer else None
             if credit_error:
                 messages.error(request, credit_error)
                 return redirect("sales")
@@ -728,7 +735,7 @@ def sales(request):
             credit_base_date = delivery_date if sale_type == "booking" and delivery_date else today
             due_date = (
                 credit_base_date + timedelta(days=customer.credit_days)
-                if customer_amount_due > amount_paid
+                if customer_amount_due > amount_paid and customer
                 else None
             )
 
@@ -755,6 +762,7 @@ def sales(request):
                     discount_amount=Decimal("0.00"),
                     total_amount=line_total,
                     wht_amount=wht_amount,
+                    change_given=change_due,
                     payment_method=payment_method,
                     status=invoice_status,
                     delivery_status=(
@@ -813,26 +821,32 @@ def sales(request):
                 )
 
                 if amount_paid > 0:
-                    payment = CustomerPayment.objects.create(
-                        invoice=invoice,
-                        customer=customer,
-                        payment_date=today,
-                        method=payment_method,
-                        amount=amount_paid,
-                        received_by=request.user,
-                    )
+                    payment_reference = f"POS-{invoice.invoice_no}"
+                    if customer:
+                        payment = CustomerPayment.objects.create(
+                            invoice=invoice,
+                            customer=customer,
+                            payment_date=today,
+                            method=payment_method,
+                            amount=amount_paid,
+                            received_by=request.user,
+                        )
+                        payment_reference = f"PAY-{payment.payment_id}"
                     _add_receivable_entry(
                         receivable=receivable,
                         entry_date=today,
                         entry_type=ReceivableEntry.EntryType.PAYMENT,
                         amount=amount_paid,
                         balance_after=balance,
-                        reference=f"PAY-{payment.payment_id}",
+                        reference=payment_reference,
                         notes="Payment received with sale",
                         created_by=request.user,
                     )
 
-            messages.success(request, f"Sale saved successfully. Invoice {invoice.invoice_no} created.")
+            success_message = f"Sale saved successfully. Invoice {invoice.invoice_no} created."
+            if change_due > 0:
+                success_message += f" Change to return: UGX {change_due:,.2f}."
+            messages.success(request, success_message)
             return redirect("sales")
 
     recent_sales = (
@@ -861,6 +875,31 @@ def sales(request):
         **_pending_orders_metrics(pending_orders),
     }
     return render(request, "sales.html", context)
+
+
+@login_required(login_url="login")
+def download_sale_receipt(request, invoice_id):
+    invoice = get_object_or_404(
+        SaleInvoice.objects.select_related("customer", "created_by").prefetch_related("items"),
+        invoice_id=invoice_id,
+    )
+    receivable = ReceivableLedger.objects.filter(invoice=invoice).first()
+    amount_paid = receivable.amount_paid if receivable else Decimal("0.00")
+    response = render(
+        request,
+        "sales/receipt.html",
+        {
+            "invoice": invoice,
+            "items": invoice.items.all(),
+            "amount_paid": amount_paid,
+            "amount_tendered": amount_paid + invoice.change_given,
+            "change_given": invoice.change_given,
+            "balance": receivable.balance if receivable else Decimal("0.00"),
+        },
+    )
+    receipt_name = slugify(invoice.invoice_no) or str(invoice.invoice_id)
+    response["Content-Disposition"] = f'attachment; filename="NZURI-{receipt_name}-receipt.html"'
+    return response
 
 
 @login_required(login_url="login")

@@ -233,8 +233,13 @@
 
 			<div class="row g-3">
 				<div class="col-md-6">
-					<label class="form-label">Customer</label>
-					<select class="form-select" name="customer" id="customerName" required>
+					<div class="d-flex align-items-center justify-content-between mb-1">
+						<label class="form-label mb-0" for="customerName">Customer</label>
+						<a class="btn btn-sm btn-outline-primary" href="{% url 'customers' %}">
+							<i class="bi bi-person-plus me-1"></i>Add Customer
+						</a>
+					</div>
+					<select class="form-select" name="customer" id="customerName">
 						<option value="">Select Customer</option>
 						{% for customer in customers %}
 						<option value="{{ customer.customer_id }}">{{ customer.display_id }} — {{ customer.name }}</option>
@@ -268,19 +273,24 @@
 					<input type="number" class="form-control" id="price" name="price" min="0" step="0.01" value="0" required>
 				</div>
 
-				<div class="col-md-4">
+				<div class="col-md-3">
 					<label class="form-label">Total Amount</label>
 					<input type="text" class="form-control" id="total" name="total" readonly value="0.00">
 				</div>
 
-				<div class="col-md-4">
-					<label class="form-label">Deposit Paid</label>
+				<div class="col-md-3">
+					<label class="form-label">Amount Tendered / Received</label>
 					<input type="number" class="form-control" id="deposit" name="deposit" min="0" step="0.01" value="0">
 				</div>
 
-				<div class="col-md-4">
+				<div class="col-md-3">
 					<label class="form-label">Balance</label>
 					<input type="text" class="form-control" id="balance" name="balance" readonly value="0.00">
+				</div>
+
+				<div class="col-md-3">
+					<label class="form-label">Change Due</label>
+					<input type="text" class="form-control" id="changeDue" readonly value="0.00">
 				</div>
 
 				<div class="col-md-6">
@@ -318,7 +328,8 @@
 				</div>
 				<div class="col-md-4">
 					<div class="kpi-pill">
-						<div class="label">Amount Paid</div>
+						<div class="label">Applied Payment</div>
+						<div class="label">Applied Payment</div>
 						<div class="value" id="kpiPaid">UGX 0.00</div>
 					</div>
 				</div>
@@ -396,13 +407,14 @@
 						<th>Unit Price</th>
 						<th>Total</th>
 						<th>Status</th>
+						<th>Receipt</th>
 					</tr>
 				</thead>
 				<tbody>
 					{% for row in recent_sales %}
 					<tr>
 						<td>{{ row.invoice.invoice_no }}</td>
-						<td>{{ row.invoice.customer.display_id }} — {{ row.invoice.customer.name }}</td>
+						<td>{% if row.invoice.customer %}{{ row.invoice.customer.display_id }} — {{ row.invoice.customer.name }}{% else %}Walk-in{% endif %}</td>
 						<td>{{ row.product_name }}</td>
 						<td>{{ row.quantity }} {{ row.unit }}</td>
 						<td>UGX {{ row.unit_price }}</td>
@@ -426,10 +438,11 @@
 							<span class="badge bg-secondary">{{ row.invoice.status }}</span>
 							{% endif %}
 						</td>
+						<td><a class="btn btn-sm btn-outline-primary" href="{% url 'sale_receipt' row.invoice.invoice_id %}" download><i class="bi bi-download me-1"></i>Download</a></td>
 					</tr>
 					{% empty %}
 					<tr>
-						<td colspan="7" class="text-center py-4 text-muted">No sales recorded yet.</td>
+						<td colspan="8" class="text-center py-4 text-muted">No sales recorded yet.</td>
 					</tr>
 					{% endfor %}
 				</tbody>
@@ -456,6 +469,7 @@
 	const availabilityHintEl = $('availabilityHint');
 	const totalEl = $('total');
 	const balanceEl = $('balance');
+	const changeDueEl = $('changeDue');
 	const kpiTotalEl = $('kpiTotal');
 	const kpiPaidEl = $('kpiPaid');
 	const kpiWhtEl = $('kpiWht');
@@ -486,16 +500,19 @@
 	function recalc() {
 		const q = parseFloat(qEl.value || 0) || 0;
 		const p = parseFloat(pEl.value || 0) || 0;
-		const d = parseFloat(dEl.value || 0) || 0;
-
-		const total = q * p;
-		const paid = d;
+		const d = Math.max(parseFloat(dEl.value || 0) || 0, 0);
+		const total = Math.round(q * p * 100) / 100;
 		const customer = customerDefaults[customerNameEl.value.trim()];
-		const wht = customer && customer.pay_wht ? total * 0.06 : 0;
-		const bal = total - wht - paid;
+		const wht = customer && customer.pay_wht ? Math.round(total * 0.06 * 100) / 100 : 0;
+		const due = Math.max(total - wht, 0);
+		const tender = Math.round(d * 100) / 100;
+		const paid = Math.min(tender, due);
+		const change = paymentMethodEl.value === 'CASH' ? Math.max(tender - due, 0) : 0;
+		const bal = Math.max(due - paid, 0);
 
 		totalEl.value = total.toFixed(2);
 		balanceEl.value = bal.toFixed(2);
+		changeDueEl.value = change.toFixed(2);
 		kpiTotalEl.textContent = `UGX ${money(total)}`;
 		kpiPaidEl.textContent = `UGX ${money(paid)}`;
 		kpiWhtEl.textContent = `UGX ${money(wht)}`;
@@ -508,7 +525,12 @@
 
 	function applyCustomerDefaults() {
 		const customer = customerDefaults[customerNameEl.value.trim()];
-		if (!customer) return;
+		if (!customer) {
+			customerPhoneEl.value = '';
+			paymentMethodEl.value = 'CASH';
+			recalc();
+			return;
+		}
 		customerPhoneEl.value = customer.phone || '';
 		if (customer.preferred_payment_method) {
 			paymentMethodEl.value = customer.preferred_payment_method;
@@ -521,6 +543,7 @@
 		pEl.addEventListener(evt, recalc);
 		dEl.addEventListener(evt, recalc);
 	});
+	paymentMethodEl.addEventListener('change', recalc);
 
 	productEl.addEventListener('change', () => {
 		updateProductMeta();
