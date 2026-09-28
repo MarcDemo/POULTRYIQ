@@ -38,6 +38,7 @@ from .services.investor_analysis import (
     previous_period,
     target_payload,
 )
+from .units import format_eggs_as_trays
 from .views import _build_investor_builder_data, scale_formula_ingredients
 
 
@@ -108,6 +109,96 @@ class PoultryBatchFormTests(TestCase):
 
         self.assertIn("Chick Supplier", supplier_values)
         self.assertNotIn("Kafika Feeds", supplier_values)
+
+
+class WorkerEggDisplayTests(TestCase):
+    def setUp(self):
+        worker_role = Role.objects.create(code=Role.RoleCode.WORKER, name="Worker")
+        self.worker = User.objects.create_user(
+            username="egg-worker",
+            password="StrongPass1",
+            role=worker_role,
+        )
+        self.house = PoultryHouse.objects.create(
+            house_code="EGG-HSE-01",
+            name="Egg House",
+            capacity=500,
+        )
+        self.worker.houses.add(self.house)
+        self.batch = PoultryBatch.objects.create(
+            batch_code="EGG-BATCH-01",
+            house=self.house,
+            breed="Layers",
+            supplier_name="Farm Source",
+            date_stocked=date(2026, 1, 1),
+            initial_quantity=300,
+            initial_age_days=120,
+            status=PoultryBatch.Status.ACTIVE,
+            created_by=self.worker,
+        )
+        self.client.force_login(self.worker)
+
+    def test_tray_formatter_preserves_loose_egg_balance(self):
+        self.assertEqual(format_eggs_as_trays(302), "10 trays and 2 eggs")
+        self.assertEqual(format_eggs_as_trays(30), "1 tray")
+        self.assertEqual(format_eggs_as_trays(1), "1 egg")
+
+    def test_worker_dashboard_total_includes_every_review_status(self):
+        egg_collection.objects.create(
+            batch=self.batch,
+            collection_date=date.today(),
+            eggs_collected=32,
+            status=ApprovalStatus.PENDING,
+            collected_by=self.worker,
+        )
+        egg_collection.objects.create(
+            batch=self.batch,
+            collection_date=date.today(),
+            eggs_collected=30,
+            status=ApprovalStatus.REJECTED,
+            review_notes="Check the count and submit again.",
+            collected_by=self.worker,
+        )
+
+        response = self.client.get(reverse("workersdash"))
+
+        self.assertEqual(response.context["today_eggs"], 62)
+        self.assertEqual(response.context["egg_approval_counts"]["pending"], 1)
+        self.assertEqual(response.context["egg_approval_counts"]["rejected"], 1)
+        self.assertContains(response, "1 tray and 2 eggs")
+        self.assertContains(response, "1 pending")
+        self.assertContains(response, "1 rejected")
+        self.assertContains(response, "Needs correction")
+        self.assertContains(response, "Awaiting review")
+
+    def test_saved_collection_confirms_trays_and_loose_eggs(self):
+        response = self.client.post(
+            reverse("record_egg"),
+            {
+                "batch": str(self.batch.pk),
+                "total_eggs": "302",
+                "broken_eggs": "2",
+                "notes": "Morning collection",
+            },
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.redirect_chain[-1][0], reverse("workersdash"))
+        self.assertContains(response, "10 trays and 2 eggs")
+        record = egg_collection.objects.get(
+            batch=self.batch,
+            eggs_collected=302,
+            status=ApprovalStatus.PENDING,
+        )
+        self.assertIsNone(record.average_egg_weight_g)
+
+    def test_egg_weight_submission_controls_are_disabled(self):
+        response = self.client.get(reverse("record_egg"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, 'id="calculate_avg_weight"')
+        self.assertNotContains(response, "Get Avg Weight")
 
 
 class AddBatchAccountingTests(TestCase):
@@ -257,6 +348,42 @@ class SupervisorHouseScopeTests(TestCase):
         self.assertEqual(response.context["assigned_houses_count"], 1)
         self.assertEqual(response.context["pending_eggs"], 1)
         self.assertEqual(response.context["total_pending"], 1)
+
+    def test_approval_requires_post_and_keeps_pending_record_unchanged_on_get(self):
+        self.client.force_login(self.supervisor)
+        record = egg_collection.objects.get(batch=self.batch_a)
+
+        response = self.client.get(reverse("sup_approve_eggs", args=[record.pk]))
+
+        self.assertEqual(response.status_code, 405)
+        record.refresh_from_db()
+        self.assertEqual(record.status, ApprovalStatus.PENDING)
+        self.assertIsNone(record.reviewed_by)
+
+    def test_rejection_requires_worker_feedback(self):
+        self.client.force_login(self.supervisor)
+        record = egg_collection.objects.get(batch=self.batch_a)
+
+        response = self.client.post(
+            reverse("sup_approve_eggs", args=[record.pk]),
+            {"action": "reject", "review_notes": ""},
+        )
+
+        self.assertRedirects(response, reverse("supapproval"))
+        record.refresh_from_db()
+        self.assertEqual(record.status, ApprovalStatus.PENDING)
+        self.assertIsNone(record.reviewed_by)
+
+    def test_pending_record_can_only_be_reviewed_once(self):
+        self.client.force_login(self.supervisor)
+        record = egg_collection.objects.get(batch=self.batch_a)
+        url = reverse("sup_approve_eggs", args=[record.pk])
+
+        first_response = self.client.post(url, {"action": "approve"})
+        second_response = self.client.post(url, {"action": "approve"})
+
+        self.assertRedirects(first_response, reverse("supapproval"))
+        self.assertEqual(second_response.status_code, 404)
 
 
 class InvestorFinancialDashboardTests(TestCase):

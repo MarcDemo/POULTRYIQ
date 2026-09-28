@@ -17,6 +17,7 @@ from django.utils import timezone
 from django.utils.text import slugify
 
 from accounts.views import get_post_login_redirect
+from accounts.decorators import manager_required
 from expenses.models import ExpenseCategory, ExpenseTransaction
 from accounting.models import ChartOfAccount
 from poultry.models import PoultryBatch
@@ -258,7 +259,7 @@ def _build_inventory_rows(store):
 
 
 # Create your views here.
-@login_required(login_url="login")
+@manager_required
 def tin_lookup(request):
     tin = _normalise_tin(request.GET.get("tin", ""))
 
@@ -331,6 +332,7 @@ def tin_lookup(request):
     }, status=502)
 
 
+@manager_required
 def suppliers(request):
     if request.method == "POST":
         action = request.POST.get("action", "save_supplier").strip()
@@ -506,6 +508,7 @@ def suppliers(request):
     )
 
 
+@manager_required
 def inventory_management(request):
     store = ensure_inventory_defaults()
     categories = ItemCategory.objects.exclude(
@@ -938,7 +941,7 @@ def manager_review_requisition(request, pk):
     return redirect("manager_requisitions")
 
 
-@login_required(login_url="login")
+@manager_required
 def store_out(request):
     store = ensure_inventory_defaults()
     inventory_rows = _build_inventory_rows(store)

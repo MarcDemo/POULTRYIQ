@@ -14,7 +14,7 @@ from datetime import date, timedelta
 from datetime import datetime
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
-from accounts.decorators import worker_required, supervisor_required
+from accounts.decorators import manager_required, supervisor_required, worker_required
 from accounts.models import InvestorCapitalTransaction, User
 from accounting.models import AccountingCode
 from accounting.services import post_expense
@@ -56,6 +56,7 @@ from .services.investor_analysis import (
     create_target_version,
     target_payload,
 )
+from .units import EGG_WEIGHT_CAPTURE_ENABLED, format_eggs_as_trays
 
 
 def _batch_cycle_stage(batch):
@@ -285,6 +286,7 @@ def dashboard(request):
     }
     return render(request, 'dashboard.html', context)
 
+@manager_required
 def birds(request):
     batches = PoultryBatch.objects.select_related("house")
 
@@ -1771,7 +1773,7 @@ def record_feed(request):
                 recorded_by=request.user,
             )
             messages.success(request, "Feed record saved successfully.")
-            return redirect("record_feed")
+            return redirect("workersdash")
 
     recent_feed_records = FeedRecord.objects.filter(
         recorded_by=request.user,
@@ -1832,34 +1834,35 @@ def record_egg(request):
         ):
             errors.append("Broken eggs cannot be more than total eggs.")
 
-        weights = []
-        for raw_weight in egg_weight_values:
-            raw_weight = raw_weight.strip()
-            if not raw_weight:
-                continue
-            try:
-                weight = Decimal(raw_weight)
-            except InvalidOperation:
-                errors.append("Please enter valid egg weights.")
-                weights = []
-                break
-            if weight <= 0:
-                errors.append("Egg weights must be greater than zero.")
-                weights = []
-                break
-            weights.append(weight)
+        if EGG_WEIGHT_CAPTURE_ENABLED:
+            weights = []
+            for raw_weight in egg_weight_values:
+                raw_weight = raw_weight.strip()
+                if not raw_weight:
+                    continue
+                try:
+                    weight = Decimal(raw_weight)
+                except InvalidOperation:
+                    errors.append("Please enter valid egg weights.")
+                    weights = []
+                    break
+                if weight <= 0:
+                    errors.append("Egg weights must be greater than zero.")
+                    weights = []
+                    break
+                weights.append(weight)
 
-        if eggs_collected is not None and eggs_collected > 0:
-            if eggs_collected < 50:
-                if len(weights) != eggs_collected:
-                    errors.append(
-                        f"Because fewer than 50 eggs were collected, enter the weight for all {eggs_collected} eggs."
-                    )
-            elif len(weights) < 20 or len(weights) > 30:
-                errors.append("Enter 20 to 30 random egg weights for collections of 50 eggs or more.")
+            if eggs_collected is not None and eggs_collected > 0:
+                if eggs_collected < 50:
+                    if len(weights) != eggs_collected:
+                        errors.append(
+                            f"Because fewer than 50 eggs were collected, enter the weight for all {eggs_collected} eggs."
+                        )
+                elif len(weights) < 20 or len(weights) > 30:
+                    errors.append("Enter 20 to 30 random egg weights for collections of 50 eggs or more.")
 
-            if weights and not errors:
-                average_egg_weight_g = (sum(weights) / Decimal(len(weights))).quantize(Decimal("0.01"))
+                if weights and not errors:
+                    average_egg_weight_g = (sum(weights) / Decimal(len(weights))).quantize(Decimal("0.01"))
 
         if errors:
             for error in errors:
@@ -1874,8 +1877,12 @@ def record_egg(request):
                 notes=notes,
                 collected_by=request.user,
             )
-            messages.success(request, "Egg collection record saved successfully.")
-            return redirect("record_egg")
+            messages.success(
+                request,
+                f"Egg collection saved: {eggs_collected} eggs — "
+                f"{format_eggs_as_trays(eggs_collected)}. Awaiting supervisor review.",
+            )
+            return redirect("workersdash")
 
     recent_egg_records = egg_collection.objects.filter(
         collected_by=request.user,
@@ -1890,6 +1897,7 @@ def record_egg(request):
             "batches": batches,
             "today": localdate(),
             "recent_egg_records": recent_egg_records,
+            "egg_weight_capture_enabled": EGG_WEIGHT_CAPTURE_ENABLED,
         },
     )
 
@@ -2301,7 +2309,7 @@ def record_cleaning(request):
 
             
             messages.success(request, "Cleaning routine record saved successfully.")
-            return redirect("record_cleaning")
+            return redirect("workersdash")
 
     recent_cleaning_records = CleaningRecord.objects.filter(
         recorded_by=request.user,
@@ -2360,14 +2368,24 @@ def workersdash(request):
 
     today_eggs = egg_collection.objects.filter(
         batch__house__in=assigned_houses,
-        collection_date=today
+        collection_date=today,
     ).aggregate(total=Sum("eggs_collected"))["total"] or 0
+
+    my_egg_submissions_today = egg_collection.objects.filter(
+        collected_by=user,
+        batch__house__in=assigned_houses,
+        collection_date=today,
+    )
+    egg_approval_counts = {
+        "pending": my_egg_submissions_today.filter(status=ApprovalStatus.PENDING).count(),
+        "approved": my_egg_submissions_today.filter(status=ApprovalStatus.APPROVED).count(),
+        "rejected": my_egg_submissions_today.filter(status=ApprovalStatus.REJECTED).count(),
+    }
 
     recent_activity = egg_collection.objects.filter(
         collected_by=user,
-        collection_date=today,
         batch__house__in=assigned_houses,
-    ).select_related("batch__house").order_by("-collected_at")[:5]
+    ).select_related("batch__house", "reviewed_by").order_by("-collected_at")[:8]
     welfare_requests = WelfareRequest.objects.filter(worker=user)
     welfare_pending_count = welfare_requests.filter(
         status__in=[
@@ -2383,6 +2401,7 @@ def workersdash(request):
         "total_birds": total_birds,
         "today_deaths": today_deaths,
         "today_eggs": today_eggs,
+        "egg_approval_counts": egg_approval_counts,
         "house_stats": house_stats,
         "recent_activity": recent_activity,
         "welfare_pending_count": welfare_pending_count,
@@ -2499,88 +2518,79 @@ def supdash(request):
     return render(request, 'supdash.html', context)
 
 
+def _review_pending_submission(request, queryset, pk, label):
+    action = request.POST.get("action")
+    review_notes = request.POST.get("review_notes", "").strip()
+
+    if action not in {"approve", "reject"}:
+        messages.error(request, "Choose either approve or reject.")
+        return redirect("supapproval")
+    if action == "reject" and not review_notes:
+        messages.error(request, "Add a reason so the worker knows what to correct.")
+        return redirect("supapproval")
+
+    with transaction.atomic():
+        record = get_object_or_404(
+            queryset.select_for_update().filter(status=ApprovalStatus.PENDING),
+            pk=pk,
+        )
+        record.status = (
+            ApprovalStatus.APPROVED if action == "approve" else ApprovalStatus.REJECTED
+        )
+        record.reviewed_by = request.user
+        record.reviewed_at = now()
+        record.review_notes = review_notes
+        record.save(update_fields=["status", "reviewed_by", "reviewed_at", "review_notes"])
+
+    if action == "approve":
+        messages.success(request, f"{label} approved.")
+    else:
+        messages.warning(request, f"{label} rejected with feedback for the worker.")
+    return redirect("supapproval")
+
+
 @supervisor_required
+@require_POST
 def sup_approve_eggs(request, pk):
-    record = get_object_or_404(
+    return _review_pending_submission(
+        request,
         _scope_to_supervisor_houses(egg_collection.objects.all(), request.user, "batch__house"),
-        pk=pk,
+        pk,
+        "Egg collection record",
     )
-    action = request.POST.get("action")
-    review_notes = request.POST.get("review_notes", "").strip()
-    if action == "approve":
-        record.status = ApprovalStatus.APPROVED
-        messages.success(request, f"Egg collection record approved.")
-    elif action == "reject":
-        record.status = ApprovalStatus.REJECTED
-        messages.warning(request, f"Egg collection record rejected.")
-    record.reviewed_by = request.user
-    record.reviewed_at = now()
-    record.review_notes = review_notes
-    record.save(update_fields=["status", "reviewed_by", "reviewed_at", "review_notes"])
-    return redirect("supapproval")
 
 
 @supervisor_required
+@require_POST
 def sup_approve_feed(request, pk):
-    record = get_object_or_404(
+    return _review_pending_submission(
+        request,
         _scope_to_supervisor_houses(FeedRecord.objects.all(), request.user, "batch__house"),
-        pk=pk,
+        pk,
+        "Feed record",
     )
-    action = request.POST.get("action")
-    review_notes = request.POST.get("review_notes", "").strip()
-    if action == "approve":
-        record.status = ApprovalStatus.APPROVED
-        messages.success(request, f"Feed record approved.")
-    elif action == "reject":
-        record.status = ApprovalStatus.REJECTED
-        messages.warning(request, f"Feed record rejected.")
-    record.reviewed_by = request.user
-    record.reviewed_at = now()
-    record.review_notes = review_notes
-    record.save(update_fields=["status", "reviewed_by", "reviewed_at", "review_notes"])
-    return redirect("supapproval")
 
 
 @supervisor_required
+@require_POST
 def sup_approve_cleaning(request, pk):
-    record = get_object_or_404(
+    return _review_pending_submission(
+        request,
         _scope_to_supervisor_houses(CleaningRecord.objects.all(), request.user, "batch__house"),
-        pk=pk,
+        pk,
+        "Cleaning record",
     )
-    action = request.POST.get("action")
-    review_notes = request.POST.get("review_notes", "").strip()
-    if action == "approve":
-        record.status = ApprovalStatus.APPROVED
-        messages.success(request, f"Cleaning record approved.")
-    elif action == "reject":
-        record.status = ApprovalStatus.REJECTED
-        messages.warning(request, f"Cleaning record rejected.")
-    record.reviewed_by = request.user
-    record.reviewed_at = now()
-    record.review_notes = review_notes
-    record.save(update_fields=["status", "reviewed_by", "reviewed_at", "review_notes"])
-    return redirect("supapproval")
 
 
 @supervisor_required
+@require_POST
 def sup_approve_mortality(request, pk):
-    record = get_object_or_404(
+    return _review_pending_submission(
+        request,
         _scope_to_supervisor_houses(MortalityRecord.objects.all(), request.user, "batch__house"),
-        pk=pk,
+        pk,
+        "Mortality record",
     )
-    action = request.POST.get("action")
-    review_notes = request.POST.get("review_notes", "").strip()
-    if action == "approve":
-        record.status = ApprovalStatus.APPROVED
-        messages.success(request, f"Mortality record approved.")
-    elif action == "reject":
-        record.status = ApprovalStatus.REJECTED
-        messages.warning(request, f"Mortality record rejected.")
-    record.reviewed_by = request.user
-    record.reviewed_at = now()
-    record.review_notes = review_notes
-    record.save(update_fields=["status", "reviewed_by", "reviewed_at", "review_notes"])
-    return redirect("supapproval")
 
 
 @supervisor_required
@@ -2665,6 +2675,7 @@ def supapproval(request):
 def login(request):
     return render(request, 'login.html')
 
+@manager_required
 def eggrec(request):
     records = egg_collection.objects.select_related(
         "batch__house", "collected_by", "reviewed_by"
@@ -2711,7 +2722,7 @@ def eggrec(request):
         "approval_statuses": ApprovalStatus.choices,
     })
 
-@login_required(login_url="login")
+@supervisor_required
 def feedrec(request):
     role_code = _role_code(request.user)
     show_feed_records = role_code in {"MANAGER", "OWNER"}
@@ -2828,7 +2839,7 @@ def _hydrate_legacy_analysis_metrics(report, start_date, end_date, group_by):
     return report
 
 
-@login_required(login_url="login")
+@manager_required
 @require_POST
 def investor_analysis(request):
     try:
@@ -2902,7 +2913,7 @@ def investor_analysis(request):
     return JsonResponse(report)
 
 
-@login_required(login_url="login")
+@manager_required
 @require_http_methods(["GET", "POST"])
 def investor_targets(request):
     if request.method == "GET":
@@ -2959,7 +2970,7 @@ def investor_targets(request):
     }, status=201)
 
 
-@login_required(login_url="login")
+@manager_required
 def investor(request):
     today = date.today()
 
@@ -2997,7 +3008,7 @@ def investor(request):
     context.update(financial_context)
     return render(request, 'investor.html', context)
 
-@login_required(login_url="login")
+@manager_required
 def add_batch(request):
     if request.method == "POST":
         form = PoultryBatchForm(request.POST)

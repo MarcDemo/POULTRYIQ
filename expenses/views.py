@@ -14,6 +14,7 @@ from accounting.services import post_expense
 from inventory.credit_alerts import create_credit_payment_alerts
 from inventory.models import InventoryTransaction, Item, ItemCategory, Store, Supplier, SupplierProduct
 from poultryiq.pagination import paginate
+from accounts.decorators import manager_required
 
 User = get_user_model()
 
@@ -218,6 +219,7 @@ def _parse_grace_period_days(value):
     return grace_period_days, ""
 
 
+@manager_required
 def expense_form(request):
     ensure_default_expense_categories()
     expense_categories = ExpenseCategory.objects.filter(
@@ -660,6 +662,7 @@ def expense_form(request):
     return render(request, "expenses/expense_form.html", context)
 
 
+@manager_required
 def expenses(request):
     ensure_default_expense_categories()
     qs = (

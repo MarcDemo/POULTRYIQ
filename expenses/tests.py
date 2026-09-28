@@ -8,13 +8,16 @@ from django.urls import reverse
 from accounting.services import get_bs_data
 from expenses.models import ExpenseCategory, ExpenseTransaction
 from inventory.models import InventoryTransaction, Item, Supplier
+from accounts.models import Role
 
 
 class ExpenseFormFlowTests(TestCase):
     def setUp(self):
+        manager_role = Role.objects.create(code=Role.RoleCode.MANAGER, name="Farm Manager")
         self.user = get_user_model().objects.create_user(
             username="expense-user",
             password="pass1234",
+            role=manager_role,
         )
         self.client.force_login(self.user)
 

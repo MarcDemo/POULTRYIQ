@@ -1,0 +1,115 @@
+.site-credit {
+    width: 100%;
+    margin-top: clamp(2rem, 5vw, 4rem);
+    padding: 1.25rem 1rem;
+    border-top: 1px solid var(--theme-border, var(--border-color, rgba(100, 116, 139, 0.22)));
+    color: var(--theme-text-muted, var(--body-quiet-color, #64748b));
+}
+
+.site-credit__inner {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    max-width: 42rem;
+    margin: 0 auto;
+}
+
+.site-credit__logo {
+    display: block;
+    width: clamp(6.5rem, 10vw, 8.5rem);
+    height: auto;
+    flex: 0 0 auto;
+}
+
+.site-credit__text {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding-left: 1rem;
+    border-left: 1px solid var(--theme-border, var(--border-color, rgba(100, 116, 139, 0.28)));
+    font-size: 0.75rem;
+    line-height: 1.35;
+    letter-spacing: 0.025em;
+}
+
+.site-credit__text strong {
+    color: var(--theme-text, var(--body-fg, #2c3e50));
+    font-size: 0.875rem;
+    font-weight: 650;
+}
+
+/* Authentication pages use a standalone document instead of base.html. */
+body.auth-page {
+    display: grid;
+    grid-template-rows: minmax(0, 1fr) auto;
+    align-items: stretch;
+    justify-content: stretch;
+    min-height: 100dvh;
+}
+
+.auth-page .auth-container {
+    width: 100%;
+    min-height: 0;
+    padding: clamp(1.25rem, 3vw, 3rem);
+}
+
+.auth-page .site-credit {
+    margin-top: 0;
+    padding: 0.75rem 1rem;
+    background: #f8f9fa;
+}
+
+.auth-page .site-credit__logo {
+    width: clamp(5rem, 7vw, 6.5rem);
+}
+
+@media (max-width: 768px) {
+    body.auth-page {
+        display: block;
+    }
+
+    .auth-page .auth-container {
+        min-height: 100dvh;
+        padding: 0;
+    }
+
+    .auth-page .site-credit {
+        margin-top: 0;
+    }
+}
+
+@media (max-width: 575.98px) {
+    .site-credit {
+        margin-top: 2rem;
+        padding-bottom: calc(1.25rem + env(safe-area-inset-bottom));
+    }
+
+    .auth-page .site-credit {
+        margin-top: 0;
+    }
+
+    .site-credit__inner {
+        gap: 0.75rem;
+    }
+
+    .site-credit__logo {
+        width: 6rem;
+    }
+
+    .site-credit__text {
+        padding-left: 0.75rem;
+    }
+}
+
+@media print {
+    .site-credit {
+        break-inside: avoid;
+        border-top-color: #d1d5db;
+        color: #4b5563;
+    }
+
+    .site-credit__text strong {
+        color: #111827;
+    }
+}

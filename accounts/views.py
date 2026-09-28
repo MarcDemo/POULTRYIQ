@@ -9,31 +9,30 @@ from django.http import HttpResponse
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
-from django.core.exceptions import ValidationError
 from django.db.models import Count, DecimalField, Q, Sum, Value
 from django.db.models.functions import Coalesce
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.text import slugify
+from django.views.decorators.http import require_POST
 from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
 
 from expenses.models import ExpenseTransaction
 from inventory.models import InventoryTransaction, ReorderRule
-from poultry.models import ApprovalStatus, FeedRecord, MortalityRecord, PoultryBatch, PoultryHouse, egg_collection
-from inventory.models import InventoryTransaction
+from poultry.models import PoultryBatch
 from poultry.models import (
     ApprovalStatus,
     FeedRecord,
     MortalityRecord,
-    PoultryHouse,
     egg_collection,
 )
 from sales.models import CustomerPayment, ReceivableLedger, SaleInvoice, SaleItem
 from accounting.models import FinancialStatement
 from accounting.services import get_pl_data, get_bs_data
+from accounts.decorators import manager_required
 
-from .models import InvestorCapitalTransaction, Role, User, validate_house_assignment
+from .models import InvestorCapitalTransaction, User
 
 # Create your views here.
 
@@ -1581,7 +1580,7 @@ def login_view(request):
 
 
 def signup_view(request):
-    """Handle user registration."""
+    """Keep account provisioning inside the manager-controlled user workflow."""
     if request.user.is_authenticated:
         redirect_target = get_post_login_redirect(request.user)
         if redirect_target == "login":
@@ -1589,125 +1588,15 @@ def signup_view(request):
             messages.error(request, "Your account has no assigned role. Please contact administrator.")
             return redirect("login")
         return redirect(redirect_target)
-    
-    roles = Role.objects.filter(is_active=True).order_by("name")
-    houses = PoultryHouse.objects.filter(is_active=True).order_by("house_code", "name")
-    form_data = {}
-    selected_house_ids = []
-    
-    if request.method == 'POST':
-        username = request.POST.get('username', '').strip()
-        email = request.POST.get('email', '').strip()
-        first_name = request.POST.get('first_name', '').strip()
-        last_name = request.POST.get('last_name', '').strip()
-        password = request.POST.get('password', '')
-        password_confirm = request.POST.get('password_confirm', '')
-        phone_number = request.POST.get('phone_number', '').strip()
-        role_id = request.POST.get('role')
-        selected_house_ids = request.POST.getlist('houses')
 
-        form_data = {
-            "username": username,
-            "email": email,
-            "first_name": first_name,
-            "last_name": last_name,
-            "phone_number": phone_number,
-            "role": role_id,
-        }
-        
-        # Validation
-        errors = []
-        role = None
-        selected_houses = list(houses.filter(pk__in=selected_house_ids))
-        
-        if not all([username, email, first_name, password, password_confirm, role_id]):
-            errors.append('All fields are required.')
-        
-        if len(username) < 4:
-            errors.append('Username must be at least 4 characters long.')
-        
-        if User.objects.filter(username=username).exists():
-            errors.append('Username already exists.')
-        
-        if User.objects.filter(email=email).exists():
-            errors.append('Email already exists.')
-        
-        if len(password) < 8:
-            errors.append('Password must be at least 8 characters long.')
-        
-        if password != password_confirm:
-            errors.append('Passwords do not match.')
-        
-        if not any(char.isupper() for char in password):
-            errors.append('Password must contain at least one uppercase letter.')
-        
-        if not any(char.isdigit() for char in password):
-            errors.append('Password must contain at least one digit.')
-
-        if role_id:
-            role = Role.objects.filter(id=role_id, is_active=True).first()
-            if role is None:
-                errors.append('Invalid role selected.')
-
-        if len(selected_houses) != len(set(selected_house_ids)):
-            errors.append('Please select valid poultry house assignments.')
-
-        if role is not None:
-            try:
-                validate_house_assignment(role, selected_houses)
-            except ValidationError as exc:
-                errors.extend(exc.messages)
-        
-        if errors:
-            for error in errors:
-                messages.error(request, error)
-            return render(
-                request,
-                'signup.html',
-                {
-                    'roles': roles,
-                    'houses': houses,
-                    'form_data': form_data,
-                    'selected_house_ids': selected_house_ids,
-                },
-            )
-        
-        try:
-            user = User.objects.create_user(
-                username=username,
-                email=email,
-                password=password,
-                first_name=first_name,
-                last_name=last_name,
-                phone_number=phone_number,
-                role=role
-            )
-            if selected_houses:
-                user.houses.set(selected_houses)
-            messages.success(request, 'Account created successfully! Please log in.')
-            return redirect('login')
-        except Exception as e:
-            messages.error(request, f'Error creating account: {str(e)}')
-            return render(
-                request,
-                'signup.html',
-                {
-                    'roles': roles,
-                    'houses': houses,
-                    'form_data': form_data,
-                    'selected_house_ids': selected_house_ids,
-                },
-            )
-    
-    context = {
-        'roles': roles,
-        'houses': houses,
-        'form_data': form_data,
-        'selected_house_ids': selected_house_ids,
-    }
-    return render(request, 'signup.html', context)
+    messages.error(
+        request,
+        "This is a private application. Ask a farm manager to create your account.",
+    )
+    return redirect("login")
 
 
+@require_POST
 def logout_view(request):
     """Handle user logout."""
     logout(request)
@@ -1715,7 +1604,7 @@ def logout_view(request):
     return redirect('login')
 
 
-@login_required(login_url='login')
+@manager_required
 def reports(request):
     period_key = request.GET.get("period", "current")
     if period_key not in {"current", "previous"}:
@@ -1752,7 +1641,7 @@ def reports(request):
     return render(request, 'reports.html', context)
 
 
-@login_required(login_url='login')
+@manager_required
 def end_of_day(request):
     # Sample data for demonstration
     eggs = 2000
@@ -1771,7 +1660,7 @@ def end_of_day(request):
     return render(request, 'end_of_day.html', context)
 
 
-@login_required(login_url='login')
+@manager_required
 def valuation(request):
     if request.method == "POST":
         transaction_type = request.POST.get("transaction_type", "").strip()
@@ -1933,7 +1822,7 @@ def valuation(request):
     return render(request, 'valuation.html', context)
 
 
-@login_required(login_url='login')
+@manager_required
 def investor_reports(request):
     start_date_str = request.GET.get("start_date", "").strip()
     end_date_str = request.GET.get("end_date", "").strip()

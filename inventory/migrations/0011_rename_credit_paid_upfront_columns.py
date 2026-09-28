@@ -7,13 +7,17 @@ def rename_credit_paid_upfront_columns(apps, schema_editor):
         ("inventory_inventorytransaction", "credit_payment_percentage", "credit_paid_upfront"),
     ]
 
-    with schema_editor.connection.cursor() as cursor:
+    connection = schema_editor.connection
+    quote_name = schema_editor.quote_name
+
+    with connection.cursor() as cursor:
         for table_name, old_column, new_column in table_column_pairs:
-            cursor.execute(f"PRAGMA table_info({table_name})")
-            columns = {row[1] for row in cursor.fetchall()}
+            description = connection.introspection.get_table_description(cursor, table_name)
+            columns = {column.name for column in description}
             if old_column in columns and new_column not in columns:
                 schema_editor.execute(
-                    f"ALTER TABLE {table_name} RENAME COLUMN {old_column} TO {new_column}"
+                    f"ALTER TABLE {quote_name(table_name)} "
+                    f"RENAME COLUMN {quote_name(old_column)} TO {quote_name(new_column)}"
                 )
 
 
