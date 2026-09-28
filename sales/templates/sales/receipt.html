@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Receipt {{ invoice.invoice_no }} | NZURI poultry farm</title>
+    <style>
+        :root { color-scheme: light; font-family: Georgia, "Times New Roman", serif; color: #202820; }
+        body { margin: 0; padding: 32px 16px; background: #eef1ec; }
+        .receipt { max-width: 720px; margin: 0 auto; padding: 36px; background: #fff; border: 1px solid #d5ddd4; }
+        header { padding-bottom: 20px; border-bottom: 2px solid #305c42; }
+        h1 { margin: 0; color: #244a34; font-size: 28px; }
+        .subtitle { margin: 6px 0 0; color: #59665d; font: 14px Arial, sans-serif; }
+        .meta, .party, .totals, table { font: 14px Arial, sans-serif; }
+        .meta { display: flex; justify-content: space-between; gap: 16px; margin-top: 20px; }
+        .party { margin: 24px 0; }
+        .party strong { display: block; margin-bottom: 5px; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 10px 6px; border-bottom: 1px solid #e2e7e1; text-align: left; }
+        th { color: #59665d; font-size: 12px; text-transform: uppercase; }
+        .number { text-align: right; white-space: nowrap; }
+        .totals { width: min(100%, 330px); margin: 22px 0 0 auto; }
+        .total-row { display: flex; justify-content: space-between; gap: 20px; padding: 5px 0; }
+        .grand-total { margin-top: 5px; padding-top: 10px; border-top: 2px solid #305c42; font-weight: 700; font-size: 16px; }
+        .change { color: #244a34; font-weight: 700; }
+        footer { margin-top: 32px; padding-top: 16px; border-top: 1px solid #e2e7e1; color: #59665d; text-align: center; font: 13px Arial, sans-serif; }
+        .print { display: block; margin: 0 auto 18px; padding: 9px 14px; border: 0; background: #305c42; color: #fff; cursor: pointer; font: 14px Arial, sans-serif; }
+        @media print {
+            body { padding: 0; background: #fff; }
+            .receipt { max-width: none; border: 0; }
+            .print { display: none; }
+        }
+    </style>
+</head>
+<body>
+    <button class="print" type="button" onclick="window.print()">Print receipt</button>
+    <main class="receipt">
+        <header>
+            <h1>NZURI poultry farm</h1>
+            <p class="subtitle">Sales receipt</p>
+            <div class="meta">
+                <span>Invoice {{ invoice.invoice_no }}</span>
+                <span>{{ invoice.invoice_date|date:"M j, Y" }}</span>
+            </div>
+        </header>
+        <section class="party">
+            <strong>Customer</strong>
+            <span>{% if invoice.customer %}{{ invoice.customer.name }}{% else %}Walk-in customer{% endif %}</span>
+        </section>
+        <table>
+            <thead>
+                <tr>
+                    <th>Item</th>
+                    <th class="number">Quantity</th>
+                    <th class="number">Unit price</th>
+                    <th class="number">Amount</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in items %}
+                <tr>
+                    <td>{{ item.product_name }} ({{ item.unit }})</td>
+                    <td class="number">{{ item.quantity }}</td>
+                    <td class="number">{{ invoice.currency }} {{ item.unit_price|floatformat:2 }}</td>
+                    <td class="number">{{ invoice.currency }} {{ item.line_total|floatformat:2 }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <section class="totals">
+            <div class="total-row"><span>Subtotal</span><span>{{ invoice.currency }} {{ invoice.subtotal|floatformat:2 }}</span></div>
+            {% if invoice.discount_amount %}<div class="total-row"><span>Discount</span><span>{{ invoice.currency }} {{ invoice.discount_amount|floatformat:2 }}</span></div>{% endif %}
+            <div class="total-row"><span>WHT</span><span>{{ invoice.currency }} {{ invoice.wht_amount|floatformat:2 }}</span></div>
+            <div class="total-row grand-total"><span>Total</span><span>{{ invoice.currency }} {{ invoice.total_amount|floatformat:2 }}</span></div>
+            <div class="total-row"><span>Amount due</span><span>{{ invoice.currency }} {{ amount_paid|add:balance|floatformat:2 }}</span></div>
+            <div class="total-row"><span>Amount tendered</span><span>{{ invoice.currency }} {{ amount_tendered|floatformat:2 }}</span></div>
+            <div class="total-row"><span>Amount applied</span><span>{{ invoice.currency }} {{ amount_paid|floatformat:2 }}</span></div>
+            <div class="total-row change"><span>Change due</span><span>{{ invoice.currency }} {{ change_given|floatformat:2 }}</span></div>
+            <div class="total-row"><span>Outstanding</span><span>{{ invoice.currency }} {{ balance|floatformat:2 }}</span></div>
+            <div class="total-row"><span>Payment method</span><span>{{ invoice.get_payment_method_display }}</span></div>
+        </section>
+        <footer>Thank you for your business.</footer>
+    </main>
+</body>
+</html>
