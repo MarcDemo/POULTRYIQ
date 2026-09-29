@@ -125,7 +125,10 @@ class SalesPageTests(TestCase):
 
 		response = self.client.get(reverse("sales"))
 
-		self.assertContains(response, '<select class="form-select" name="customer" id="customerName" required>', html=False)
+		self.assertContains(response, '<select class="form-select" name="customer" id="customerName">', html=False)
+		self.assertContains(response, 'Add Customer')
+		self.assertContains(response, 'Change Due')
+		self.assertContains(response, 'Download')
 		self.assertContains(
 			response,
 			f'<option value="{customer.customer_id}">{customer.display_id} — Dropdown Buyer</option>',
@@ -310,7 +313,7 @@ class SalesPageTests(TestCase):
 			).exists()
 		)
 
-	def test_post_sale_overpayment_creates_negative_balance(self):
+	def test_post_sale_cash_overpayment_returns_change_without_negative_balance(self):
 		Customer.objects.create(name="Credit Buyer")
 		self.client.force_login(self.user)
 
@@ -337,9 +340,95 @@ class SalesPageTests(TestCase):
 
 		self.assertEqual(invoice.total_amount, Decimal("2000.00"))
 		self.assertEqual(invoice.status, SaleInvoice.Status.PAID)
-		self.assertEqual(ledger.amount_paid, Decimal("3000.00"))
-		self.assertEqual(ledger.balance, Decimal("-1000.00"))
-		self.assertEqual(payment.amount, Decimal("3000.00"))
+		self.assertEqual(ledger.amount_due, Decimal("2000.00"))
+		self.assertEqual(ledger.amount_paid, Decimal("2000.00"))
+		self.assertEqual(ledger.balance, Decimal("0.00"))
+		self.assertEqual(payment.amount, Decimal("2000.00"))
+		self.assertTrue(
+			any("Change to return: UGX 1,000.00" in str(message) for message in response.context["messages"])
+		)
+
+	def test_walk_in_sale_has_no_wht_and_receipt_can_be_downloaded(self):
+		self.client.force_login(self.user)
+
+		response = self.client.post(
+			reverse("sales"),
+			{
+				"customer": "",
+				"product": "eggs",
+				"quantity": "1",
+				"price": "2000",
+				"deposit": "3000",
+				"payment_method": "CASH",
+				"sale_type": "instant",
+			},
+		)
+
+		self.assertEqual(response.status_code, 302)
+		invoice = SaleInvoice.objects.latest("invoice_id")
+		self.assertIsNone(invoice.customer)
+		self.assertEqual(invoice.wht_amount, Decimal("0.00"))
+		self.assertEqual(invoice.change_given, Decimal("1000.00"))
+		self.assertEqual(invoice.receivable.amount_paid, Decimal("2000.00"))
+		self.assertEqual(invoice.receivable.balance, Decimal("0.00"))
+		self.assertFalse(CustomerPayment.objects.filter(invoice=invoice).exists())
+
+		receipt = self.client.get(reverse("sale_receipt", args=[invoice.pk]))
+		self.assertEqual(receipt.status_code, 200)
+		self.assertIn("attachment; filename=", receipt["Content-Disposition"])
+		self.assertContains(receipt, "NZURI poultry farm")
+		self.assertContains(receipt, "Walk-in customer")
+		self.assertContains(receipt, "Change due")
+		self.assertContains(receipt, "1000.00")
+
+	def test_cash_change_uses_customer_amount_due_after_wht(self):
+		customer = Customer.objects.create(name="WHT Cash Buyer", pay_wht=True)
+		self.client.force_login(self.user)
+
+		response = self.client.post(
+			reverse("sales"),
+			{
+				"customer": str(customer.pk),
+				"product": "eggs",
+				"quantity": "1",
+				"price": "10000",
+				"deposit": "9500",
+				"payment_method": "CASH",
+				"sale_type": "instant",
+			},
+		)
+
+		self.assertEqual(response.status_code, 302)
+		invoice = SaleInvoice.objects.get(customer=customer)
+		self.assertEqual(invoice.wht_amount, Decimal("600.00"))
+		self.assertEqual(invoice.change_given, Decimal("100.00"))
+		self.assertEqual(invoice.receivable.amount_due, Decimal("9400.00"))
+		self.assertEqual(invoice.receivable.amount_paid, Decimal("9400.00"))
+		self.assertEqual(invoice.receivable.balance, Decimal("0.00"))
+		self.assertEqual(CustomerPayment.objects.get(invoice=invoice).amount, Decimal("9400.00"))
+
+	def test_non_cash_overpayment_is_rejected(self):
+		for method in (Customer.PaymentMethod.MOMO, Customer.PaymentMethod.BANK):
+			with self.subTest(method=method):
+				customer = Customer.objects.create(name=f"{method} Buyer")
+				self.client.force_login(self.user)
+
+				response = self.client.post(
+					reverse("sales"),
+					{
+						"customer": str(customer.pk),
+						"product": "eggs",
+						"quantity": "1",
+						"price": "2000",
+						"deposit": "3000",
+						"payment_method": method,
+						"sale_type": "instant",
+					},
+					follow=True,
+				)
+
+				self.assertContains(response, "Amount received cannot exceed the amount due")
+				self.assertFalse(SaleInvoice.objects.filter(customer=customer).exists())
 
 	def test_booking_without_payment_is_saved_as_draft(self):
 		Customer.objects.create(name="Booking Buyer")
