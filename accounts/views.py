@@ -32,7 +32,7 @@ from accounting.models import FinancialStatement
 from accounting.services import get_pl_data, get_bs_data
 from accounts.decorators import manager_required
 
-from .models import InvestorCapitalTransaction, User
+from .models import EndOfDayNote, InvestorCapitalTransaction, User
 
 # Create your views here.
 
@@ -1643,21 +1643,76 @@ def reports(request):
 
 @manager_required
 def end_of_day(request):
-    # Sample data for demonstration
-    eggs = 2000
-    sales = 10000000
-    expenses = 500000
-    deaths = 10
-    profit = sales - expenses
+    raw_date = (request.POST.get("date") if request.method == "POST" else request.GET.get("date")) or ""
+    raw_date = raw_date.strip()
+    selected_date = timezone.localdate()
+
+    if raw_date:
+        try:
+            selected_date = date.fromisoformat(raw_date)
+        except ValueError:
+            messages.error(request, "Please select a valid summary date.")
+            return redirect("end_of_day")
+
+    if request.method == "POST":
+        notes = request.POST.get("notes", "").strip()
+        EndOfDayNote.objects.update_or_create(
+            summary_date=selected_date,
+            defaults={"notes": notes, "updated_by": request.user},
+        )
+        messages.success(request, f"Manager notes saved for {selected_date:%d %b %Y}.")
+        return redirect(f"{reverse('end_of_day')}?date={selected_date.isoformat()}")
+
+    egg_qs = egg_collection.objects.filter(
+        collection_date=selected_date,
+        sickness_report__isnull=True,
+    ).exclude(status=ApprovalStatus.REJECTED)
+    sales_qs = SaleInvoice.objects.filter(invoice_date=selected_date).exclude(
+        status=SaleInvoice.Status.CANCELLED
+    )
+    payment_qs = CustomerPayment.objects.filter(payment_date=selected_date).exclude(
+        invoice__status=SaleInvoice.Status.CANCELLED
+    )
+    expense_qs = ExpenseTransaction.objects.filter(expense_date=selected_date).exclude(
+        status=ExpenseTransaction.Status.REJECTED
+    )
+    mortality_qs = MortalityRecord.objects.filter(record_date=selected_date).exclude(
+        status=ApprovalStatus.REJECTED
+    )
+
+    eggs_collected = _int_total(egg_qs, "eggs_collected")
+    eggs_rejected = _int_total(egg_qs, "eggs_rejected")
+    sales = _decimal_total(sales_qs, "total_amount")
+    cash_received = _decimal_total(payment_qs, "amount")
+    expenses = _decimal_total(expense_qs, "total_amount")
+    deaths = _int_total(mortality_qs, "number_dead")
+    operating_result = sales - expenses
+
+    note = EndOfDayNote.objects.select_related("updated_by").filter(summary_date=selected_date).first()
+    activity_count = (
+        egg_qs.count()
+        + sales_qs.count()
+        + payment_qs.count()
+        + expense_qs.count()
+        + mortality_qs.count()
+    )
 
     context = {
-        'eggs': eggs,
-        'sales': sales,
-        'expenses': expenses,
-        'deaths': deaths,
-        'profit': profit,
+        "selected_date": selected_date,
+        "selected_date_value": selected_date.isoformat(),
+        "eggs": _number(eggs_collected),
+        "eggs_rejected": _number(eggs_rejected),
+        "net_eggs": _number(max(eggs_collected - eggs_rejected, 0)),
+        "sales": _money(sales),
+        "cash_received": _money(cash_received),
+        "expenses": _money(expenses),
+        "deaths": _number(deaths),
+        "operating_result": _money(operating_result),
+        "operating_result_value": operating_result,
+        "note": note,
+        "activity_count": activity_count,
     }
-    return render(request, 'end_of_day.html', context)
+    return render(request, "end_of_day.html", context)
 
 
 @manager_required
