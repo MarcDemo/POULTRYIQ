@@ -1,3 +1,5 @@
+from datetime import date
+from decimal import Decimal
 from pathlib import Path
 
 from django.apps import apps
@@ -7,8 +9,10 @@ from django.template.loader import get_template
 from django.test import SimpleTestCase, TestCase
 from django.urls import reverse
 
-from .models import Role, User
-from poultry.models import PoultryHouse
+from .models import EndOfDayNote, Role, User
+from poultry.models import ApprovalStatus, MortalityCause, MortalityRecord, PoultryBatch, PoultryHouse, egg_collection
+from expenses.models import ExpenseCategory, ExpenseTransaction
+from sales.models import Customer, CustomerPayment, SaleInvoice
 
 
 class UserModelTests(TestCase):
@@ -378,3 +382,144 @@ class NavSidebarVisibilityTests(TestCase):
         self.assertNotContains(response, 'id="managerSidebar"')
         self.assertNotContains(response, "Worker Panel")
         self.assertNotContains(response, "Supervisor Panel")
+
+
+class EndOfDayViewTests(TestCase):
+    def setUp(self):
+        self.summary_date = date(2026, 9, 27)
+        manager_role = Role.objects.create(code=Role.RoleCode.MANAGER, name="Farm Manager")
+        self.manager = User.objects.create_user(
+            username="eod-manager",
+            password="StrongPass1",
+            role=manager_role,
+        )
+        self.client.force_login(self.manager)
+
+        house = PoultryHouse.objects.create(
+            house_code="EOD-01",
+            name="End of Day House",
+            capacity=500,
+        )
+        self.batch = PoultryBatch.objects.create(
+            batch_code="EOD-BATCH",
+            house=house,
+            date_stocked=self.summary_date,
+            initial_quantity=400,
+            initial_age_days=140,
+            created_by=self.manager,
+        )
+        self.customer = Customer.objects.create(name="End of Day Customer")
+        self.expense_category = ExpenseCategory.objects.create(
+            code="EOD",
+            name="End of Day Expense",
+        )
+
+    def test_summary_calculates_selected_date_and_excludes_invalid_records(self):
+        egg_collection.objects.create(
+            batch=self.batch,
+            collection_date=self.summary_date,
+            eggs_collected=120,
+            eggs_rejected=5,
+            status=ApprovalStatus.APPROVED,
+            collected_by=self.manager,
+        )
+        egg_collection.objects.create(
+            batch=self.batch,
+            collection_date=self.summary_date,
+            eggs_collected=999,
+            status=ApprovalStatus.REJECTED,
+            collected_by=self.manager,
+        )
+
+        invoice = SaleInvoice.objects.create(
+            invoice_no="EOD-INV-001",
+            customer=self.customer,
+            invoice_date=self.summary_date,
+            total_amount=Decimal("1000.00"),
+            status=SaleInvoice.Status.ISSUED,
+            created_by=self.manager,
+        )
+        SaleInvoice.objects.create(
+            invoice_no="EOD-INV-CANCELLED",
+            customer=self.customer,
+            invoice_date=self.summary_date,
+            total_amount=Decimal("9999.00"),
+            status=SaleInvoice.Status.CANCELLED,
+            created_by=self.manager,
+        )
+        CustomerPayment.objects.create(
+            invoice=invoice,
+            customer=self.customer,
+            payment_date=self.summary_date,
+            amount=Decimal("500.00"),
+            received_by=self.manager,
+        )
+
+        ExpenseTransaction.objects.create(
+            expense_date=self.summary_date,
+            category=self.expense_category,
+            description="Included expense",
+            total_amount=Decimal("250.00"),
+            period_year=self.summary_date.year,
+            period_month=self.summary_date.month,
+            status=ExpenseTransaction.Status.APPROVED,
+            created_by=self.manager,
+        )
+        ExpenseTransaction.objects.create(
+            expense_date=self.summary_date,
+            category=self.expense_category,
+            description="Rejected expense",
+            total_amount=Decimal("900.00"),
+            period_year=self.summary_date.year,
+            period_month=self.summary_date.month,
+            status=ExpenseTransaction.Status.REJECTED,
+            created_by=self.manager,
+        )
+
+        cause = MortalityCause.objects.create(name="Test cause")
+        MortalityRecord.objects.create(
+            batch=self.batch,
+            record_date=self.summary_date,
+            number_dead=3,
+            cause=cause,
+            status=ApprovalStatus.APPROVED,
+            reported_by=self.manager,
+        )
+        MortalityRecord.objects.create(
+            batch=self.batch,
+            record_date=self.summary_date,
+            number_dead=20,
+            cause=cause,
+            status=ApprovalStatus.REJECTED,
+            reported_by=self.manager,
+        )
+
+        response = self.client.get(reverse("end_of_day"), {"date": self.summary_date.isoformat()})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["eggs"], "120")
+        self.assertEqual(response.context["eggs_rejected"], "5")
+        self.assertEqual(response.context["net_eggs"], "115")
+        self.assertEqual(response.context["sales"], "UGX 1,000.00")
+        self.assertEqual(response.context["cash_received"], "UGX 500.00")
+        self.assertEqual(response.context["expenses"], "UGX 250.00")
+        self.assertEqual(response.context["deaths"], "3")
+        self.assertEqual(response.context["operating_result"], "UGX 750.00")
+        self.assertEqual(response.context["activity_count"], 5)
+
+    def test_manager_notes_are_saved_and_loaded_by_date(self):
+        response = self.client.post(
+            reverse("end_of_day"),
+            {"date": self.summary_date.isoformat(), "notes": "Inspect feed stock tomorrow."},
+        )
+
+        self.assertRedirects(
+            response,
+            f"{reverse('end_of_day')}?date={self.summary_date.isoformat()}",
+        )
+        note = EndOfDayNote.objects.get(summary_date=self.summary_date)
+        self.assertEqual(note.notes, "Inspect feed stock tomorrow.")
+        self.assertEqual(note.updated_by, self.manager)
+
+        response = self.client.get(reverse("end_of_day"), {"date": self.summary_date.isoformat()})
+        self.assertContains(response, "Inspect feed stock tomorrow.")
