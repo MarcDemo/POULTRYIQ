@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-labelledby="title">
+  <title id="title">Egg tray</title>
+  <path d="M18 45h44l-5 19H23z" fill="#dce9f7" stroke="#2f5f96" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M24 45c0-12 6-21 11-21s10 9 10 21M39 45c0-13 6-23 11-23s10 10 10 23" fill="#fffdf4" stroke="#2f5f96" stroke-width="3" stroke-linecap="round"/>
+  <path d="M22 52h36M29 45l4 19M51 45l-4 19" fill="none" stroke="#6f9fd5" stroke-width="2.5" stroke-linecap="round"/>
+</svg>

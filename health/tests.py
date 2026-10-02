@@ -277,6 +277,38 @@ class SupervisorSicknessWorkflowTests(TestCase):
         self.assertEqual(len(recent_treatments), 1)
         self.assertEqual(recent_treatments[0].sickness_report.house_ref, self.house_a)
 
+    def test_supervisor_can_open_scoped_sickness_report_list(self):
+        visible_report = SicknessReport.objects.create(
+            date=date(2026, 5, 5),
+            house="House A",
+            house_ref=self.house_a,
+            batch=self.batch_a,
+            bird_identifier="BIRD-A",
+            symptoms="Sneezing",
+            affected=1,
+            action="sickbay",
+            reported_by=self.supervisor,
+        )
+        SicknessReport.objects.create(
+            date=date(2026, 5, 5),
+            house="House B",
+            house_ref=self.house_b,
+            batch=self.batch_b,
+            bird_identifier="BIRD-B",
+            symptoms="Drooping wings",
+            affected=1,
+            action="sickbay",
+            reported_by=self.manager,
+        )
+
+        self.client.force_login(self.supervisor)
+        response = self.client.get(reverse("view_sickness"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(list(response.context["reports"]), [visible_report])
+        self.assertContains(response, "BIRD-A")
+        self.assertNotContains(response, "BIRD-B")
+
     def test_worker_can_record_sickbay_cleaning_from_sickbay_report(self):
         today = date.today()
         report = SicknessReport.objects.create(

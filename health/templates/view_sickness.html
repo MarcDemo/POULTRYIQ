@@ -1,27 +1,112 @@
 {% extends "base.html" %}
 {% block extra_css %}
 <style>
-    .symptom-photo-thumb {
-        width: 64px;
+    .symptom-photo-trigger {
+        position: relative;
+        display: grid !important;
+        width: 64px !important;
+        min-width: 64px;
+        max-width: 64px;
         height: 64px;
-        object-fit: cover;
-        border: 1px solid #dee2e6;
-        border-radius: 0.5rem;
+        min-height: 64px;
+        padding: 0 !important;
+        overflow: hidden;
+        border: 1px solid #c6d7e6 !important;
+        border-radius: 0.75rem;
+        background: #eaf2f9;
         cursor: zoom-in;
-        transition: transform 0.15s ease, box-shadow 0.15s ease;
+        box-shadow: 0 5px 14px rgba(28, 68, 105, 0.1);
+        transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
     }
 
-    .symptom-photo-thumb:hover {
-        transform: scale(1.04);
-        box-shadow: 0 0.25rem 0.75rem rgba(0, 0, 0, 0.18);
+    .symptom-photo-thumb {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        background: #ffffff;
+        transition: transform 0.22s ease;
+    }
+
+    .symptom-photo-trigger:hover,
+    .symptom-photo-trigger:focus-visible {
+        border-color: #2868aa !important;
+        box-shadow: 0 8px 20px rgba(28, 68, 105, 0.18);
+        transform: translateY(-2px);
+    }
+
+    .symptom-photo-trigger:hover .symptom-photo-thumb {
+        transform: scale(1.06);
+    }
+
+    .symptom-photo-zoom {
+        position: absolute;
+        right: 0.35rem;
+        bottom: 0.35rem;
+        display: grid;
+        width: 1.65rem;
+        height: 1.65rem;
+        place-items: center;
+        border: 1px solid rgba(255, 255, 255, 0.72);
+        border-radius: 50%;
+        color: #fff;
+        background: rgba(16, 43, 78, 0.82);
+        font-size: 0.75rem;
+        pointer-events: none;
+    }
+
+    .symptom-photo-fallback {
+        display: none;
+        place-items: center;
+        align-content: center;
+        gap: 0.2rem;
+        color: #526f8a;
+        font-size: 0.67rem;
+        font-weight: 700;
+        line-height: 1.1;
+        text-decoration: none;
+    }
+
+    .symptom-photo-trigger.is-missing {
+        cursor: default;
+    }
+
+    .symptom-photo-trigger.is-missing .symptom-photo-thumb,
+    .symptom-photo-trigger.is-missing .symptom-photo-zoom {
+        display: none;
+    }
+
+    .symptom-photo-trigger.is-missing .symptom-photo-fallback {
+        display: grid;
     }
 
     .symptom-photo-modal-img {
         width: 100%;
-        max-height: 75vh;
+        max-height: min(78vh, 900px);
         object-fit: contain;
-        border-radius: 0.5rem;
-        background: #f8f9fa;
+        border-radius: 0.75rem;
+        background: #0b1726;
+    }
+
+    #symptomPhotoModal .modal-body {
+        padding: 0.75rem;
+        background: #0b1726;
+    }
+
+    @media (max-width: 575.98px) {
+        #symptomPhotoModal .modal-dialog {
+            margin: 0.65rem;
+        }
+
+        .symptom-photo-modal-img {
+            max-height: 82vh;
+        }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .symptom-photo-trigger,
+        .symptom-photo-thumb {
+            transition: none;
+        }
     }
 </style>
 {% endblock %}
@@ -182,7 +267,7 @@
                             {% if record.image %}
                             <button
                                 type="button"
-                                class="btn btn-link p-0 mt-1 d-inline-flex align-items-center symptom-photo-trigger"
+                                class="btn btn-link mt-2 symptom-photo-trigger"
                                 data-bs-toggle="modal"
                                 data-bs-target="#symptomPhotoModal"
                                 data-img-src="{{ record.image.url }}"
@@ -193,7 +278,10 @@
                                     src="{{ record.image.url }}"
                                     alt="Sickness photo for {{ record.case_label }}"
                                     class="symptom-photo-thumb"
+                                    loading="lazy"
                                 >
+                                <span class="symptom-photo-zoom" aria-hidden="true"><i class="bi bi-arrows-fullscreen"></i></span>
+                                <span class="symptom-photo-fallback" aria-hidden="true"><i class="bi bi-image fs-5"></i>Photo unavailable</span>
                             </button>
                             {% endif %}
                         </td>
@@ -254,8 +342,8 @@
     <div class="modal-dialog modal-dialog-centered modal-lg">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="symptomPhotoModalLabel">Sickness Photo</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                <h5 class="modal-title" id="symptomPhotoModalLabel">Sickness photo</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close enlarged photo"></button>
             </div>
             <div class="modal-body">
                 <img id="symptomPhotoModalImage" src="" alt="Sickness photo preview" class="symptom-photo-modal-img">
@@ -269,17 +357,33 @@
 {% block extra_js %}
 <script>
     document.addEventListener("DOMContentLoaded", function () {
+        const modal = document.getElementById("symptomPhotoModal");
         const modalImage = document.getElementById("symptomPhotoModalImage");
         const triggers = document.querySelectorAll(".symptom-photo-trigger");
 
         triggers.forEach(function (trigger) {
+            const thumbnail = trigger.querySelector(".symptom-photo-thumb");
+
+            thumbnail.addEventListener("error", function () {
+                trigger.classList.add("is-missing");
+                trigger.removeAttribute("data-bs-toggle");
+                trigger.removeAttribute("data-bs-target");
+                trigger.setAttribute("aria-label", "Sickness photo unavailable");
+                trigger.disabled = true;
+            });
+
             trigger.addEventListener("click", function () {
+                if (this.classList.contains("is-missing")) return;
                 const imgSrc = this.getAttribute("data-img-src");
                 const imgAlt = this.getAttribute("data-img-alt") || "Sickness photo preview";
 
                 modalImage.setAttribute("src", imgSrc);
                 modalImage.setAttribute("alt", imgAlt);
             });
+        });
+
+        modal.addEventListener("hidden.bs.modal", function () {
+            modalImage.removeAttribute("src");
         });
     });
 </script>

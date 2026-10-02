@@ -4,7 +4,7 @@
 {% block title %}Alerts & Messages - Poultry IQ{% endblock %}
 
 {% block content %}
-<div class="container-fluid mt-4">
+<div class="container-fluid mt-4 alerts-inbox">
     <div class="row">
         <!-- Sidebar with filters -->
         <div class="col-md-3">
@@ -70,15 +70,15 @@
                 <div class="card-body">
                     <div class="d-flex justify-content-between mb-2">
                         <span><i class="fas fa-envelope"></i> Unread:</span>
-                        <strong class="badge badge-warning">{{ unread_count }}</strong>
+                        <strong class="badge bg-warning text-dark">{{ unread_count }}</strong>
                     </div>
                     <div class="d-flex justify-content-between mb-2">
                         <span><i class="fas fa-exclamation-circle"></i> Urgent:</span>
-                        <strong class="badge badge-danger">{{ urgent_count }}</strong>
+                        <strong class="badge bg-danger">{{ urgent_count }}</strong>
                     </div>
                     <div class="d-flex justify-content-between">
                         <span><i class="fas fa-clock"></i> Overdue:</span>
-                        <strong class="badge badge-danger">{{ overdue_count }}</strong>
+                        <strong class="badge bg-danger">{{ overdue_count }}</strong>
                     </div>
                 </div>
             </div>
@@ -108,7 +108,7 @@
                         <div class="list-group">
                             {% for alert in alerts %}
                                 <a href="{% url 'alerts:detail' alert.alert_id %}" 
-                                   class="list-group-item list-group-item-action {% if alert.status == 'UNREAD' %}active{% endif %} border-left-4 {% if alert.priority == 'URGENT' %}border-danger{% elif alert.priority == 'HIGH' %}border-warning{% endif %}">
+                                   class="list-group-item list-group-item-action alert-inbox-item {% if alert.status == 'UNREAD' %}is-unread{% endif %} border-left-4 {% if alert.priority == 'URGENT' %}alert-border--urgent{% elif alert.priority == 'HIGH' %}alert-border--high{% endif %}">
                                     
                                     <div class="d-flex justify-content-between align-items-start">
                                         <div class="flex-grow-1">
@@ -127,16 +127,16 @@
                                                 <h6 class="mb-0">{{ alert.title }}</h6>
                                                 
                                                 <!-- Priority badge -->
-                                                <span class="badge 
-                                                    {% if alert.priority == 'URGENT' %}badge-danger
-                                                    {% elif alert.priority == 'HIGH' %}badge-warning
-                                                    {% elif alert.priority == 'MEDIUM' %}badge-info
-                                                    {% else %}badge-secondary{% endif %} ms-2">
+                                                <span class="badge alert-priority-badge
+                                                    {% if alert.priority == 'URGENT' %}alert-priority-badge--urgent
+                                                    {% elif alert.priority == 'HIGH' %}alert-priority-badge--high
+                                                    {% elif alert.priority == 'MEDIUM' %}alert-priority-badge--medium
+                                                    {% else %}alert-priority-badge--low{% endif %} ms-2">
                                                     {{ alert.get_priority_display }}
                                                 </span>
                                                 
                                                 <!-- Type badge -->
-                                                <span class="badge badge-light ms-2">
+                                                <span class="badge alert-type-badge ms-2">
                                                     {{ alert.alert_type.name }}
                                                 </span>
                                             </div>
@@ -166,7 +166,7 @@
                                         
                                         <div class="text-right ms-3">
                                             {% if alert.status == 'UNREAD' %}
-                                                <span class="badge badge-warning">New</span>
+                                                <span class="badge alert-new-badge">New</span>
                                             {% endif %}
                                         </div>
                                     </div>
@@ -185,13 +185,4 @@
     </div>
 </div>
 
-<style>
-    .border-left-4 {
-        border-left: 4px solid transparent !important;
-    }
-    .list-group-item.active {
-        background-color: #e7f3ff;
-        border-color: #b3d9ff;
-    }
-</style>
 {% endblock %}

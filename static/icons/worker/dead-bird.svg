@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-labelledby="title">
+  <title id="title">Dead bird report</title>
+  <path d="M56 43c-1-10-9-18-20-18-12 0-22 9-22 20s10 19 22 19h21c6 0 9-4 9-9 0-6-4-10-10-12z" fill="#f4dddd" stroke="#8f3535" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M55 41l13 5-11 6" fill="#d6a14b" stroke="#8f3535" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M43 34l7 7m0-7-7 7" stroke="#8f3535" stroke-width="3" stroke-linecap="round"/>
+  <path d="M25 64l-3 7m18-7 3 7" stroke="#8f3535" stroke-width="3" stroke-linecap="round"/>
+  <path d="M22 45c5-6 13-6 18 0-5 7-13 7-18 0z" fill="#cf8e8e"/>
+</svg>

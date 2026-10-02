@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-labelledby="title">
+  <title id="title">Sick bird</title>
+  <path d="M55 35c0-9-7-16-17-16-12 0-22 10-22 22 0 13 10 23 24 23 10 0 19-5 23-13-7 1-12-1-15-5 5-1 8-5 7-11z" fill="#e5eef8" stroke="#2f5f96" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M54 32l12 5-11 5" fill="#d19a42" stroke="#684f21" stroke-width="3" stroke-linejoin="round"/>
+  <circle cx="47" cy="29" r="2.5" fill="#2f5f96"/>
+  <path d="M27 45c5-6 13-5 17 1-5 7-13 8-17-1z" fill="#8eb4de"/>
+  <path d="M29 64v7m14-7v7" stroke="#684f21" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="61" cy="57" r="11" fill="#fff" stroke="#a63d3d" stroke-width="3"/>
+  <path d="M61 51v12m-6-6h12" stroke="#a63d3d" stroke-width="3" stroke-linecap="round"/>
+</svg>
