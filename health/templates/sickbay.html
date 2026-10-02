@@ -1,292 +1,60 @@
 {% extends "base.html" %}
-
-{% block extra_css %}
-<style>
-/* ── Action Buttons: uniform height ── */
-.action-btn {
-    min-height: 90px;
-    border-radius: 14px;
-    position: relative;
-    overflow: hidden;
-    border: none !important;
-    text-decoration: none;
-    transition: transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1),
-                box-shadow 0.25s ease;
-}
-.action-btn:hover {
-    transform: translateY(-6px) scale(1.03);
-    text-decoration: none;
-}
-.action-btn:active {
-    transform: translateY(-2px) scale(0.98) !important;
-    transition: transform 0.08s ease !important;
-}
-
-/* ── Particle base ── */
-.particle {
-    position: absolute;
-    pointer-events: none;
-    z-index: 10;
-}
-
-/* ── Egg particles ── */
-.egg-particle {
-    width: 14px;
-    height: 18px;
-    background: radial-gradient(circle at 40% 30%, #fffde7, #fbbf24);
-    border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
-    box-shadow: inset -2px -2px 4px rgba(0,0,0,0.12);
-    top: -20px;
-    animation: eggFall linear forwards;
-}
-@keyframes eggFall {
-    0%   { top: -20px; opacity: 1; transform: rotate(var(--rot-s,-10deg)); }
-    55%  { opacity: 1; }
-    100% { top: 115%; opacity: 0; transform: rotate(var(--rot-e, 20deg)) scale(0.55); }
-}
-
-/* ── Grain particles ── */
-.grain-particle {
-    width: 7px;
-    height: 7px;
-    background: radial-gradient(circle at 35% 35%, #d97706, #78350f);
-    border-radius: 50%;
-    bottom: 4px;
-    animation: grainRise ease-out forwards;
-}
-@keyframes grainRise {
-    0%   { bottom: 4px; opacity: 1; transform: translateX(0) scale(1); }
-    100% { bottom: 85px; opacity: 0; transform: translateX(var(--xd,0px)) scale(0.35); }
-}
-
-/* ── Feed shimmer sweep ── */
-.btn-feed::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(110deg, transparent 30%, rgba(255,255,255,0.32) 50%, transparent 70%);
-    transform: translateX(-110%);
-}
-.btn-feed:hover::after {
-    transform: translateX(110%);
-    transition: transform 0.55s ease;
-}
-
-/* ── Sparkle particles ── */
-.sparkle-particle {
-    width: 10px;
-    height: 10px;
-    background: rgba(255,255,255,0.95);
-    clip-path: polygon(50% 0%,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%);
-    top: 50%;
-    left: 50%;
-    animation: sparkleBurst ease-out forwards;
-}
-@keyframes sparkleBurst {
-    0%   { transform: translate(-50%,-50%) rotate(var(--ang)) translateX(0)   scale(1.4); opacity: 1; }
-    100% { transform: translate(-50%,-50%) rotate(var(--ang)) translateX(50px) scale(0.2); opacity: 0; }
-}
-
-/* ── Mortality heartbeat glow ── */
-.btn-mortality:hover {
-    animation: heartbeat 0.75s ease-in-out infinite;
-}
-@keyframes heartbeat {
-    0%   { box-shadow: 0 0 0  0   rgba(220,53,69,0.65), 0 8px 24px rgba(0,0,0,0.18); }
-    50%  { box-shadow: 0 0 0 16px rgba(220,53,69,0),    0 8px 24px rgba(0,0,0,0.18); }
-    100% { box-shadow: 0 0 0  0   rgba(220,53,69,0),    0 8px 24px rgba(0,0,0,0.18); }
-}
-
-/* ── Sickbay banner + particles ── */
-.sickbay-banner {
-    background: linear-gradient(90deg, rgba(220,53,69,0.06), rgba(248,113,113,0.03));
-    border-left: 4px solid rgba(220,53,69,0.18);
-    padding: 12px 16px;
-    border-radius: 10px;
-}
-.s-badge {
-    width: 52px;
-    height: 52px;
-    border-radius: 10px;
-    background: linear-gradient(180deg,#fff 0%, #ffd6d6 100%);
-    color: #c82333;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: 700;
-    font-size: 28px;
-    box-shadow: 0 6px 18px rgba(200,40,50,0.12);
-    animation: sBadgePulse 1.8s ease-in-out infinite;
-}
-@keyframes sBadgePulse {
-    0% { transform: scale(1); }
-    50% { transform: scale(1.06); }
-    100% { transform: scale(1); }
-}
-
-.sickbay-particles {
-    position: absolute;
-    inset: 80px 0 auto 0;
-    pointer-events: none;
-    overflow: visible;
-    z-index: 5;
-}
-.sick-cross {
-    position: absolute;
-    width: 18px;
-    height: 18px;
-    background: linear-gradient(180deg,#ff6b6b,#ff8787);
-    clip-path: polygon(30% 0%, 70% 0%, 70% 30%, 100% 30%, 100% 70%, 70% 70%, 70% 100%, 30% 100%, 30% 70%, 0% 70%, 0% 30%, 30% 30%);
-    opacity: 0.0;
-    transform: translateY(0) scale(0.9) rotate(-10deg);
-    animation: crossFloat 3200ms linear forwards;
-}
-@keyframes crossFloat {
-    0% { opacity: 0; transform: translateY(0) scale(0.8) rotate(-10deg); }
-    10% { opacity: 0.9; }
-    70% { opacity: 0.9; transform: translateY(-90px) scale(1) rotate(10deg); }
-    100% { opacity: 0; transform: translateY(-140px) scale(0.6) rotate(25deg); }
-}
-
-</style>
-{% endblock %}
-
-
+{% load static %}
 
 {% block content %}
-
-<div class="container-fluid">
-
-    <!-- Sickbay Banner -->
-    <div class="sickbay-banner d-flex align-items-center mb-3">
-        <div class="s-badge me-3">+</div>
-        <div>
-            <h4 class="mb-0">Sickbay</h4>
-            <small class="text-muted">Care for separated sick birds <span class="luganda">Labirira enkoko endwadde ezayawuddwa</span></small>
-        </div>
-    </div>
-
-    <!-- floating crosses container -->
-    <div class="sickbay-particles" aria-hidden="true"></div>
-
-
-   
-
-    <!-- ── Quick Actions ── -->
-    <div class="card shadow-sm mb-4">
-        <div class="card-header">
-            <i class="bi bi-hand-index-thumb me-2"></i>Tap what you want to record
-            <span class="luganda">Koona ku ky'ogenda okuwandiika</span>
-        </div>
-        <div class="card-body">
-            <div class="row g-3">
-                <div class="col-6 col-md-3">
-                    <a href="{% url 'sick_record_egg' %}" class="btn btn-primary w-100 action-btn worker-action-btn btn-eggs d-flex flex-column align-items-center justify-content-center gap-2">
-                        <i class="bi bi-basket fs-2"></i>
-                        <span class="action-title">Eggs</span>
-                        <span class="action-subtitle">Amagi</span>
-                    </a>
-                </div>
-                <div class="col-6 col-md-3">
-                    <a href="{% url 'sick_record_feed' %}" class="btn btn-warning w-100 action-btn worker-action-btn btn-feed d-flex flex-column align-items-center justify-content-center gap-2">
-                        <i class="bi bi-bag-fill fs-2"></i>
-                        <span class="action-title">Feed</span>
-                        <span class="action-subtitle">Emmere</span>
-                    </a>
-                </div>
-                <div class="col-6 col-md-3">
-                    <a href="{% url 'sick_record_cleaning' %}" class="btn btn-success w-100 action-btn worker-action-btn btn-clean d-flex flex-column align-items-center justify-content-center gap-2">
-                        <i class="bi bi-broom fs-2"></i>
-                        <span class="action-title">Clean</span>
-                        <span class="action-subtitle">Okuyonja</span>
-                    </a>
-                </div>
-                <div class="col-6 col-md-3">
-                    <a href="{% url 'sick_mortality' %}" class="btn btn-danger w-100 action-btn worker-action-btn btn-mortality d-flex flex-column align-items-center justify-content-center gap-2">
-                        <i class="bi bi-exclamation-triangle fs-2"></i>
-                        <span class="action-title">Dead birds</span>
-                        <span class="action-subtitle">Enkoko ezifudde</span>
-                    </a>
-                </div>
+<div class="container-fluid worker-field-page">
+    <header class="worker-hero worker-page-heading mb-4">
+        <div class="worker-identity">
+            <span class="worker-avatar worker-avatar--health" aria-hidden="true">
+                <img src="{% static 'icons/worker/sick-bird.svg' %}" alt="">
+            </span>
+            <div>
+                <p class="worker-eyebrow mb-1">Bird care</p>
+                <h1 class="worker-name mb-1">Sick bay</h1>
+                <p class="worker-page-description">Record care given to separated sick birds.</p>
+                <p class="luganda">Wandiika obujjanjabi bw'enkoko endwadde ezayawuddwa.</p>
             </div>
         </div>
-    </div>
+    </header>
 
-    
-
-
-  
-    
+    <section class="worker-actions" aria-labelledby="sickbay-actions-title">
+        <div class="worker-actions-heading">
+            <span class="section-cue" aria-hidden="true"><i class="bi bi-hand-index-thumb-fill"></i></span>
+            <div>
+                <h2 id="sickbay-actions-title">What do you want to record?</h2>
+                <p>Koona ku ky'ogenda okuwandiika</p>
+            </div>
+        </div>
+        <div class="worker-action-grid worker-action-grid--four">
+            <div>
+                <a href="{% url 'sick_record_egg' %}" class="worker-action-btn">
+                    <span class="action-pictogram" aria-hidden="true"><img src="{% static 'icons/worker/eggs.png' %}" alt=""></span>
+                    <span class="action-copy"><strong>Eggs</strong><small>Amagi</small></span>
+                    <i class="bi bi-chevron-right action-arrow" aria-hidden="true"></i>
+                </a>
+            </div>
+            <div>
+                <a href="{% url 'sick_record_feed' %}" class="worker-action-btn">
+                    <span class="action-pictogram" aria-hidden="true"><img src="{% static 'icons/worker/feed.png' %}" alt=""></span>
+                    <span class="action-copy"><strong>Feed</strong><small>Emmere</small></span>
+                    <i class="bi bi-chevron-right action-arrow" aria-hidden="true"></i>
+                </a>
+            </div>
+            <div>
+                <a href="{% url 'sick_record_cleaning' %}" class="worker-action-btn">
+                    <span class="action-pictogram" aria-hidden="true"><img src="{% static 'icons/worker/brush.png' %}" alt=""></span>
+                    <span class="action-copy"><strong>Cleaning</strong><small>Okuyonja</small></span>
+                    <i class="bi bi-chevron-right action-arrow" aria-hidden="true"></i>
+                </a>
+            </div>
+            <div>
+                <a href="{% url 'sick_mortality' %}" class="worker-action-btn worker-action-btn--critical">
+                    <span class="action-pictogram action-pictogram--critical" aria-hidden="true"><img src="{% static 'icons/worker/dead-bird.svg' %}" alt=""></span>
+                    <span class="action-copy"><strong>Dead bird</strong><small>Enkoko efudde</small></span>
+                    <i class="bi bi-chevron-right action-arrow" aria-hidden="true"></i>
+                </a>
+            </div>
+        </div>
+    </section>
 </div>
-
-{% endblock %}
-
-{% block extra_js %}
-<script>
-function spawnEggs(btn) {
-    for (let i = 0; i < 6; i++) {
-        setTimeout(() => {
-            const e = document.createElement('span');
-            e.className = 'particle egg-particle';
-            const rs = ((Math.random() - 0.5) * 30).toFixed(1);
-            const re = ((Math.random() - 0.5) * 40).toFixed(1);
-            e.style.cssText = `left:${10 + Math.random()*75}%;animation-duration:${(0.55+Math.random()*0.4).toFixed(2)}s;--rot-s:${rs}deg;--rot-e:${re}deg;`;
-            btn.appendChild(e);
-            e.addEventListener('animationend', () => e.remove());
-        }, i * 65);
-    }
-}
-
-function spawnGrains(btn) {
-    for (let i = 0; i < 9; i++) {
-        setTimeout(() => {
-            const g = document.createElement('span');
-            g.className = 'particle grain-particle';
-            const xd = ((Math.random() - 0.5) * 50).toFixed(1);
-            g.style.cssText = `left:${10 + Math.random()*75}%;animation-duration:${(0.45+Math.random()*0.4).toFixed(2)}s;--xd:${xd}px;`;
-            btn.appendChild(g);
-            g.addEventListener('animationend', () => g.remove());
-        }, i * 45);
-    }
-}
-
-function spawnSparkles(btn) {
-    const count = 10;
-    for (let i = 0; i < count; i++) {
-        const s = document.createElement('span');
-        s.className = 'particle sparkle-particle';
-        s.style.setProperty('--ang', `${(i / count) * 360}deg`);
-        s.style.animationDuration = `${(0.45 + Math.random()*0.2).toFixed(2)}s`;
-        btn.appendChild(s);
-        s.addEventListener('animationend', () => s.remove());
-    }
-}
-
-document.querySelectorAll('.btn-eggs').forEach(b => b.addEventListener('mouseenter', () => spawnEggs(b)));
-document.querySelectorAll('.btn-feed').forEach(b => b.addEventListener('mouseenter', () => spawnGrains(b)));
-document.querySelectorAll('.btn-clean').forEach(b => b.addEventListener('mouseenter', () => spawnSparkles(b)));
-
-// spawn small medical crosses subtly to remind user they're in sickbay
-function spawnSickCross() {
-    const container = document.querySelector('.sickbay-particles');
-    if (!container) return;
-    const cross = document.createElement('span');
-    cross.className = 'sick-cross';
-    // random horizontal position within page width
-    const left = Math.random() * 92 + 2; // percent
-    cross.style.left = left + '%';
-    cross.style.bottom = '8px';
-    // randomize animation duration slightly
-    const dur = 2800 + Math.floor(Math.random() * 1000);
-    cross.style.animationDuration = dur + 'ms';
-    container.appendChild(cross);
-    cross.addEventListener('animationend', () => cross.remove());
-}
-
-// spawn a few crosses every 3.5s, but only when visible
-let sickInterval = setInterval(spawnSickCross, 3500);
-
-// clear interval when navigating away
-window.addEventListener('beforeunload', () => clearInterval(sickInterval));
-</script>
 {% endblock %}

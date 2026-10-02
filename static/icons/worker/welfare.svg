@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-labelledby="title">
+  <title id="title">Worker welfare</title>
+  <circle cx="40" cy="25" r="10" fill="#dce9f7" stroke="#2f5f96" stroke-width="3"/>
+  <path d="M22 56c2-12 9-18 18-18s16 6 18 18" fill="#dce9f7" stroke="#2f5f96" stroke-width="3" stroke-linecap="round"/>
+  <path d="M16 49c6 0 10 3 14 9m34-9c-6 0-10 3-14 9M14 49v13c8 5 16 7 26 7s18-2 26-7V49" fill="none" stroke="#6f9fd5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M40 38c-7-5-13-10-13-16 0-7 9-9 13-3 4-6 13-4 13 3 0 6-6 11-13 16z" fill="#c26d6d"/>
+</svg>
