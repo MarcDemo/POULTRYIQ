@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-labelledby="title">
+  <title id="title">Cleaning brush</title>
+  <path d="M48 11c4 0 7 3 7 7v29H41V18c0-4 3-7 7-7z" fill="#c8934e" stroke="#5d4325" stroke-width="3"/>
+  <path d="M29 43h38c4 0 7 3 7 7v7H22v-7c0-4 3-7 7-7z" fill="#5b8fca" stroke="#2f5f96" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M25 57v11m8-11v11m8-11v11m8-11v11m8-11v11m8-11v11m7-11v8" fill="none" stroke="#2f5f96" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="59" cy="28" r="3" fill="#8eb4de"/>
+  <path d="M65 20v8m-4-4h8" stroke="#8eb4de" stroke-width="2.5" stroke-linecap="round"/>
+</svg>

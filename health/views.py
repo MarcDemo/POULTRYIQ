@@ -825,7 +825,6 @@ def view_sickness_reports(request):
         request,
         "view_sickness.html",
         {
-            "base_template": "supbase.html" if role_code == "SUPERVISOR" else "base.html",
             "reports": page_obj,
             "page_obj": page_obj,
             "querystring": querystring,

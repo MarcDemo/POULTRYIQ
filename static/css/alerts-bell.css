@@ -328,3 +328,172 @@
 .desktop-notif-bar .alerts-sound-toggle {
     box-shadow: 0 4px 16px rgba(15,23,42,0.12);
 }
+
+/* ── Alerts inbox ── */
+.alerts-inbox .border-left-4 {
+    border-left: 4px solid transparent !important;
+}
+
+.alerts-inbox .alert-inbox-item,
+.alerts-inbox .alert-inbox-item.active {
+    color: #21364d;
+    border-top-color: #d8e2ec;
+    border-right-color: #d8e2ec;
+    border-bottom-color: #d8e2ec;
+    background: #ffffff;
+}
+
+.alerts-inbox .alert-inbox-item.is-unread,
+.alerts-inbox .alert-inbox-item.is-unread.active {
+    color: #172f49;
+    border-top-color: #c8d6e2;
+    border-right-color: #c8d6e2;
+    border-bottom-color: #c8d6e2;
+    background-color: #edf3f7 !important;
+}
+
+.alerts-inbox .alert-inbox-item:hover,
+.alerts-inbox .alert-inbox-item:focus-visible {
+    color: #102b4e;
+    background: #f1f6fb;
+}
+
+.alerts-inbox .alert-inbox-item.is-unread:hover,
+.alerts-inbox .alert-inbox-item.is-unread:focus-visible {
+    color: #102b4e;
+    background-color: #e3ebf2 !important;
+}
+
+.alerts-inbox .alert-inbox-item.alert-border--urgent {
+    border-left-color: #b85d68 !important;
+}
+
+.alerts-inbox .alert-inbox-item.alert-border--high {
+    border-left-color: #b58a3b !important;
+}
+
+.alerts-inbox .alert-inbox-item h6,
+.alerts-inbox .alert-inbox-item p,
+.alerts-inbox .alert-inbox-item strong {
+    color: inherit;
+}
+
+.alerts-inbox .alert-inbox-item .d-flex.align-items-center {
+    flex-wrap: wrap;
+    gap: 0.25rem;
+}
+
+.alerts-inbox .alert-inbox-item .d-flex.align-items-center .badge {
+    margin-left: 0.25rem !important;
+}
+
+.alerts-inbox .alert-inbox-item .text-muted {
+    color: #5e7186 !important;
+}
+
+.alerts-inbox .alert-inbox-item .text-danger {
+    color: #b42332 !important;
+    font-weight: 700;
+}
+
+.alerts-inbox .alert-inbox-item .text-info {
+    color: #176d93 !important;
+    font-weight: 700;
+}
+
+.alerts-inbox .alert-priority-badge,
+.alerts-inbox .alert-type-badge,
+.alerts-inbox .alert-new-badge {
+    border: 1px solid transparent;
+    font-size: 0.66rem;
+    font-weight: 750;
+}
+
+.alerts-inbox .alert-priority-badge--urgent {
+    color: #8f1d2c;
+    border-color: #efb4bc;
+    background: #fde8eb;
+}
+
+.alerts-inbox .alert-priority-badge--high {
+    color: #684d1d;
+    border-color: #d8c18f;
+    background: #f3ead6;
+}
+
+.alerts-inbox .alert-priority-badge--medium {
+    color: #164f7a;
+    border-color: #acd0eb;
+    background: #e4f2fc;
+}
+
+.alerts-inbox .alert-priority-badge--low,
+.alerts-inbox .alert-type-badge {
+    color: #43576b;
+    border-color: #cbd7e2;
+    background: #f1f5f8;
+}
+
+.alerts-inbox .alert-new-badge {
+    color: #315572;
+    border-color: #b6cadb;
+    background: #e3ecf3;
+}
+
+html[data-theme="dark"] .alerts-inbox .alert-inbox-item,
+html[data-theme="dark"] .alerts-inbox .alert-inbox-item.active {
+    color: #e6eef6;
+    border-color: #30485f;
+    background: #122235;
+}
+
+html[data-theme="dark"] .alerts-inbox .alert-inbox-item.is-unread,
+html[data-theme="dark"] .alerts-inbox .alert-inbox-item.is-unread.active {
+    color: #f4f8fc;
+    border-color: #436785;
+    background: #1a3652;
+}
+
+html[data-theme="dark"] .alerts-inbox .alert-inbox-item:hover,
+html[data-theme="dark"] .alerts-inbox .alert-inbox-item:focus-visible {
+    color: #ffffff;
+    background: #203b56;
+}
+
+html[data-theme="dark"] .alerts-inbox .alert-inbox-item .text-muted {
+    color: #b6c8da !important;
+}
+
+html[data-theme="dark"] .alerts-inbox .alert-inbox-item .text-danger {
+    color: #ff9ca8 !important;
+}
+
+html[data-theme="dark"] .alerts-inbox .alert-inbox-item .text-info {
+    color: #86d3f4 !important;
+}
+
+html[data-theme="dark"] .alerts-inbox .alert-priority-badge--urgent {
+    color: #ffd7dc;
+    border-color: #984251;
+    background: #5b2630;
+}
+
+html[data-theme="dark"] .alerts-inbox .alert-priority-badge--high {
+    color: #ffe8a3;
+    border-color: #82681f;
+    background: #4a3b14;
+}
+
+html[data-theme="dark"] .alerts-inbox .alert-priority-badge--medium,
+html[data-theme="dark"] .alerts-inbox .alert-new-badge {
+    color: #cde9ff;
+    border-color: #3f7199;
+    background: #244c6d;
+}
+
+html[data-theme="dark"] .alerts-inbox .alert-priority-badge--low,
+html[data-theme="dark"] .alerts-inbox .alert-type-badge {
+    color: #d3dfeb;
+    border-color: #52677b;
+    background: #2b3c4e;
+}

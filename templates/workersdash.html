@@ -1,239 +1,118 @@
 {% extends "base.html" %}
-{% load poultry_units %}
-
-{% block extra_css %}
-<style>
-/* ── Action Buttons: uniform height ── */
-.action-btn {
-    min-height: 132px;
-    border-radius: 8px;
-    position: relative;
-    overflow: hidden;
-    border: none !important;
-    text-decoration: none;
-    transition: transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1),
-                box-shadow 0.25s ease;
-}
-.action-btn:hover {
-    transform: translateY(-6px) scale(1.03);
-    text-decoration: none;
-}
-.action-btn:active {
-    transform: translateY(-2px) scale(0.98) !important;
-    transition: transform 0.08s ease !important;
-}
-.tabular-nums { font-variant-numeric: tabular-nums; }
-
-/* ── Particle base ── */
-.particle {
-    position: absolute;
-    pointer-events: none;
-    z-index: 10;
-}
-
-/* ── Egg particles ── */
-.egg-particle {
-    width: 14px;
-    height: 18px;
-    background: radial-gradient(circle at 40% 30%, #fffde7, #fbbf24);
-    border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
-    box-shadow: inset -2px -2px 4px rgba(0,0,0,0.12);
-    top: -20px;
-    animation: eggFall linear forwards;
-}
-@keyframes eggFall {
-    0%   { top: -20px; opacity: 1; transform: rotate(var(--rot-s,-10deg)); }
-    55%  { opacity: 1; }
-    100% { top: 115%; opacity: 0; transform: rotate(var(--rot-e, 20deg)) scale(0.55); }
-}
-
-/* ── Grain particles ── */
-.grain-particle {
-    width: 7px;
-    height: 7px;
-    background: radial-gradient(circle at 35% 35%, #d97706, #78350f);
-    border-radius: 50%;
-    bottom: 4px;
-    animation: grainRise ease-out forwards;
-}
-@keyframes grainRise {
-    0%   { bottom: 4px; opacity: 1; transform: translateX(0) scale(1); }
-    100% { bottom: 85px; opacity: 0; transform: translateX(var(--xd,0px)) scale(0.35); }
-}
-
-/* ── Feed shimmer sweep ── */
-.btn-feed::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(110deg, transparent 30%, rgba(255,255,255,0.32) 50%, transparent 70%);
-    transform: translateX(-110%);
-}
-.btn-feed:hover::after {
-    transform: translateX(110%);
-    transition: transform 0.55s ease;
-}
-
-/* ── Sparkle particles ── */
-.sparkle-particle {
-    width: 10px;
-    height: 10px;
-    background: rgba(255,255,255,0.95);
-    clip-path: polygon(50% 0%,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%);
-    top: 50%;
-    left: 50%;
-    animation: sparkleBurst ease-out forwards;
-}
-@keyframes sparkleBurst {
-    0%   { transform: translate(-50%,-50%) rotate(var(--ang)) translateX(0)   scale(1.4); opacity: 1; }
-    100% { transform: translate(-50%,-50%) rotate(var(--ang)) translateX(50px) scale(0.2); opacity: 0; }
-}
-
-/* ── Mortality heartbeat glow ── */
-.btn-mortality:hover {
-    animation: heartbeat 0.75s ease-in-out infinite;
-}
-@keyframes heartbeat {
-    0%   { box-shadow: 0 0 0  0   rgba(220,53,69,0.65), 0 8px 24px rgba(0,0,0,0.18); }
-    50%  { box-shadow: 0 0 0 16px rgba(220,53,69,0),    0 8px 24px rgba(0,0,0,0.18); }
-    100% { box-shadow: 0 0 0  0   rgba(220,53,69,0),    0 8px 24px rgba(0,0,0,0.18); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-    .action-btn,
-    .btn-mortality:hover {
-        animation: none !important;
-        transition: none !important;
-        transform: none !important;
-    }
-}
-</style>
-{% endblock %}
+{% load poultry_units static %}
 
 {% block content %}
 
-<div class="container-fluid">
+<div class="container-fluid worker-dashboard">
 
     <!-- ── Greeting Header ── -->
-    <div class="worker-hero d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
-        <div>
-            <h3 class="mb-0 fw-bold">
-                <i class="bi bi-person-circle me-2 text-primary"></i>
-                {{ request.user.get_full_name|default:request.user.username }}
-            </h3>
-            <span class="worker-subtitle">
-                <i class="bi bi-calendar3 me-1"></i>{{ today|date:"l, d F Y" }}
-                &nbsp;·&nbsp;
-                <i class="bi bi-house-door me-1"></i>
-                {% if assigned_houses %}
-                    {% for h in assigned_houses %}<strong>{{ h.name|default:h.house_code }}</strong>{% if not forloop.last %}, {% endif %}{% endfor %}
-                {% else %}
-                    <span class="text-danger">No house assigned</span>
-                {% endif %}
-            </span>
+    <header class="worker-hero mb-4">
+        <div class="worker-identity">
+            <span class="worker-avatar" aria-hidden="true"><i class="bi bi-person-fill"></i></span>
+            <div>
+                <p class="worker-eyebrow mb-1">Welcome back</p>
+                <h1 class="worker-name mb-1">
+                    {{ request.user.get_full_name|default:request.user.username }}
+                </h1>
+                <div class="worker-meta">
+                    <span><i class="bi bi-calendar3" aria-hidden="true"></i>{{ today|date:"l, d F Y" }}</span>
+                    <span><i class="bi bi-house-door-fill" aria-hidden="true"></i>
+                    {% if assigned_houses %}
+                        {% for h in assigned_houses %}<strong>{{ h.name|default:h.house_code }}</strong>{% if not forloop.last %}, {% endif %}{% endfor %}
+                    {% else %}
+                        <strong class="worker-warning">No house assigned</strong>
+                    {% endif %}
+                    </span>
+                </div>
+            </div>
         </div>
-        <span class="badge bg-primary fs-6 px-3 py-2">
-            <i class="bi bi-person-badge me-1"></i>Farm Worker
-            <span class="luganda text-white">Omukozi</span>
-        </span>
-    </div>
+        <div class="worker-role">
+            <i class="bi bi-person-vcard" aria-hidden="true"></i>
+            <span><strong>Farm worker</strong><small>Omukozi</small></span>
+        </div>
+    </header>
 
-    <section class="row g-3 mb-4" aria-labelledby="today-summary-title">
-        <h2 id="today-summary-title" class="visually-hidden">Today's farm summary</h2>
-        <div class="col-6 col-xl-3">
-            <div class="card shadow-sm h-100">
-                <div class="card-body">
-                    <div class="small text-muted">Eggs submitted today</div>
-                    <div class="fs-4 fw-bold tabular-nums">{{ today_eggs }} eggs</div>
-                    <div class="small text-primary">{{ today_eggs|egg_trays }}</div>
-                </div>
-            </div>
-        </div>
-        <div class="col-6 col-xl-3">
-            <div class="card shadow-sm h-100">
-                <div class="card-body">
-                    <div class="small text-muted">Current birds</div>
-                    <div class="fs-4 fw-bold tabular-nums">{{ total_birds }}</div>
-                    <div class="small text-muted">Across assigned houses</div>
-                </div>
-            </div>
-        </div>
-        <div class="col-6 col-xl-3">
-            <div class="card shadow-sm h-100">
-                <div class="card-body">
-                    <div class="small text-muted">Deaths submitted today</div>
-                    <div class="fs-4 fw-bold tabular-nums">{{ today_deaths }}</div>
-                    <div class="small text-muted">All review statuses</div>
-                </div>
-            </div>
-        </div>
-        <div class="col-6 col-xl-3">
-            <div class="card shadow-sm h-100">
-                <div class="card-body">
-                    <div class="small text-muted mb-2">My egg reviews today</div>
-                    <div class="d-flex flex-wrap gap-1">
-                        <span class="badge bg-warning text-dark">{{ egg_approval_counts.pending }} pending</span>
-                        <span class="badge bg-success">{{ egg_approval_counts.approved }} approved</span>
-                        <span class="badge bg-danger">{{ egg_approval_counts.rejected }} rejected</span>
-                    </div>
-                </div>
-            </div>
+    <section class="worker-summary mb-4" aria-labelledby="today-summary-title">
+        <h2 id="today-summary-title" class="worker-section-label">Today at a glance</h2>
+        <div class="worker-summary-grid">
+            <article class="summary-item">
+                <span class="summary-icon" aria-hidden="true"><img src="{% static 'icons/worker/eggs.png' %}" alt=""></span>
+                <span><strong class="tabular-nums">{{ today_eggs }}</strong><small>Eggs recorded</small><em>{{ today_eggs|egg_trays }}</em></span>
+            </article>
+            <article class="summary-item">
+                <span class="summary-icon" aria-hidden="true"><i class="bi bi-feather"></i></span>
+                <span><strong class="tabular-nums">{{ total_birds }}</strong><small>Current birds</small><em>Assigned houses</em></span>
+            </article>
+            <article class="summary-item{% if today_deaths %} summary-item--attention{% endif %}">
+                <span class="summary-icon" aria-hidden="true"><i class="bi bi-heartbreak-fill"></i></span>
+                <span><strong class="tabular-nums">{{ today_deaths }}</strong><small>Deaths recorded</small><em>Today</em></span>
+            </article>
+            <article class="summary-item summary-reviews">
+                <span class="summary-icon" aria-hidden="true"><i class="bi bi-clipboard2-check-fill"></i></span>
+                <span>
+                    <strong>Egg reviews</strong>
+                    <small class="review-line"><i class="bi bi-clock" aria-hidden="true"></i>{{ egg_approval_counts.pending }} pending</small>
+                    <small class="review-line"><i class="bi bi-check-circle-fill" aria-hidden="true"></i>{{ egg_approval_counts.approved }} approved</small>
+                    <small class="review-line{% if egg_approval_counts.rejected %} review-line--attention{% endif %}"><i class="bi bi-exclamation-circle-fill" aria-hidden="true"></i>{{ egg_approval_counts.rejected }} rejected</small>
+                </span>
+            </article>
         </div>
     </section>
 
     <!-- ── Quick Actions ── -->
-    <div class="card shadow-sm mb-4">
-        <div class="card-header">
-            <i class="bi bi-hand-index-thumb me-2"></i>Tap what you want to record
-            <span class="luganda">Koona ku ky'ogenda okuwandiika</span>
-        </div>
-        <div class="card-body">
-            <div class="row g-3">
-                <div class="col-6 col-md-3">
-                    <a href="{% url 'record_egg' %}" class="btn btn-primary w-100 action-btn worker-action-btn btn-eggs d-flex flex-column align-items-center justify-content-center gap-2">
-                        <i class="bi bi-basket fs-2"></i>
-                        <span class="action-title">Eggs</span>
-                        <span class="action-subtitle">Amagi</span>
-                    </a>
-                </div>
-                <div class="col-6 col-md-3">
-                    <a href="{% url 'record_feed' %}" class="btn btn-warning w-100 action-btn worker-action-btn btn-feed d-flex flex-column align-items-center justify-content-center gap-2">
-                        <i class="bi bi-bag-fill fs-2"></i>
-                        <span class="action-title">Feed</span>
-                        <span class="action-subtitle">Emmere</span>
-                    </a>
-                </div>
-                <div class="col-6 col-md-3">
-                    <a href="{% url 'record_cleaning' %}" class="btn btn-success w-100 action-btn worker-action-btn btn-clean d-flex flex-column align-items-center justify-content-center gap-2">
-                        <i class="bi bi-broom fs-2"></i>
-                        <span class="action-title">Clean</span>
-                        <span class="action-subtitle">Okuyonja</span>
-                    </a>
-                </div>
-                <div class="col-6 col-md-3">
-                    <a href="{% url 'mortality' %}" class="btn btn-danger w-100 action-btn worker-action-btn btn-mortality d-flex flex-column align-items-center justify-content-center gap-2">
-                        <i class="bi bi-exclamation-triangle fs-2"></i>
-                        <span class="action-title">Dead birds</span>
-                        <span class="action-subtitle">Enkoko ezifudde</span>
-                    </a>
-                </div>
-                <div class="col-6 col-md-3">
-                    <a href="{% url 'sickbay' %}" class="btn btn-secondary w-100 action-btn worker-action-btn d-flex flex-column align-items-center justify-content-center gap-2">
-                        <i class="bi bi-hospital fs-2"></i>
-                        <span class="action-title">Sickbay</span>
-                        <span class="action-subtitle">Awali endwadde</span>
-                    </a>
-                </div>
-                <div class="col-6 col-md-3">
-                    <a href="{% url 'worker_welfare' %}" class="btn btn-info text-white w-100 action-btn worker-action-btn d-flex flex-column align-items-center justify-content-center gap-2">
-                        <i class="bi bi-heart fs-2"></i>
-                        <span class="action-title">Welfare</span>
-                        <span class="action-subtitle">Leave & salary</span>
-                    </a>
-                </div>
+    <section class="worker-actions mb-4" aria-labelledby="worker-actions-title">
+        <div class="worker-actions-heading">
+            <span class="section-cue" aria-hidden="true"><i class="bi bi-hand-index-thumb-fill"></i></span>
+            <div>
+                <h2 id="worker-actions-title">What do you want to record?</h2>
+                <p>Koona ku ky'ogenda okuwandiika</p>
             </div>
         </div>
-    </div>
+        <div class="worker-action-grid">
+                <div>
+                    <a href="{% url 'record_egg' %}" class="worker-action-btn">
+                        <span class="action-pictogram action-pictogram--eggs" aria-hidden="true"><img src="{% static 'icons/worker/eggs.png' %}" alt=""></span>
+                        <span class="action-copy"><strong>Eggs</strong><small>Amagi</small></span>
+                        <i class="bi bi-chevron-right action-arrow" aria-hidden="true"></i>
+                    </a>
+                </div>
+                <div>
+                    <a href="{% url 'record_feed' %}" class="worker-action-btn">
+                        <span class="action-pictogram action-pictogram--feed" aria-hidden="true"><img src="{% static 'icons/worker/feed.png' %}" alt=""></span>
+                        <span class="action-copy"><strong>Feed</strong><small>Emmere</small></span>
+                        <i class="bi bi-chevron-right action-arrow" aria-hidden="true"></i>
+                    </a>
+                </div>
+                <div>
+                    <a href="{% url 'record_cleaning' %}" class="worker-action-btn">
+                        <span class="action-pictogram action-pictogram--clean" aria-hidden="true"><img src="{% static 'icons/worker/brush.png' %}" alt=""></span>
+                        <span class="action-copy"><strong>Cleaning</strong><small>Okuyonja</small></span>
+                        <i class="bi bi-chevron-right action-arrow" aria-hidden="true"></i>
+                    </a>
+                </div>
+                <div>
+                    <a href="{% url 'sickbay' %}" class="worker-action-btn">
+                        <span class="action-pictogram action-pictogram--health" aria-hidden="true"><img src="{% static 'icons/worker/sick-bird.svg' %}" alt=""></span>
+                        <span class="action-copy"><strong>Sick bird</strong><small>Enkoko endwadde</small></span>
+                        <i class="bi bi-chevron-right action-arrow" aria-hidden="true"></i>
+                    </a>
+                </div>
+                <div>
+                    <a href="{% url 'worker_welfare' %}" class="worker-action-btn">
+                        <span class="action-pictogram action-pictogram--welfare" aria-hidden="true"><img src="{% static 'icons/worker/welfare.svg' %}" alt=""></span>
+                        <span class="action-copy"><strong>My welfare</strong><small>Obulamu bw'omukozi</small></span>
+                        <i class="bi bi-chevron-right action-arrow" aria-hidden="true"></i>
+                    </a>
+                </div>
+                <div class="action-wide">
+                    <a href="{% url 'mortality' %}" class="worker-action-btn worker-action-btn--critical">
+                        <span class="action-pictogram action-pictogram--critical" aria-hidden="true"><img src="{% static 'icons/worker/dead-bird.svg' %}" alt=""></span>
+                        <span class="action-copy"><strong>Report a dead bird</strong><small>Wandiika enkoko efudde</small></span>
+                        <i class="bi bi-chevron-right action-arrow" aria-hidden="true"></i>
+                    </a>
+                </div>
+        </div>
+    </section>
 
     
 
@@ -362,51 +241,4 @@
 
 </div>
 
-{% endblock %}
-
-{% block extra_js %}
-<script>
-function spawnEggs(btn) {
-    for (let i = 0; i < 6; i++) {
-        setTimeout(() => {
-            const e = document.createElement('span');
-            e.className = 'particle egg-particle';
-            const rs = ((Math.random() - 0.5) * 30).toFixed(1);
-            const re = ((Math.random() - 0.5) * 40).toFixed(1);
-            e.style.cssText = `left:${10 + Math.random()*75}%;animation-duration:${(0.55+Math.random()*0.4).toFixed(2)}s;--rot-s:${rs}deg;--rot-e:${re}deg;`;
-            btn.appendChild(e);
-            e.addEventListener('animationend', () => e.remove());
-        }, i * 65);
-    }
-}
-
-function spawnGrains(btn) {
-    for (let i = 0; i < 9; i++) {
-        setTimeout(() => {
-            const g = document.createElement('span');
-            g.className = 'particle grain-particle';
-            const xd = ((Math.random() - 0.5) * 50).toFixed(1);
-            g.style.cssText = `left:${10 + Math.random()*75}%;animation-duration:${(0.45+Math.random()*0.4).toFixed(2)}s;--xd:${xd}px;`;
-            btn.appendChild(g);
-            g.addEventListener('animationend', () => g.remove());
-        }, i * 45);
-    }
-}
-
-function spawnSparkles(btn) {
-    const count = 10;
-    for (let i = 0; i < count; i++) {
-        const s = document.createElement('span');
-        s.className = 'particle sparkle-particle';
-        s.style.setProperty('--ang', `${(i / count) * 360}deg`);
-        s.style.animationDuration = `${(0.45 + Math.random()*0.2).toFixed(2)}s`;
-        btn.appendChild(s);
-        s.addEventListener('animationend', () => s.remove());
-    }
-}
-
-document.querySelectorAll('.btn-eggs').forEach(b => b.addEventListener('mouseenter', () => spawnEggs(b)));
-document.querySelectorAll('.btn-feed').forEach(b => b.addEventListener('mouseenter', () => spawnGrains(b)));
-document.querySelectorAll('.btn-clean').forEach(b => b.addEventListener('mouseenter', () => spawnSparkles(b)));
-</script>
 {% endblock %}
