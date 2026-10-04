@@ -1,3 +1,5 @@
+
+<!-- Base template for the application -->
 {% load static %}
 <!DOCTYPE html>
 <html lang="en">
@@ -14,37 +16,69 @@
     <link rel="stylesheet" href="{% static 'css/responsive-ui.css' %}?v=mobile-shell-2">
     <link rel="stylesheet" href="{% static 'css/alerts-bell.css' %}?v=2">
     <link rel="stylesheet" href="{% static 'css/brand-footer.css' %}?v=2">
+
+
+
+    <!-- Authorization Logic for the css -->
+
+    <!-- Auth for worker  -->
     {% if request.user.is_authenticated and request.user.is_worker %}
     <link rel="stylesheet" href="{% static 'css/worker-field-ui.css' %}?v=calm-worker-5">
     {% endif %}
+
+    <!-- Auth for supervisor -->
     {% if request.user.is_authenticated and request.user.is_supervisor %}
     <link rel="stylesheet" href="{% static 'css/supervisor-ui.css' %}?v=calm-supervisor-1">
     {% endif %}
+
+    <!-- Auth for investor -->
     {% if request.user.is_authenticated and request.user.is_investor %}
     <link rel="stylesheet" href="{% static 'css/investor.css' %}">
     {% endif %}
+
+
+    <!-- block content for css -->
     {% block extra_css %}{% endblock %}
+
+
 </head>
+
+<!-- ==========================================================
+     Base layout: page shell and global role-based navigation
+     ========================================================== -->
 <body{% if request.user.is_authenticated and request.user.is_supervisor %} class="supervisor-ui"{% endif %}>
 <a class="skip-link" href="#main-content">Skip to main content</a>
 
+
+<!-- ==========================================================
+     Investor layout
+     Shared top navigation and content wrapper for investor 
+     ========================================================== -->
 {% if request.user.is_authenticated and request.user.is_investor %}
 
+<!-- investor navbar -->
 <nav class="navbar navbar-expand-lg navbar-dark px-3 shadow-lg">
     <a class="navbar-brand fw-bold d-flex align-items-center" href="{% url 'investor' %}">
         <i class="bi bi-egg-fill me-2"></i>PoultryIQ Investor
     </a>
+
+    <!-- nav toggler -->
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#investorNavbar" aria-controls="investorNavbar" aria-expanded="false" aria-label="Toggle navigation">
         <span class="navbar-toggler-icon"></span>
     </button>
+
     <div class="collapse navbar-collapse" id="investorNavbar">
+
         <ul class="navbar-nav ms-auto">
+            <!-- user name display -->
             <li class="nav-item">
                 <span class="nav-link" style="cursor: default;">
                     <i class="bi bi-person-circle me-1"></i>
                     <small>{{ request.user.get_full_name|default:request.user.username }}</small>
                 </span>
             </li>
+
+            <!-- navigation links -->
             <li class="nav-item">
                 <a class="nav-link d-flex align-items-center {% if request.resolver_match.url_name == 'investor' %}active{% endif %}" href="{% url 'investor' %}">
                     <i class="bi bi-house-door me-1"></i>Dashboard
@@ -65,12 +99,14 @@
                     <i class="bi bi-circle-half me-1 theme-toggle-icon" data-theme-icon></i><span data-theme-label>System</span>
                 </button>
             </li>
+            <!-- logout -->
             <li class="nav-item">
                 <form method="post" action="{% url 'logout' %}">
                     {% csrf_token %}
                     <button class="nav-link d-flex align-items-center text-warning border-0 bg-transparent" type="submit">
                     <i class="bi bi-box-arrow-right me-1"></i>Logout
                     </button>
+
                 </form>
             </li>
         </ul>
@@ -81,6 +117,10 @@
 
 {% else %}
 
+<!-- ==========================================================
+     Shared mobile shell
+     Includes role-aware top bar, alerts, and sidebar overlays
+     ========================================================== -->
 <div class="mobile-topbar">
     {% if request.user.is_authenticated %}
         {% if request.user.is_worker %}
@@ -138,6 +178,12 @@
 <div class="sidebar-overlay" data-sidebar-overlay="managerSidebar"></div>
 {% endif %}
 
+<!-- ==========================================================
+     Role-specific sidebars
+     Worker, supervisor, and manager navigation panels live here
+     ========================================================== -->
+
+     <!-- worker sidebar -->
 <div class="wrapper">
     {% if request.user.is_authenticated and request.user.is_worker %}
     <aside class="sidebar worker-sidebar" id="workerSidebar" aria-label="Worker navigation">
@@ -191,6 +237,8 @@
             <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button type="submit" class="worker-logout"><i class="bi bi-box-arrow-right" aria-hidden="true"></i><span><strong>Log out</strong><small>Fuluma</small></span></button></form>
         </div>
     </aside>
+
+    <!-- supervisor sidebar -->
     {% elif request.user.is_authenticated and request.user.is_supervisor %}
     <aside class="sidebar supervisor-sidebar" id="supervisorSidebar" aria-label="Supervisor navigation">
         <div class="supervisor-brand">
@@ -229,13 +277,14 @@
                 </div>
             </li>
             <li class="nav-item manager-nav-group">
-                <button class="nav-link manager-nav-trigger {% if request.resolver_match.url_name == 'feed_mixtures' or request.resolver_match.url_name == 'feedrec' or request.resolver_match.url_name == 'supervisor_requisitions' %}active{% endif %}" type="button">
+                <button class="nav-link manager-nav-trigger {% if request.resolver_match.url_name == 'feed_mixtures' or request.resolver_match.url_name == 'feedrec' or request.resolver_match.url_name == 'supervisor_requisitions' or request.resolver_match.url_name == 'store' %}active{% endif %}" type="button">
                     <i class="bi bi-box-seam-fill"></i><span><strong>Production</strong><small>Okufulumya</small></span><i class="bi bi-chevron-right manager-nav-chevron"></i>
                 </button>
                 <div class="manager-nav-submenu">
                     <a class="manager-nav-subitem {% if request.resolver_match.url_name == 'feed_mixtures' %}active{% endif %}" href="{% url 'feed_mixtures' %}"><i class="bi bi-dot"></i>Feed Mixtures</a>
                     <a class="manager-nav-subitem {% if request.resolver_match.url_name == 'feedrec' %}active{% endif %}" href="{% url 'feedrec' %}"><i class="bi bi-dot"></i>Feed Management</a>
                     <a class="manager-nav-subitem {% if request.resolver_match.url_name == 'supervisor_requisitions' %}active{% endif %}" href="{% url 'supervisor_requisitions' %}"><i class="bi bi-dot"></i>Inventory Requisitions</a>
+                    <a class="manager-nav-subitem {% if request.resolver_match.url_name == 'store' %}active{% endif %}" href="{% url 'store' %}"><i class="bi bi-dot"></i>Store Issue</a>
                 </div>
             </li>
             <li class="nav-item manager-nav-group">
@@ -275,6 +324,9 @@
             </div>
         </div>
         {% endif %}
+
+
+        <!-- manager sidebar -->
         <ul class="nav flex-column manager-nav">
             <li class="nav-item">
                 <a class="nav-link {% if request.resolver_match.url_name == 'managerdash' %}active{% endif %}" href="{% url 'managerdash' %}">
@@ -308,30 +360,34 @@
                 </button>
                 <div class="manager-nav-submenu">
                     <a class="manager-nav-subitem {% if request.resolver_match.url_name == 'inventory_management' %}active{% endif %}" href="{% url 'inventory_management' %}"><i class="bi bi-dot"></i>Inventory Overview</a>
-                    <a class="manager-nav-subitem {% if request.resolver_match.url_name == 'store' %}active{% endif %}" href="{% url 'store' %}"><i class="bi bi-dot"></i>Store Issue</a>
+                    <a class="manager-nav-subitem {% if request.resolver_match.url_name == 'store' %}active{% endif %}" href="{% url 'store' %}"><i class="bi bi-dot"></i>Store Request</a>
                     <a class="manager-nav-subitem {% if request.resolver_match.url_name == 'suppliers' %}active{% endif %}" href="{% url 'suppliers' %}"><i class="bi bi-dot"></i>Suppliers</a>
                     <a class="manager-nav-subitem {% if request.resolver_match.url_name == 'manager_requisitions' or request.resolver_match.url_name == 'manager_review_requisition' %}active{% endif %}" href="{% url 'manager_requisitions' %}"><i class="bi bi-dot"></i>Requisitions</a>
                 </div>
             </li>
-            <li class="nav-item manager-nav-group">
-                <button class="nav-link manager-nav-trigger {% if request.resolver_match.url_name == 'expenses' or request.resolver_match.url_name == 'expense_form' or request.resolver_match.url_name == 'sales' or request.resolver_match.url_name == 'customers' or request.resolver_match.url_name == 'customer_profile' or request.resolver_match.url_name == 'orders' or request.resolver_match.url_name == 'orderview' or request.resolver_match.url_name == 'receivables' or request.resolver_match.url_name == 'reports' or request.resolver_match.url_name == 'chart_of_accounts' or request.resolver_match.url_name == 'balance_sheet' or request.resolver_match.url_name == 'trial_balance' or request.resolver_match.url_name == 'cash_flow' or request.resolver_match.url_name == 'journal_entries' or request.resolver_match.url_name == 'budgets' or request.resolver_match.url_name == 'fixed_assets' or request.resolver_match.url_name == 'depreciation_run' or request.resolver_match.url_name == 'asset_disposal' or request.resolver_match.url_name == 'asset_revaluation' %}active{% endif %}" type="button">
-                    <i class="bi bi-cash-coin"></i><span>Accounting</span><i class="bi bi-chevron-right manager-nav-chevron"></i>
-                </button> 
-                <div class="manager-nav-submenu">
-                    <a class="manager-nav-subitem {% if request.resolver_match.url_name == 'expenses' or request.resolver_match.url_name == 'expense_form' %}active{% endif %}" href="{% url 'expense_form' %}"><i class="bi bi-dot"></i>Expenses</a>
-                    <a class="manager-nav-subitem {% if request.resolver_match.url_name == 'sales' %}active{% endif %}" href="{% url 'sales' %}"><i class="bi bi-dot"></i>Sales</a>
+        <!-- these are commented out accounting modules -->
+
+        
+            <!-- <li class="nav-item manager-nav-group"> -->
+                <!-- <button class="nav-link manager-nav-trigger {% if request.resolver_match.url_name == 'expenses' or request.resolver_match.url_name == 'expense_form' or request.resolver_match.url_name == 'sales' or request.resolver_match.url_name == 'customers' or request.resolver_match.url_name == 'customer_profile' or request.resolver_match.url_name == 'orders' or request.resolver_match.url_name == 'orderview' or request.resolver_match.url_name == 'receivables' or request.resolver_match.url_name == 'reports' or request.resolver_match.url_name == 'chart_of_accounts' or request.resolver_match.url_name == 'balance_sheet' or request.resolver_match.url_name == 'trial_balance' or request.resolver_match.url_name == 'cash_flow' or request.resolver_match.url_name == 'journal_entries' or request.resolver_match.url_name == 'budgets' or request.resolver_match.url_name == 'fixed_assets' or request.resolver_match.url_name == 'depreciation_run' or request.resolver_match.url_name == 'asset_disposal' or request.resolver_match.url_name == 'asset_revaluation' %}active{% endif %}" type="button"> -->
+                    <!-- <i class="bi bi-cash-coin"></i><span>Accounting</span><i class="bi bi-chevron-right manager-nav-chevron"></i> -->
+                <!-- </button>  -->
+                <!-- <div class="manager-nav-submenu"> -->
+                    <!-- <a class="manager-nav-subitem {% if request.resolver_match.url_name == 'expenses' or request.resolver_match.url_name == 'expense_form' %}active{% endif %}" href="{% url 'expense_form' %}"><i class="bi bi-dot"></i>Expenses</a> -->
+                    <!-- <a class="manager-nav-subitem {% if request.resolver_match.url_name == 'sales' %}active{% endif %}" href="{% url 'sales' %}"><i class="bi bi-dot"></i>Sales</a>
                     <a class="manager-nav-subitem {% if request.resolver_match.url_name == 'customers' or request.resolver_match.url_name == 'customer_profile' %}active{% endif %}" href="{% url 'customers' %}"><i class="bi bi-dot"></i>Customers</a>
                     <a class="manager-nav-subitem {% if request.resolver_match.url_name == 'orders' or request.resolver_match.url_name == 'orderview' %}active{% endif %}" href="{% url 'orders' %}"><i class="bi bi-dot"></i>Orders</a>
                     <a class="manager-nav-subitem {% if request.resolver_match.url_name == 'receivables' %}active{% endif %}" href="{% url 'receivables' %}"><i class="bi bi-dot"></i>Receivables</a>
                     <a class="manager-nav-subitem {% if request.resolver_match.url_name == 'reports' %}active{% endif %}" href="{% url 'reports' %}"><i class="bi bi-dot"></i>Reports</a>
-                    <a class="manager-nav-subitem {% if request.resolver_match.url_name == 'balance_sheet' %}active{% endif %}" href="{% url 'balance_sheet' %}"><i class="bi bi-dot"></i>Balance Sheet</a>
-                    <a class="manager-nav-subitem {% if request.resolver_match.url_name == 'trial_balance' %}active{% endif %}" href="{% url 'trial_balance' %}"><i class="bi bi-dot"></i>Trial Balance</a>
+                    <a class="manager-nav-subitem {% if request.resolver_match.url_name == 'balance_sheet' %}active{% endif %}" href="{% url 'balance_sheet' %}"><i class="bi bi-dot"></i>Balance Sheet</a> -->
+                    <!-- <a class="manager-nav-subitem {% if request.resolver_match.url_name == 'trial_balance' %}active{% endif %}" href="{% url 'trial_balance' %}"><i class="bi bi-dot"></i>Trial Balance</a>
                     <a class="manager-nav-subitem {% if request.resolver_match.url_name == 'cash_flow' %}active{% endif %}" href="{% url 'cash_flow' %}"><i class="bi bi-dot"></i>Cash Flow</a>
                     <a class="manager-nav-subitem {% if request.resolver_match.url_name == 'journal_entries' %}active{% endif %}" href="{% url 'journal_entries' %}"><i class="bi bi-dot"></i>Journal Entries</a>
                     <a class="manager-nav-subitem {% if request.resolver_match.url_name == 'budgets' %}active{% endif %}" href="{% url 'budgets' %}"><i class="bi bi-dot"></i>Budgets</a>
                     <a class="manager-nav-subitem {% if request.resolver_match.url_name == 'fixed_assets' or request.resolver_match.url_name == 'depreciation_run' or request.resolver_match.url_name == 'asset_disposal' or request.resolver_match.url_name == 'asset_revaluation' %}active{% endif %}" href="{% url 'fixed_assets' %}"><i class="bi bi-dot"></i>Fixed Assets</a>
                 </div>
-            </li>
+            </li> -->
+            
             <li class="nav-item manager-nav-group">
                 <button class="nav-link manager-nav-trigger {% if request.resolver_match.url_name == 'salaries' or request.resolver_match.url_name == 'hourly_wages' or request.resolver_match.url_name == 'manager_welfare' or request.resolver_match.url_name == 'manager_review_welfare' or request.resolver_match.url_name == 'advance_register' or request.resolver_match.url_name == 'disburse_salary_advance' %}active{% endif %}" type="button">
                     <i class="bi bi-wallet2"></i><span>Payroll</span><i class="bi bi-chevron-right manager-nav-chevron"></i>
@@ -394,6 +450,10 @@
     <main class="main-content" id="main-content" tabindex="-1">
 {% endif %}
 
+<!-- ==========================================================
+     Flash messages and page content
+     Application-wide notifications and child template content area
+     ========================================================== -->
 {% if messages %}
     {% for message in messages %}
         <div class="alert alert-{% if message.tags %}{{ message.tags }}{% else %}info{% endif %} alert-dismissible fade show" role="{% if 'success' in message.tags %}status{% else %}alert{% endif %}"{% if 'success' in message.tags %} data-auto-dismiss="6000"{% endif %}>
@@ -417,6 +477,10 @@
 
 {% endif %}
 
+<!-- ==========================================================
+     Mobile quick navigation
+     Compact bottom navigation for authenticated non-investor users
+     ========================================================== -->
 {% if request.user.is_authenticated and not request.user.is_investor %}
 <nav class="mobile-bottom-nav" aria-label="Role quick navigation">
     {% if request.user.is_worker %}
@@ -441,6 +505,10 @@
 </nav>
 {% endif %}
 
+<!-- ==========================================================
+     Utility actions
+     Home return links and global footer-related actions
+     ========================================================== -->
 {% if request.user.is_authenticated %}
 <div class="home-return">
     {% if request.user.is_worker %}
@@ -463,6 +531,10 @@
 </div>
 {% endif %}
 
+<!-- ==========================================================
+     Global scripts and shared frontend behavior
+     Includes Bootstrap, theme controls, form helpers, and page-level JS
+     ========================================================== -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <script src="{% static 'js/flash-messages.js' %}?v=1"></script>
 <script src="{% static 'js/theme-toggle.js' %}"></script>

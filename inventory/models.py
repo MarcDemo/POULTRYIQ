@@ -230,6 +230,13 @@ class InventoryRequisition(models.Model):
         decimal_places=3,
         validators=[MinValueValidator(Decimal("0.000"))],
     )
+    unit_price = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal("0.00"))],
+    )
     unit = models.CharField(max_length=20, default="kg")
     needed_by = models.DateField(null=True, blank=True)
     reason = models.TextField()
@@ -258,3 +265,9 @@ class InventoryRequisition(models.Model):
     def __str__(self) -> str:
         item_label = self.item.name if self.item_id else self.item_name
         return f"{item_label} - {self.quantity} {self.unit} ({self.get_status_display()})"
+
+    @property
+    def total_amount(self):
+        if self.unit_price is None:
+            return None
+        return (self.quantity * self.unit_price).quantize(Decimal("0.01"))

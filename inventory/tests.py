@@ -7,7 +7,7 @@ from django.urls import reverse
 from accounts.models import Role, User
 from alerts.models import Alert
 from expenses.models import ExpenseTransaction
-from .models import InventoryTransaction, Item, ItemCategory, Store, Supplier
+from .models import InventoryRequisition, InventoryTransaction, Item, ItemCategory, Store, Supplier
 
 
 class StoreOutTests(TestCase):
@@ -54,6 +54,40 @@ class StoreOutTests(TestCase):
         self.assertEqual(stock_out.item, self.item)
         self.assertEqual(stock_out.quantity, Decimal("25.000"))
         self.assertEqual(stock_out.reference, "Farm hand")
+
+    def test_supervisor_can_access_store_and_record_stock_out(self):
+        supervisor_role = Role.objects.create(
+            code=Role.RoleCode.SUPERVISOR,
+            name="Farm Supervisor",
+        )
+        supervisor = User.objects.create_user(
+            username="stock-supervisor",
+            password="test-password",
+            role=supervisor_role,
+        )
+        self.client.force_login(supervisor)
+
+        response = self.client.get(reverse("store"))
+        self.assertEqual(response.status_code, 200)
+
+        response = self.client.post(
+            reverse("store"),
+            {
+                "tx_date": date.today().isoformat(),
+                "item": str(self.item.pk),
+                "quantity": "10",
+                "reference": "Farm hand",
+                "notes": "Issued by supervisor",
+            },
+        )
+
+        self.assertRedirects(response, reverse("store"))
+        stock_out = InventoryTransaction.objects.get(
+            tx_type=InventoryTransaction.TxType.OUT,
+            created_by=supervisor,
+        )
+        self.assertEqual(stock_out.item, self.item)
+        self.assertEqual(stock_out.quantity, Decimal("10.000"))
 
     def test_store_page_blocks_more_than_available(self):
         response = self.client.post(
@@ -195,6 +229,83 @@ class StoreOutTests(TestCase):
         self.assertContains(response, "Fixed assets must be recorded in the Fixed Assets page.")
         self.assertFalse(Item.objects.filter(name="Feeders").exists())
         self.assertFalse(InventoryTransaction.objects.filter(item__name="Feeders").exists())
+
+
+class InventoryRequisitionTests(TestCase):
+    def setUp(self):
+        supervisor_role = Role.objects.create(
+            code=Role.RoleCode.SUPERVISOR,
+            name="Farm Supervisor",
+        )
+        manager_role = Role.objects.create(
+            code=Role.RoleCode.MANAGER,
+            name="Farm Manager",
+        )
+        self.supervisor = User.objects.create_user(
+            username="requisition-supervisor",
+            password="test-password",
+            role=supervisor_role,
+        )
+        self.manager = User.objects.create_user(
+            username="requisition-manager",
+            password="test-password",
+            role=manager_role,
+        )
+
+    def test_unit_price_total_and_requisition_histories(self):
+        self.client.force_login(self.supervisor)
+        response = self.client.post(
+            reverse("supervisor_requisitions"),
+            {
+                "item_name": "Layer Feed",
+                "quantity": "2.5",
+                "unit_price": "12.50",
+                "unit": "kg",
+                "reason": "Feed stock is low.",
+            },
+        )
+
+        self.assertRedirects(response, reverse("supervisor_requisitions"))
+        requisition = InventoryRequisition.objects.get(requested_by=self.supervisor)
+        self.assertEqual(requisition.unit_price, Decimal("12.50"))
+        self.assertEqual(requisition.total_amount, Decimal("31.25"))
+
+        self.client.force_login(self.manager)
+        response = self.client.get(reverse("manager_requisitions"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "12.50")
+        self.assertContains(response, "31.25")
+
+        response = self.client.post(
+            reverse("manager_review_requisition", args=[requisition.pk]),
+            {"action": "approve", "notes": "Approved."},
+        )
+        self.assertRedirects(response, reverse("manager_requisitions"))
+        response = self.client.get(reverse("manager_requisitions"))
+        self.assertContains(response, "Reviewed Requisition History")
+        self.assertContains(response, "Approved")
+        self.assertContains(response, "31.25")
+
+        self.client.force_login(self.supervisor)
+        response = self.client.get(reverse("supervisor_requisitions"))
+        self.assertContains(response, "My Requisitions")
+        self.assertContains(response, "31.25")
+
+    def test_unit_price_is_required(self):
+        self.client.force_login(self.supervisor)
+
+        response = self.client.post(
+            reverse("supervisor_requisitions"),
+            {
+                "item_name": "Layer Feed",
+                "quantity": "2.5",
+                "unit": "kg",
+                "reason": "Feed stock is low.",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(InventoryRequisition.objects.exists())
 
 
 class SupplierPageTests(TestCase):
