@@ -5,7 +5,7 @@ from .models import InventoryRequisition, InventoryTransaction, Item, ItemCatego
 
 @admin.register(InventoryRequisition)
 class InventoryRequisitionAdmin(admin.ModelAdmin):
-    list_display = ("requested_by", "item", "item_name", "quantity", "unit", "status", "created_at")
+    list_display = ("requested_by", "item", "item_name", "quantity", "unit", "unit_price", "total_amount", "status", "created_at")
     list_filter = ("status", "created_at")
     search_fields = ("requested_by__username", "requested_by__first_name", "requested_by__last_name", "item__name", "item_name", "reason")
     readonly_fields = ("created_at", "updated_at")

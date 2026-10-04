@@ -4,7 +4,7 @@ todo 1:
 
 
 Manager to supervisor transers:
-        add store issue(change name to store-requests)
+        add store issue(change name to store-requests)---------done
         add requisition history, add amount column
         abstarct the manager dash
 
