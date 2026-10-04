@@ -10,7 +10,8 @@ from django.db.models.functions import Coalesce
 from django.shortcuts import get_object_or_404, redirect, render
 
 from inventory.models import InventoryTransaction
-from poultry.models import ApprovalStatus, egg_collection
+from poultry.bird_ledger import batch_bird_count, farm_bird_count, record_delivered_bird_sale
+from poultry.models import ApprovalStatus, HouseBirdMovement, PoultryBatch, egg_collection
 from poultryiq.pagination import paginate
 from accounting.models import AccountingCode, ChartOfAccount
 from accounting.services import account_by_system_code, payment_account_for_method, post_customer_payment, post_sale, post_sale_delivery
@@ -215,9 +216,26 @@ def _build_product_stock():
 
     for key in ("manure", "off_layers"):
         cfg = PRODUCTS[key]
-        source = _stock_from_inventory(cfg["inventory_filter"])
-        sold = _sold_qty(cfg["sold_filter"])
-        available = max(source - sold, Decimal("0.000"))
+        if key == "off_layers":
+            source = Decimal(
+                HouseBirdMovement.objects.filter(
+                    direction=HouseBirdMovement.Direction.IN,
+                    movement_type__in=[
+                        HouseBirdMovement.MovementType.OPENING_STOCK,
+                        HouseBirdMovement.MovementType.STOCK_IN,
+                    ],
+                ).aggregate(total=Sum("quantity"))["total"] or 0
+            )
+            sold = Decimal(
+                HouseBirdMovement.objects.filter(
+                    movement_type=HouseBirdMovement.MovementType.SALE,
+                ).aggregate(total=Sum("quantity"))["total"] or 0
+            )
+            available = max(Decimal(farm_bird_count()), Decimal("0.000"))
+        else:
+            source = _stock_from_inventory(cfg["inventory_filter"])
+            sold = _sold_qty(cfg["sold_filter"])
+            available = max(source - sold, Decimal("0.000"))
         unit_price = _latest_unit_price(cfg["sold_filter"])
         stock[key] = {
             "key": key,
@@ -637,6 +655,7 @@ def sales(request):
         sale_type = request.POST.get("sale_type", "instant").strip().lower()
         delivery_date_raw = request.POST.get("delivery_date", "").strip()
         notes = request.POST.get("notes", "").strip()
+        bird_batch_id = request.POST.get("bird_batch", "").strip()
 
         errors = []
 
@@ -649,6 +668,19 @@ def sales(request):
         if product_key not in stock:
             errors.append("Please select a valid product.")
 
+        bird_batch = None
+        if product_key == "off_layers":
+            if bird_batch_id:
+                bird_batch_queryset = PoultryBatch.objects.filter(
+                    pk=bird_batch_id,
+                    status=PoultryBatch.Status.ACTIVE,
+                ).select_related("house")
+                if getattr(request.user, "role_code", "") == "SUPERVISOR":
+                    bird_batch_queryset = bird_batch_queryset.filter(house__in=request.user.houses.all())
+                bird_batch = bird_batch_queryset.first()
+            if not bird_batch:
+                errors.append("Select the source house and flock for the bird sale.")
+
         try:
             quantity = Decimal(quantity_raw)
             if quantity <= 0:
@@ -656,6 +688,13 @@ def sales(request):
         except (InvalidOperation, ValueError):
             quantity = Decimal("0")
             errors.append("Please provide a valid quantity.")
+
+        if product_key == "off_layers" and quantity != quantity.to_integral_value():
+            errors.append("Bird quantities must be whole numbers.")
+        if bird_batch and quantity > batch_bird_count(bird_batch):
+            errors.append(
+                f"Only {batch_bird_count(bird_batch)} birds are available in {bird_batch.batch_code}."
+            )
 
         try:
             unit_price = Decimal(price_raw)
@@ -769,6 +808,7 @@ def sales(request):
 
                 sale_item = SaleItem.objects.create(
                     invoice=invoice,
+                    batch=bird_batch,
                     account=sale_account,
                     product_name=product_name,
                     quantity=quantity,
@@ -794,6 +834,8 @@ def sales(request):
                     description=f"{product_name} sale",
                 )
                 post_sale(sale_item, amount_paid=amount_paid, created_by=request.user)
+                if invoice.delivery_status == SaleInvoice.DeliveryStatus.DELIVERED:
+                    record_delivered_bird_sale(sale_item, operator=request.user)
 
                 receivable = ReceivableLedger.objects.create(
                     invoice=invoice,
@@ -845,6 +887,17 @@ def sales(request):
         ).order_by("-item_id")[:10]
     )
 
+    bird_batches = list(
+        PoultryBatch.objects.filter(status=PoultryBatch.Status.ACTIVE)
+        .select_related("house")
+        .order_by("house__house_code", "batch_code")
+    )
+    if getattr(request.user, "role_code", "") == "SUPERVISOR":
+        bird_batches = [batch for batch in bird_batches if request.user.houses.filter(pk=batch.house_id).exists()]
+    for batch in bird_batches:
+        batch.available_birds = batch_bird_count(batch)
+    bird_batches = [batch for batch in bird_batches if batch.available_birds > 0]
+
     context = {
         "stock_cards": [stock["eggs"], stock["damaged_eggs"], stock["manure"], stock["off_layers"]],
         "recent_sales": recent_sales,
@@ -859,6 +912,7 @@ def sales(request):
             for customer in Customer.objects.filter(is_active=True).order_by("name")
         },
         "payment_method_choices": Customer.PaymentMethod.choices,
+        "bird_batches": bird_batches,
         **_pending_orders_metrics(pending_orders),
     }
     return render(request, "sales.html", context)
@@ -960,6 +1014,8 @@ def orders(request):
                                 post_sale_delivery(invoice, created_by=request.user)
                                 invoice.delivery_status = SaleInvoice.DeliveryStatus.DELIVERED
                                 invoice.save(update_fields=["delivery_status"])
+                                for sale_item in invoice.items.select_related("batch", "invoice").all():
+                                    record_delivered_bird_sale(sale_item, operator=request.user)
                         except ValidationError as exc:
                             messages.error(request, "; ".join(exc.messages) if hasattr(exc, "messages") else str(exc))
                             return redirect("orders")

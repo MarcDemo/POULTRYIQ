@@ -115,8 +115,8 @@ class SalesPageTests(TestCase):
 		self.assertEqual(cards["manure"]["source_qty"], Decimal("45.000"))
 		self.assertEqual(cards["manure"]["available_qty"], Decimal("45.000"))
 
-		self.assertEqual(cards["off_layers"]["source_qty"], Decimal("20.000"))
-		self.assertEqual(cards["off_layers"]["available_qty"], Decimal("20.000"))
+		self.assertEqual(cards["off_layers"]["source_qty"], Decimal("300"))
+		self.assertEqual(cards["off_layers"]["available_qty"], Decimal("300"))
 
 	def test_sales_page_uses_customer_dropdown_from_db(self):
 		customer = Customer.objects.create(name="Dropdown Buyer", is_active=True)
@@ -287,6 +287,7 @@ class SalesPageTests(TestCase):
 				"customer": "Bird Buyer",
 				"phone": "0700333444",
 				"product": "off_layers",
+				"bird_batch": str(self.batch.pk),
 				"quantity": "2",
 				"price": "15000",
 				"deposit": "30000",

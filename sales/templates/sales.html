@@ -263,6 +263,17 @@
 					<input type="number" class="form-control" id="quantity" name="quantity" min="0" step="0.001" value="0" required>
 				</div>
 
+				<div class="col-md-8" id="birdBatchWrap" style="display:none;">
+					<label class="form-label">Source house and flock</label>
+					<select class="form-select" name="bird_batch" id="birdBatch">
+						<option value="">Select the flock supplying these birds</option>
+						{% for batch in bird_batches %}
+						<option value="{{ batch.pk }}" data-available="{{ batch.available_birds }}">{{ batch.house.house_code }}{% if batch.house.name %} — {{ batch.house.name }}{% endif %} / {{ batch.batch_code }} ({{ batch.available_birds }} birds)</option>
+						{% endfor %}
+					</select>
+					<small class="text-muted">Required for live or off-layer bird sales so the correct house balance is reduced.</small>
+				</div>
+
 				<div class="col-md-4">
 					<label class="form-label">Price per Unit</label>
 					<input type="number" class="form-control" id="price" name="price" min="0" step="0.01" value="0" required>
@@ -453,6 +464,8 @@
 	const productEl = $('product');
 	const saleTypeEl = $('saleType');
 	const deliveryWrapEl = $('deliveryWrap');
+	const birdBatchWrapEl = $('birdBatchWrap');
+	const birdBatchEl = $('birdBatch');
 	const availabilityHintEl = $('availabilityHint');
 	const totalEl = $('total');
 	const balanceEl = $('balance');
@@ -481,6 +494,14 @@
 		}
 
 		availabilityHintEl.textContent = `Available: ${available} ${unit}`;
+		const isBirdSale = productEl.value === 'off_layers';
+		birdBatchWrapEl.style.display = isBirdSale ? '' : 'none';
+		birdBatchEl.required = isBirdSale;
+		if (isBirdSale && birdBatchEl.value) {
+			const batchAvailable = Number(birdBatchEl.selectedOptions[0]?.dataset.available || 0);
+			qEl.max = batchAvailable;
+			availabilityHintEl.textContent = `Available in selected flock: ${batchAvailable} birds`;
+		}
 	}
 
 	function recalc() {
@@ -526,6 +547,7 @@
 		updateProductMeta();
 		recalc();
 	});
+	birdBatchEl.addEventListener('change', updateProductMeta);
 
 	saleTypeEl.addEventListener('change', toggleDelivery);
 	customerNameEl.addEventListener('change', applyCustomerDefaults);
