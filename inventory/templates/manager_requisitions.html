@@ -14,7 +14,7 @@
         <div class="card-body p-0">
             <div class="table-responsive">
                 <table class="table table-hover mb-0 align-middle">
-                    <thead><tr><th>Supervisor</th><th>Item</th><th>Quantity</th><th>Reason</th><th class="text-center">Action</th></tr></thead>
+                    <thead><tr><th>Supervisor</th><th>Item</th><th>Quantity</th><th>Unit Price</th><th>Total</th><th>Reason</th><th class="text-center">Action</th></tr></thead>
                     <tbody>
                         {% for req in requests %}
                         <tr>
@@ -27,6 +27,8 @@
                                 {{ req.quantity|floatformat:3 }} {{ req.unit }}
                                 {% if req.needed_by %}<div><small class="text-muted">Needed {{ req.needed_by }}</small></div>{% endif %}
                             </td>
+                            <td>{% if req.unit_price != None %}{{ req.unit_price|floatformat:2 }}{% else %}-{% endif %}</td>
+                            <td>{% if req.total_amount != None %}{{ req.total_amount|floatformat:2 }}{% else %}-{% endif %}</td>
                             <td>{{ req.reason|truncatechars:90 }}</td>
                             <td>
                                 <form method="post" action="{% url 'manager_review_requisition' req.pk %}" class="d-grid gap-2">
@@ -40,7 +42,7 @@
                             </td>
                         </tr>
                         {% empty %}
-                        <tr><td colspan="5" class="text-center text-muted py-4">No inventory requisitions awaiting approval.</td></tr>
+                        <tr><td colspan="7" class="text-center text-muted py-4">No inventory requisitions awaiting approval.</td></tr>
                         {% endfor %}
                     </tbody>
                 </table>
@@ -48,6 +50,40 @@
         </div>
     </div>
     {% include "partials/pagination.html" %}
+
+    <div class="card mt-4">
+        <div class="card-header"><i class="bi bi-clock-history me-2"></i>Reviewed Requisition History</div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0 align-middle">
+                    <thead><tr><th>Supervisor</th><th>Item</th><th>Quantity</th><th>Unit Price</th><th>Total</th><th>Reviewed By</th><th>Outcome</th><th>Manager Notes</th></tr></thead>
+                    <tbody>
+                        {% for req in history %}
+                        <tr>
+                            <td>
+                                <div class="fw-semibold">{{ req.requested_by.get_full_name|default:req.requested_by.username }}</div>
+                                <small class="text-muted">{{ req.created_at|date:"d M Y H:i" }}</small>
+                            </td>
+                            <td>{% if req.item %}{{ req.item.name }}{% else %}{{ req.item_name }}{% endif %}</td>
+                            <td>{{ req.quantity|floatformat:3 }} {{ req.unit }}</td>
+                            <td>{% if req.unit_price != None %}{{ req.unit_price|floatformat:2 }}{% else %}-{% endif %}</td>
+                            <td>{% if req.total_amount != None %}{{ req.total_amount|floatformat:2 }}{% else %}-{% endif %}</td>
+                            <td>
+                                {{ req.reviewed_by.get_full_name|default:req.reviewed_by.username }}
+                                {% if req.reviewed_at %}<div><small class="text-muted">{{ req.reviewed_at|date:"d M Y H:i" }}</small></div>{% endif %}
+                            </td>
+                            <td><span class="badge {% if req.status == 'APPROVED' %}bg-success{% else %}bg-danger{% endif %}">{{ req.get_status_display }}</span></td>
+                            <td>{{ req.review_notes|default:"-"|truncatechars:60 }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="8" class="text-center text-muted py-4">No reviewed requisitions yet.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% include "partials/pagination.html" with page_obj=history querystring=history_querystring page_param="history_page" %}
 </div>
 
 {% endblock %}
