@@ -1,6 +1,7 @@
 import json
 
 from django.db import connection
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.test import TestCase
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
@@ -24,10 +25,21 @@ from .models import (
     FeedRecord,
     FlockStage,
     InvestorKpiTarget,
+    BirdTransfer,
+    HouseBirdMovement,
+    MortalityCause,
+    MortalityRecord,
     PoultryBatch,
     PoultryHouse,
     egg_collection,
     flock_stage_for_age_days,
+)
+from .bird_ledger import (
+    batch_bird_count,
+    create_bird_transfer,
+    house_bird_count,
+    record_delivered_bird_sale,
+    reverse_bird_transfer,
 )
 from .services.investor_analysis import (
     GUIDED_QUESTIONS,
@@ -40,6 +52,180 @@ from .services.investor_analysis import (
 )
 from .units import format_eggs_as_trays
 from .views import _build_investor_builder_data, scale_formula_ingredients
+
+
+class BirdTransferLedgerTests(TestCase):
+    def setUp(self):
+        self.supervisor_role = Role.objects.create(code=Role.RoleCode.SUPERVISOR, name="Transfer Supervisor")
+        self.manager_role = Role.objects.create(code=Role.RoleCode.MANAGER, name="Transfer Manager")
+        self.supervisor = User.objects.create_user(
+            username="transfer-supervisor",
+            password="pass1234",
+            role=self.supervisor_role,
+        )
+        self.manager = User.objects.create_user(
+            username="transfer-manager",
+            password="pass1234",
+            role=self.manager_role,
+        )
+        self.superuser = User.objects.create_superuser(
+            username="transfer-admin",
+            email="transfer-admin@example.com",
+            password="pass1234",
+        )
+        self.source_house = PoultryHouse.objects.create(house_code="BROODER", name="Brooder", capacity=1000)
+        self.house_a = PoultryHouse.objects.create(house_code="HOUSE-A", name="House A", capacity=500)
+        self.house_b = PoultryHouse.objects.create(house_code="HOUSE-B", name="House B", capacity=500)
+        self.supervisor.houses.add(self.source_house)
+        self.batch = PoultryBatch.objects.create(
+            batch_code="BROOD-001",
+            house=self.source_house,
+            breed="Layers",
+            supplier_name="Hatchery",
+            date_stocked=date.today(),
+            initial_quantity=200,
+            initial_age_days=42,
+            status=PoultryBatch.Status.ACTIVE,
+            created_by=self.manager,
+        )
+
+    def test_new_stocking_creates_house_ledger_balance(self):
+        self.assertEqual(batch_bird_count(self.batch), 200)
+        self.assertEqual(house_bird_count(self.source_house), 200)
+        movement = HouseBirdMovement.objects.get(batch=self.batch)
+        self.assertEqual(movement.movement_type, HouseBirdMovement.MovementType.STOCK_IN)
+        self.assertEqual(movement.direction, HouseBirdMovement.Direction.IN)
+
+    def test_supervisor_can_split_batch_across_multiple_active_houses(self):
+        transfer = create_bird_transfer(
+            actor=self.supervisor,
+            source_batch_id=self.batch.pk,
+            transfer_date=date.today(),
+            allocations=[
+                {"house_id": self.house_a.pk, "quantity": 100},
+                {"house_id": self.house_b.pk, "quantity": 50},
+            ],
+            notes="Move growers out of brooder",
+        )
+
+        self.assertEqual(transfer.allocations.count(), 2)
+        self.assertEqual(batch_bird_count(self.batch), 50)
+        self.assertEqual(house_bird_count(self.source_house), 50)
+        self.assertEqual(house_bird_count(self.house_a), 100)
+        self.assertEqual(house_bird_count(self.house_b), 50)
+        for allocation in transfer.allocations.select_related("destination_batch"):
+            self.assertEqual(allocation.destination_batch.origin_batch, self.batch)
+            self.assertEqual(batch_bird_count(allocation.destination_batch), allocation.quantity)
+
+    def test_supervisor_transfer_page_is_available_but_manager_is_denied(self):
+        self.client.force_login(self.supervisor)
+        response = self.client.get(reverse("bird_transfers"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Transfer birds between houses")
+        self.assertContains(response, self.batch.batch_code)
+
+        self.client.force_login(self.manager)
+        self.assertEqual(self.client.get(reverse("bird_transfers")).status_code, 403)
+
+    def test_full_transfer_closes_source_batch(self):
+        create_bird_transfer(
+            actor=self.supervisor,
+            source_batch_id=self.batch.pk,
+            transfer_date=date.today(),
+            allocations=[{"house_id": self.house_a.pk, "quantity": 200}],
+        )
+        self.batch.refresh_from_db()
+        self.assertEqual(self.batch.status, PoultryBatch.Status.CLOSED)
+
+    def test_capacity_warning_requires_acknowledgement(self):
+        self.house_a.capacity = 50
+        self.house_a.save(update_fields=["capacity"])
+        with self.assertRaises(ValidationError):
+            create_bird_transfer(
+                actor=self.supervisor,
+                source_batch_id=self.batch.pk,
+                transfer_date=date.today(),
+                allocations=[{"house_id": self.house_a.pk, "quantity": 100}],
+            )
+        transfer = create_bird_transfer(
+            actor=self.supervisor,
+            source_batch_id=self.batch.pk,
+            transfer_date=date.today(),
+            allocations=[{"house_id": self.house_a.pk, "quantity": 100}],
+            capacity_warning_acknowledged=True,
+        )
+        self.assertTrue(transfer.allocations.get().exceeded_capacity)
+
+    def test_supervisor_cannot_transfer_from_unassigned_source(self):
+        self.supervisor.houses.clear()
+        with self.assertRaises(PermissionDenied):
+            create_bird_transfer(
+                actor=self.supervisor,
+                source_batch_id=self.batch.pk,
+                transfer_date=date.today(),
+                allocations=[{"house_id": self.house_a.pk, "quantity": 10}],
+            )
+
+    def test_approved_mortality_reduces_correct_house(self):
+        cause = MortalityCause.objects.create(name="Natural")
+        mortality = MortalityRecord.objects.create(
+            batch=self.batch,
+            record_date=date.today(),
+            number_dead=7,
+            cause=cause,
+            status=ApprovalStatus.PENDING,
+            reported_by=self.supervisor,
+        )
+        self.client.force_login(self.supervisor)
+        response = self.client.post(
+            reverse("sup_approve_mortality", args=[mortality.pk]),
+            {"action": "approve", "review_notes": "Verified"},
+        )
+        self.assertRedirects(response, reverse("supapproval"))
+        self.assertEqual(batch_bird_count(self.batch), 193)
+        self.assertEqual(house_bird_count(self.source_house), 193)
+        self.assertTrue(HouseBirdMovement.objects.filter(mortality_record=mortality).exists())
+
+    def test_only_django_superuser_can_reverse_transfer(self):
+        transfer = create_bird_transfer(
+            actor=self.supervisor,
+            source_batch_id=self.batch.pk,
+            transfer_date=date.today(),
+            allocations=[{"house_id": self.house_a.pk, "quantity": 40}],
+        )
+        with self.assertRaises(PermissionDenied):
+            reverse_bird_transfer(actor=self.manager, transfer_id=transfer.pk, reason="Wrong house")
+
+        reverse_bird_transfer(actor=self.superuser, transfer_id=transfer.pk, reason="Wrong house")
+        transfer.refresh_from_db()
+        self.assertEqual(transfer.status, BirdTransfer.Status.REVERSED)
+        self.assertEqual(house_bird_count(self.source_house), 200)
+        self.assertEqual(house_bird_count(self.house_a), 0)
+
+    def test_delivered_bird_sale_reduces_selected_house_and_batch(self):
+        customer = Customer.objects.create(name="Ledger Bird Buyer")
+        invoice = SaleInvoice.objects.create(
+            invoice_no="INV-LEDGER-1",
+            customer=customer,
+            invoice_date=date.today(),
+            total_amount=Decimal("50000.00"),
+            status=SaleInvoice.Status.PAID,
+            delivery_status=SaleInvoice.DeliveryStatus.DELIVERED,
+            created_by=self.manager,
+        )
+        item = SaleItem.objects.create(
+            invoice=invoice,
+            batch=self.batch,
+            product_name="Off Layer Birds",
+            quantity=Decimal("5"),
+            unit="birds",
+            unit_price=Decimal("10000.00"),
+            line_total=Decimal("50000.00"),
+        )
+        movement = record_delivered_bird_sale(item, operator=self.manager)
+        self.assertEqual(movement.movement_type, HouseBirdMovement.MovementType.SALE)
+        self.assertEqual(batch_bird_count(self.batch), 195)
+        self.assertEqual(house_bird_count(self.source_house), 195)
 
 
 class PoultryAdminTests(TestCase):

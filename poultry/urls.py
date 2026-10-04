@@ -11,6 +11,7 @@ urlpatterns = [
     path('record_cleaning/', views.record_cleaning, name='record_cleaning'),
     path('workersdash/', views.workersdash, name='workersdash'),
     path('supdash/', views.supdash, name='supdash'),
+    path('supervisor/bird-transfers/', views.bird_transfers, name='bird_transfers'),
     path('supapproval/', views.supapproval, name='supapproval'),
     path('sup/approve/eggs/<int:pk>/', views.sup_approve_eggs, name='sup_approve_eggs'),
     path('sup/approve/feed/<int:pk>/', views.sup_approve_feed, name='sup_approve_feed'),

@@ -3,7 +3,7 @@ import json
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.core.exceptions import ValidationError
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
 from django.db.models import Avg, Count, DecimalField, Max, Q, Sum, Value
 from django.db.models.functions import Coalesce
@@ -45,8 +45,18 @@ from .models import (
     CleaningPhoto,
     MortalityRecord,
     ApprovalStatus,
+    BirdTransfer,
+    HouseBirdMovement,
 )
 from .forms import PoultryBatchForm
+from .bird_ledger import (
+    batch_bird_count,
+    create_bird_transfer,
+    farm_bird_count,
+    house_bird_counts,
+    record_approved_mortality,
+    record_batch_stocking,
+)
 from .services.investor_analysis import (
     DIMENSIONS as INVESTOR_DIMENSIONS,
     GUIDED_QUESTIONS,
@@ -118,7 +128,7 @@ def dashboard(request):
         approved_deaths = batch.mortality_records.filter(
             status=ApprovalStatus.APPROVED
         ).aggregate(total=Sum("number_dead"))["total"] or 0
-        total_birds += max(batch.initial_quantity - approved_deaths, 0)
+        total_birds += max(batch_bird_count(batch), 0)
 
     eggs_today = egg_collection.objects.filter(
         collection_date=today,
@@ -361,7 +371,7 @@ def birds(request):
             is_active=True,
         ).order_by("first_name", "username")
 
-        current_birds = max(batch.initial_quantity - total_mortality - int(birds_sold), 0)
+        current_birds = max(batch_bird_count(batch), 0)
 
         # 🧠 performance logic
         if batch.initial_quantity > 0:
@@ -722,7 +732,7 @@ def _build_investor_builder_data(start_date, end_date, group_by):
         birds_sold = SaleItem.objects.filter(batch=batch).filter(
             Q(product_name__icontains="bird") | Q(product_name__icontains="off layer")
         ).aggregate(total=Sum("quantity"))["total"] or 0
-        live_birds = max(batch.initial_quantity - int(approved_deaths) - int(birds_sold), 0)
+        live_birds = max(batch_bird_count(batch), 0)
         current_birds += live_birds
         label = f"{batch.house.house_code} - {batch.house.name}" if batch.house.name and batch.house.house_code != batch.house.name else (batch.house.name or batch.house.house_code)
         house_current[label] = house_current.get(label, 0) + live_birds
@@ -731,7 +741,9 @@ def _build_investor_builder_data(start_date, end_date, group_by):
         house_active_batches[label] = house_active_batches.get(label, 0) + 1
         batch_current.append((batch.batch_code, live_birds))
         batch_initial.append((batch.batch_code, batch.initial_quantity))
-        batch_purchase_cost.append((batch.batch_code, batch.amount_paid or 0))
+    active_root_ids = {batch.origin_batch_id or batch.pk for batch in active_batches}
+    active_roots = list(PoultryBatch.objects.filter(pk__in=active_root_ids))
+    batch_purchase_cost = [(batch.batch_code, batch.amount_paid or 0) for batch in active_roots]
 
     all_active_houses = PoultryHouse.objects.filter(is_active=True)
     for house in all_active_houses:
@@ -855,7 +867,7 @@ def _build_investor_builder_data(start_date, end_date, group_by):
     cost_per_egg = (total_expenses / decimal_value(net_eggs)) if net_eggs else Decimal("0")
     feed_cost_per_egg = (feed_cost_total / decimal_value(net_eggs)) if net_eggs else Decimal("0")
     rejected_egg_loss = decimal_value(rejected_eggs) * revenue_per_egg
-    stocked_birds = sum(value for _, value in batch_initial)
+    stocked_birds = sum(batch.initial_quantity for batch in active_roots)
     batch_purchase_total = sum(decimal_value(value) for _, value in batch_purchase_cost)
     average_bird_cost = (batch_purchase_total / decimal_value(stocked_birds)) if stocked_birds else Decimal("0")
     mortality_loss_estimate = decimal_value(total_deaths) * average_bird_cost
@@ -1377,14 +1389,16 @@ def _build_investor_financial_context(start_date, end_date, group_by):
     current_birds = 0
     stocked_birds = 0
     batch_purchase_total = Decimal("0")
+    active_root_ids = {batch.origin_batch_id or batch.pk for batch in active_batches}
     for batch in active_batches:
         approved_deaths = batch.mortality_records.filter(status=ApprovalStatus.APPROVED).aggregate(total=Sum("number_dead"))["total"] or 0
         birds_sold = SaleItem.objects.filter(batch=batch).filter(
             Q(product_name__icontains="bird") | Q(product_name__icontains="off layer")
         ).aggregate(total=Sum("quantity"))["total"] or 0
-        current_birds += max(batch.initial_quantity - int(approved_deaths) - int(birds_sold), 0)
-        stocked_birds += batch.initial_quantity
-        batch_purchase_total += decimal_value(batch.amount_paid)
+        current_birds += max(batch_bird_count(batch), 0)
+    for root_batch in PoultryBatch.objects.filter(pk__in=active_root_ids):
+        stocked_birds += root_batch.initial_quantity
+        batch_purchase_total += decimal_value(root_batch.amount_paid)
 
     expense_ratio = pct(total_expenses, total_revenue)
     profit_margin = pct(total_profit, total_revenue)
@@ -2355,7 +2369,7 @@ def workersdash(request):
             record_date=today
         ).aggregate(total=Sum("number_dead"))["total"] or 0
 
-        current_birds = max(batch.initial_quantity - total_mortality, 0)
+        current_birds = max(batch_bird_count(batch), 0)
         total_birds += current_birds
         today_deaths += batch_today_deaths
 
@@ -2484,11 +2498,37 @@ def supdash(request):
         request.user,
         "house",
     ).select_related("house")
-    total_birds = 0
-    for batch in active_batches:
-        mort = batch.mortality_records.filter(status=ApprovalStatus.APPROVED).aggregate(
-            total=Sum("number_dead"))["total"] or 0
-        total_birds += max(batch.initial_quantity - mort, 0)
+    counts_by_house = house_bird_counts()
+    house_summaries = []
+    for house in assigned_houses:
+        house_summaries.append({
+            "house": house,
+            "current_birds": counts_by_house.get(house.pk, 0),
+            "deaths_today": HouseBirdMovement.objects.filter(
+                house=house,
+                occurred_on=today,
+                movement_type=HouseBirdMovement.MovementType.MORTALITY,
+            ).aggregate(total=Sum("quantity"))["total"] or 0,
+            "total_deaths": HouseBirdMovement.objects.filter(
+                house=house,
+                movement_type=HouseBirdMovement.MovementType.MORTALITY,
+            ).aggregate(total=Sum("quantity"))["total"] or 0,
+            "transfers_in": HouseBirdMovement.objects.filter(
+                house=house,
+                movement_type__in=[
+                    HouseBirdMovement.MovementType.TRANSFER_IN,
+                    HouseBirdMovement.MovementType.REVERSAL_IN,
+                ],
+            ).aggregate(total=Sum("quantity"))["total"] or 0,
+            "transfers_out": HouseBirdMovement.objects.filter(
+                house=house,
+                movement_type__in=[
+                    HouseBirdMovement.MovementType.TRANSFER_OUT,
+                    HouseBirdMovement.MovementType.REVERSAL_OUT,
+                ],
+            ).aggregate(total=Sum("quantity"))["total"] or 0,
+        })
+    total_birds = sum(row["current_birds"] for row in house_summaries)
 
     context = {
         "today": today,
@@ -2514,11 +2554,82 @@ def supdash(request):
         "recent_pending_treatments": recent_pending_treatments,
         "total_birds": total_birds,
         "active_batches_count": active_batches.count(),
+        "house_summaries": house_summaries,
     }
     return render(request, 'supdash.html', context)
 
 
-def _review_pending_submission(request, queryset, pk, label):
+@login_required(login_url="login")
+def bird_transfers(request):
+    if _role_code(request.user) != "SUPERVISOR":
+        raise PermissionDenied("Only supervisors can create bird transfers.")
+
+    assigned_houses = request.user.houses.filter(is_active=True)
+    source_batches = list(
+        PoultryBatch.objects.filter(
+            status=PoultryBatch.Status.ACTIVE,
+            house__in=assigned_houses,
+        ).select_related("house").order_by("house__house_code", "batch_code")
+    )
+    for batch in source_batches:
+        batch.available_birds = batch_bird_count(batch)
+    source_batches = [batch for batch in source_batches if batch.available_birds > 0]
+
+    houses = list(PoultryHouse.objects.filter(is_active=True).order_by("house_code", "name"))
+    counts = house_bird_counts()
+    for house in houses:
+        house.current_birds = counts.get(house.pk, 0)
+        house.available_space = house.capacity - house.current_birds
+
+    if request.method == "POST":
+        transfer_date_raw = request.POST.get("transfer_date", "").strip()
+        try:
+            selected_date = date.fromisoformat(transfer_date_raw)
+        except ValueError:
+            selected_date = None
+
+        destination_ids = request.POST.getlist("destination_house")
+        quantities = request.POST.getlist("quantity")
+        allocations = [
+            {"house_id": house_id, "quantity": quantity}
+            for house_id, quantity in zip(destination_ids, quantities)
+            if house_id or quantity
+        ]
+        try:
+            if selected_date is None:
+                raise ValidationError("Enter a valid transfer date.")
+            transfer = create_bird_transfer(
+                actor=request.user,
+                source_batch_id=request.POST.get("source_batch"),
+                transfer_date=selected_date,
+                allocations=allocations,
+                notes=request.POST.get("notes", ""),
+                capacity_warning_acknowledged=bool(request.POST.get("ack_capacity_warning")),
+            )
+        except (ValidationError, PermissionDenied, PoultryBatch.DoesNotExist) as exc:
+            message = exc.messages[0] if isinstance(exc, ValidationError) else str(exc)
+            messages.error(request, message)
+        else:
+            messages.success(
+                request,
+                f"Transfer {transfer.pk} completed: {sum(a.quantity for a in transfer.allocations.all())} birds moved.",
+            )
+            return redirect("bird_transfers")
+
+    recent_transfers = (
+        BirdTransfer.objects.filter(source_batch__house__in=assigned_houses)
+        .select_related("source_batch__house", "created_by")
+        .prefetch_related("allocations__destination_house", "allocations__destination_batch")[:20]
+    )
+    return render(request, "bird_transfers.html", {
+        "today": localdate(),
+        "source_batches": source_batches,
+        "houses": houses,
+        "recent_transfers": recent_transfers,
+    })
+
+
+def _review_pending_submission(request, queryset, pk, label, on_approve=None):
     action = request.POST.get("action")
     review_notes = request.POST.get("review_notes", "").strip()
 
@@ -2529,18 +2640,24 @@ def _review_pending_submission(request, queryset, pk, label):
         messages.error(request, "Add a reason so the worker knows what to correct.")
         return redirect("supapproval")
 
-    with transaction.atomic():
-        record = get_object_or_404(
-            queryset.select_for_update().filter(status=ApprovalStatus.PENDING),
-            pk=pk,
-        )
-        record.status = (
-            ApprovalStatus.APPROVED if action == "approve" else ApprovalStatus.REJECTED
-        )
-        record.reviewed_by = request.user
-        record.reviewed_at = now()
-        record.review_notes = review_notes
-        record.save(update_fields=["status", "reviewed_by", "reviewed_at", "review_notes"])
+    try:
+        with transaction.atomic():
+            record = get_object_or_404(
+                queryset.select_for_update().filter(status=ApprovalStatus.PENDING),
+                pk=pk,
+            )
+            record.status = (
+                ApprovalStatus.APPROVED if action == "approve" else ApprovalStatus.REJECTED
+            )
+            record.reviewed_by = request.user
+            record.reviewed_at = now()
+            record.review_notes = review_notes
+            record.save(update_fields=["status", "reviewed_by", "reviewed_at", "review_notes"])
+            if action == "approve" and on_approve:
+                on_approve(record)
+    except ValidationError as exc:
+        messages.error(request, exc.messages[0])
+        return redirect("supapproval")
 
     if action == "approve":
         messages.success(request, f"{label} approved.")
@@ -2590,6 +2707,7 @@ def sup_approve_mortality(request, pk):
         _scope_to_supervisor_houses(MortalityRecord.objects.all(), request.user, "batch__house"),
         pk,
         "Mortality record",
+        on_approve=lambda record: record_approved_mortality(record, operator=request.user),
     )
 
 
@@ -3016,6 +3134,7 @@ def add_batch(request):
             batch = form.save(commit=False)
             batch.created_by = request.user
             batch.save()
+            record_batch_stocking(batch, operator=request.user)
 
             if batch.amount_paid and batch.amount_paid > 0:
                 batch_expense_category, _ = ExpenseCategory.objects.get_or_create(
