@@ -7,7 +7,7 @@ from django.db.models import Count, Max, Q, Sum
 from django.shortcuts import redirect, render
 from django.utils import timezone
 
-from accounts.decorators import supervisor_required, worker_required
+from accounts.decorators import field_operations_required, supervisor_required
 from alerts.models import Alert, AlertType
 from .services import get_health_alert_type, get_treatment_alert_receiver, create_treatment_alert
 from poultry.models import (
@@ -36,7 +36,7 @@ def _selected_or_only(queryset, pk):
 
 
 # Create your views here.
-@worker_required
+@field_operations_required
 def mortality(request):
     worker_batches = PoultryBatch.objects.filter(
         house__in=request.user.houses.all(),
@@ -89,7 +89,7 @@ def mortality(request):
                 reported_by=request.user,
             )
             messages.success(request, "Mortality record saved successfully.")
-            return redirect("workersdash")
+            return redirect("supdash" if request.user.is_supervisor else "workersdash")
 
     recent_records = MortalityRecord.objects.filter(
         reported_by=request.user,
@@ -677,7 +677,7 @@ def report_sickness(request):
                 case_status=SicknessReport.CaseStatus.REPORTED,
             )
             messages.success(request, "Sickness case saved successfully.")
-            return redirect("supdash")
+            return redirect("report_sickness")
 
     return render(
         request,
@@ -692,7 +692,7 @@ def report_sickness(request):
     )
 
 
-@worker_required
+@field_operations_required
 def record_sickbay_cleaning(request):
     assigned_houses = request.user.houses.all().order_by("house_code", "name")
     sickbay_reports = (
@@ -737,7 +737,7 @@ def record_sickbay_cleaning(request):
                 recorded_by=request.user,
             )
             messages.success(request, "Sickbay cleaning record saved successfully.")
-            return redirect("workersdash")
+            return redirect("supdash" if request.user.is_supervisor else "record_sickbay_cleaning")
 
     recent_cleaning_records = (
         SickbayCleaningRecord.objects.filter(
@@ -843,13 +843,13 @@ def view_sickness_reports(request):
         },
     )
 
-@worker_required
+@field_operations_required
 def sickbay(request):
 
     return render(request, 'sickbay.html')
 
 
-@worker_required
+@field_operations_required
 def sick_record_egg(request):
     batches = PoultryBatch.objects.filter(
         house__in=request.user.houses.all(),
@@ -955,7 +955,7 @@ def sick_record_egg(request):
                 f"Sickbay egg collection saved: {eggs_collected} eggs — "
                 f"{format_eggs_as_trays(eggs_collected)}. Awaiting supervisor review.",
             )
-            return redirect("workersdash")
+            return redirect("supdash" if request.user.is_supervisor else "workersdash")
 
     from django.db.models import Q
     recent_egg_records = egg_collection.objects.filter(
@@ -966,7 +966,7 @@ def sick_record_egg(request):
     return render(request, "record_egg_sickbay.html", {"batches": batches, "today": timezone.localdate(), "recent_egg_records": recent_egg_records, "sick_reports": assigned_sick_reports, "egg_weight_capture_enabled": EGG_WEIGHT_CAPTURE_ENABLED})
 
 
-@worker_required
+@field_operations_required
 def sick_record_feed(request):
     batches = PoultryBatch.objects.filter(
         house__in=request.user.houses.all(),
@@ -1026,7 +1026,7 @@ def sick_record_feed(request):
                 sickness_report=selected_report,
             )
             messages.success(request, "Sickbay: Feed record saved.")
-            return redirect("workersdash")
+            return redirect("supdash" if request.user.is_supervisor else "workersdash")
 
     from django.db.models import Q
     recent_feed_records = FeedRecord.objects.filter(
@@ -1037,7 +1037,7 @@ def sick_record_feed(request):
     return render(request, "record_feed_sickbay.html", {"batches": batches, "today": timezone.localdate(), "recent_feed_records": recent_feed_records, "feed_types": FeedRecord.FeedType.choices, "sick_reports": assigned_sick_reports})
 
 
-@worker_required
+@field_operations_required
 def sick_record_cleaning(request):
     batches = PoultryBatch.objects.filter(
         house__in=request.user.houses.all(),
@@ -1088,7 +1088,7 @@ def sick_record_cleaning(request):
                 sickness_report=selected_report,
             )
             messages.success(request, "Sickbay: Cleaning record saved.")
-            return redirect("workersdash")
+            return redirect("supdash" if request.user.is_supervisor else "workersdash")
 
     from django.db.models import Q
     recent_cleaning_records = CleaningRecord.objects.filter(
@@ -1099,7 +1099,7 @@ def sick_record_cleaning(request):
     return render(request, "record_cleaning_sickbay.html", {"batches": batches, "today": timezone.localdate(), "recent_cleaning_records": recent_cleaning_records, "sick_reports": assigned_sick_reports})
 
 
-@worker_required
+@field_operations_required
 def sick_mortality(request):
     batches = PoultryBatch.objects.filter(
         house__in=request.user.houses.all(),
@@ -1147,7 +1147,7 @@ def sick_mortality(request):
                 reported_by=request.user,
             )
             messages.success(request, "Sickbay: Mortality record saved.")
-            return redirect("workersdash")
+            return redirect("supdash" if request.user.is_supervisor else "workersdash")
 
     recent_records = MortalityRecord.objects.filter(
         reported_by=request.user,

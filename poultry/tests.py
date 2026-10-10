@@ -54,6 +54,98 @@ from .units import format_eggs_as_trays
 from .views import _build_investor_builder_data, scale_formula_ingredients
 
 
+class SupervisorFieldOperationsTests(TestCase):
+    def setUp(self):
+        supervisor_role = Role.objects.create(
+            code=Role.RoleCode.SUPERVISOR,
+            name="Field Supervisor",
+        )
+        manager_role = Role.objects.create(
+            code=Role.RoleCode.MANAGER,
+            name="Field Manager",
+        )
+        self.supervisor = User.objects.create_user(
+            username="field-supervisor",
+            password="pass1234",
+            role=supervisor_role,
+        )
+        self.manager = User.objects.create_user(
+            username="field-manager",
+            password="pass1234",
+            role=manager_role,
+        )
+        self.assigned_house = PoultryHouse.objects.create(
+            house_code="FIELD-A",
+            name="Assigned House",
+            capacity=500,
+        )
+        self.other_house = PoultryHouse.objects.create(
+            house_code="FIELD-B",
+            name="Other House",
+            capacity=500,
+        )
+        self.supervisor.houses.add(self.assigned_house)
+        self.assigned_batch = PoultryBatch.objects.create(
+            batch_code="FIELD-BATCH-A",
+            house=self.assigned_house,
+            breed="Layers",
+            supplier_name="Farm Source",
+            date_stocked=date.today(),
+            initial_quantity=200,
+            initial_age_days=120,
+            status=PoultryBatch.Status.ACTIVE,
+            created_by=self.manager,
+        )
+        PoultryBatch.objects.create(
+            batch_code="FIELD-BATCH-B",
+            house=self.other_house,
+            breed="Layers",
+            supplier_name="Farm Source",
+            date_stocked=date.today(),
+            initial_quantity=200,
+            initial_age_days=120,
+            status=PoultryBatch.Status.ACTIVE,
+            created_by=self.manager,
+        )
+        self.client.force_login(self.supervisor)
+
+    def test_supervisor_dashboard_exposes_worker_recording_actions(self):
+        response = self.client.get(reverse("supdash"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, reverse("record_egg"))
+        self.assertContains(response, reverse("record_feed"))
+        self.assertContains(response, reverse("record_cleaning"))
+        self.assertContains(response, reverse("mortality"))
+        self.assertContains(response, reverse("sickbay"))
+
+    def test_supervisor_can_open_field_forms_for_assigned_houses_only(self):
+        for url_name in ("record_egg", "record_feed", "record_cleaning"):
+            with self.subTest(url_name=url_name):
+                response = self.client.get(reverse(url_name))
+                self.assertEqual(response.status_code, 200)
+                self.assertQuerySetEqual(
+                    response.context["batches"],
+                    [self.assigned_batch],
+                )
+
+    def test_supervisor_egg_submission_returns_to_supervisor_dashboard(self):
+        response = self.client.post(
+            reverse("record_egg"),
+            {
+                "batch": str(self.assigned_batch.pk),
+                "total_eggs": "30",
+                "broken_eggs": "1",
+                "notes": "Supervisor morning collection",
+            },
+        )
+
+        self.assertRedirects(response, reverse("supdash"))
+        record = egg_collection.objects.get()
+        self.assertEqual(record.collected_by, self.supervisor)
+        self.assertEqual(record.status, ApprovalStatus.PENDING)
+
+
 class BirdTransferLedgerTests(TestCase):
     def setUp(self):
         self.supervisor_role = Role.objects.create(code=Role.RoleCode.SUPERVISOR, name="Transfer Supervisor")

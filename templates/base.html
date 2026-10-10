@@ -14,8 +14,8 @@
     <link rel="stylesheet" href="{% static 'css/responsive-ui.css' %}?v=mobile-shell-2">
     <link rel="stylesheet" href="{% static 'css/alerts-bell.css' %}?v=2">
     <link rel="stylesheet" href="{% static 'css/brand-footer.css' %}?v=2">
-    {% if request.user.is_authenticated and request.user.is_worker %}
-    <link rel="stylesheet" href="{% static 'css/worker-field-ui.css' %}?v=calm-worker-5">
+    {% if request.user.is_authenticated and request.user.is_worker or request.user.is_authenticated and request.user.is_supervisor %}
+    <link rel="stylesheet" href="{% static 'css/worker-field-ui.css' %}?v=calm-worker-6">
     {% endif %}
     {% if request.user.is_authenticated and request.user.is_supervisor %}
     <link rel="stylesheet" href="{% static 'css/supervisor-ui.css' %}?v=calm-supervisor-1">
@@ -207,6 +207,18 @@
                 <a class="nav-link {% if request.resolver_match.url_name == 'supdash' %}active{% endif %}" href="{% url 'supdash' %}">
                     <i class="bi bi-grid-1x2-fill"></i><span><strong>Overview</strong><small>Awaka</small></span>
                 </a>
+            </li>
+            <li class="nav-item manager-nav-group">
+                <button class="nav-link manager-nav-trigger {% if request.resolver_match.url_name == 'record_egg' or request.resolver_match.url_name == 'record_feed' or request.resolver_match.url_name == 'record_cleaning' or request.resolver_match.url_name == 'mortality' or request.resolver_match.url_name == 'sickbay' or request.resolver_match.url_name == 'sick_record_egg' or request.resolver_match.url_name == 'sick_record_feed' or request.resolver_match.url_name == 'sick_record_cleaning' or request.resolver_match.url_name == 'sick_mortality' or request.resolver_match.url_name == 'record_sickbay_cleaning' %}active{% endif %}" type="button">
+                    <i class="bi bi-pencil-square"></i><span><strong>Daily records</strong><small>Ebiwandiiko bya leero</small></span><i class="bi bi-chevron-right manager-nav-chevron"></i>
+                </button>
+                <div class="manager-nav-submenu">
+                    <a class="manager-nav-subitem {% if request.resolver_match.url_name == 'record_egg' %}active{% endif %}" href="{% url 'record_egg' %}"><i class="bi bi-dot"></i>Record Eggs</a>
+                    <a class="manager-nav-subitem {% if request.resolver_match.url_name == 'record_feed' %}active{% endif %}" href="{% url 'record_feed' %}"><i class="bi bi-dot"></i>Record Feed</a>
+                    <a class="manager-nav-subitem {% if request.resolver_match.url_name == 'record_cleaning' %}active{% endif %}" href="{% url 'record_cleaning' %}"><i class="bi bi-dot"></i>Record Cleaning</a>
+                    <a class="manager-nav-subitem {% if request.resolver_match.url_name == 'sickbay' or request.resolver_match.url_name == 'sick_record_egg' or request.resolver_match.url_name == 'sick_record_feed' or request.resolver_match.url_name == 'sick_record_cleaning' or request.resolver_match.url_name == 'sick_mortality' or request.resolver_match.url_name == 'record_sickbay_cleaning' %}active{% endif %}" href="{% url 'sickbay' %}"><i class="bi bi-dot"></i>Sick Bay Records</a>
+                    <a class="manager-nav-subitem {% if request.resolver_match.url_name == 'mortality' %}active{% endif %}" href="{% url 'mortality' %}"><i class="bi bi-dot"></i>Record Mortality</a>
+                </div>
             </li>
             <li class="nav-item manager-nav-group">
                 <button class="nav-link manager-nav-trigger {% if request.resolver_match.url_name == 'supapproval' or request.resolver_match.url_name == 'worker_welfare' or request.resolver_match.url_name == 'supervisor_welfare' or request.resolver_match.url_name == 'supervisor_review_welfare' %}active{% endif %}" type="button">
@@ -427,9 +439,9 @@
         <button class="mobile-nav-item" type="button" data-sidebar-toggle="workerSidebar" aria-controls="workerSidebar" aria-expanded="false"><i class="bi bi-grid"></i><span>More</span></button>
     {% elif request.user.is_supervisor %}
         <a class="mobile-nav-item {% if request.resolver_match.url_name == 'supdash' %}active{% endif %}" href="{% url 'supdash' %}"><i class="bi bi-house-door"></i><span>Home</span></a>
+        <a class="mobile-nav-item {% if request.resolver_match.url_name == 'record_egg' %}active{% endif %}" href="{% url 'record_egg' %}"><img src="{% static 'icons/worker/eggs.png' %}" alt=""><span>Eggs</span></a>
+        <a class="mobile-nav-item {% if request.resolver_match.url_name == 'record_feed' %}active{% endif %}" href="{% url 'record_feed' %}"><img src="{% static 'icons/worker/feed.png' %}" alt=""><span>Feed</span></a>
         <a class="mobile-nav-item {% if request.resolver_match.url_name == 'supapproval' %}active{% endif %}" href="{% url 'supapproval' %}"><img src="{% static 'icons/worker/eggs.png' %}" alt=""><span>Review</span></a>
-        <a class="mobile-nav-item {% if request.resolver_match.url_name == 'feed_mixtures' %}active{% endif %}" href="{% url 'feed_mixtures' %}"><img src="{% static 'icons/worker/feed.png' %}" alt=""><span>Feed mix</span></a>
-        <a class="mobile-nav-item {% if request.resolver_match.url_name == 'view_sickness' %}active{% endif %}" href="{% url 'view_sickness' %}"><i class="bi bi-heart-pulse"></i><span>Health</span></a>
         <button class="mobile-nav-item" type="button" data-sidebar-toggle="supervisorSidebar" aria-controls="supervisorSidebar" aria-expanded="false"><i class="bi bi-grid"></i><span>More</span></button>
     {% else %}
         <a class="mobile-nav-item {% if request.resolver_match.url_name == 'managerdash' %}active{% endif %}" href="{% url 'managerdash' %}"><i class="bi bi-house-door"></i><span>Home</span></a>

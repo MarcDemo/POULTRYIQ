@@ -1,10 +1,11 @@
 {% extends "base.html" %}
+{% load static %}
 {% block content %}
 
 <div class="container mt-4 worker-field-page">
 
     <div class="worker-hero mb-4">
-        <h3 class="mb-1"><i class="bi bi-broom me-2 text-success"></i>Cleaning done</h3>
+        <h3 class="mb-1 field-heading"><img class="field-realistic-icon field-realistic-icon--hero" src="{% static 'icons/worker/brush.png' %}" alt="" width="40" height="40">Cleaning done</h3>
         <div class="worker-subtitle">Tick the work finished today. <span class="luganda">Laga emirimu egikoleddwa leero.</span></div>
     </div>
 
@@ -12,7 +13,7 @@
         <div class="col-lg-6">
             <div class="card field-card">
                 <div class="card-header" style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%);">
-                    <i class="bi bi-broom me-2"></i>Cleaning form
+                    <img class="field-realistic-icon" src="{% static 'icons/worker/brush.png' %}" alt="" width="24" height="24">Cleaning form
                     <span class="luganda">Foomu y'okuyonja</span>
                 </div>
 
