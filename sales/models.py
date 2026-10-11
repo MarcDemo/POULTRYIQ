@@ -70,7 +70,7 @@ class SaleInvoice(models.Model):
     invoice_id = models.BigAutoField(primary_key=True)
     invoice_no = models.CharField(max_length=60, unique=True, db_index=True)  # e.g. INV-2026-0001
 
-    customer = models.ForeignKey(Customer, on_delete=models.PROTECT, related_name="invoices")
+    customer = models.ForeignKey(Customer, on_delete=models.PROTECT, related_name="invoices", null=True, blank=True)
 
     invoice_date = models.DateField(db_index=True)
     due_date = models.DateField(null=True, blank=True, db_index=True)
@@ -96,6 +96,10 @@ class SaleInvoice(models.Model):
         validators=[MinValueValidator(Decimal("0.00"))]
     )
     wht_amount = models.DecimalField(
+        max_digits=14, decimal_places=2, default=Decimal("0.00"),
+        validators=[MinValueValidator(Decimal("0.00"))]
+    )
+    change_given = models.DecimalField(
         max_digits=14, decimal_places=2, default=Decimal("0.00"),
         validators=[MinValueValidator(Decimal("0.00"))]
     )

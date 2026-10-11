@@ -8,6 +8,7 @@ from urllib.request import Request, urlopen
 
 from django.contrib import messages
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import Prefetch
 from django.http import JsonResponse
@@ -17,7 +18,7 @@ from django.utils import timezone
 from django.utils.text import slugify
 
 from accounts.views import get_post_login_redirect
-from accounts.decorators import manager_required
+from accounts.decorators import manager_required, roles_required
 from expenses.models import ExpenseCategory, ExpenseTransaction
 from accounting.models import ChartOfAccount
 from poultry.models import PoultryBatch
@@ -830,6 +831,7 @@ def supervisor_requisitions(request):
         item_id = request.POST.get("item", "").strip()
         item_name = request.POST.get("item_name", "").strip()
         quantity_raw = request.POST.get("quantity", "").strip()
+        unit_price_raw = request.POST.get("unit_price", "").strip()
         unit = request.POST.get("unit", "").strip() or "kg"
         needed_by_raw = request.POST.get("needed_by", "").strip()
         reason = request.POST.get("reason", "").strip()
@@ -837,6 +839,7 @@ def supervisor_requisitions(request):
         errors = []
         item = items.filter(pk=item_id).first() if item_id else None
         quantity = None
+        unit_price = Decimal("0.00")
         needed_by = None
 
         if not item and not item_name:
@@ -848,6 +851,11 @@ def supervisor_requisitions(request):
                 errors.append("Quantity must be greater than zero.")
         except (InvalidOperation, ValueError):
             errors.append("Please enter a valid quantity.")
+
+        try:
+            unit_price = InventoryRequisition._meta.get_field("unit_price").clean(unit_price_raw, None)
+        except ValidationError as exc:
+            errors.append(exc.messages[0])
 
         if needed_by_raw:
             try:
@@ -867,6 +875,7 @@ def supervisor_requisitions(request):
                 item=item,
                 item_name="" if item else item_name,
                 quantity=quantity,
+                unit_price=unit_price,
                 unit=item.unit if item else unit,
                 needed_by=needed_by,
                 reason=reason,
@@ -874,15 +883,21 @@ def supervisor_requisitions(request):
             messages.success(request, "Inventory requisition sent to the manager.")
             return redirect("supervisor_requisitions")
 
-    requisitions = InventoryRequisition.objects.filter(requested_by=request.user).select_related(
-        "item", "reviewed_by"
-    )[:20]
+    requisitions, history_querystring = paginate(
+        request,
+        InventoryRequisition.objects.filter(requested_by=request.user).select_related(
+            "item", "reviewed_by"
+        ),
+        per_page=20,
+        page_param="history_page",
+    )
     return render(
         request,
         "supervisor_requisitions.html",
         {
             "items": items,
             "requisitions": requisitions,
+            "history_querystring": history_querystring,
             "today": timezone.localdate(),
         },
     )
@@ -898,6 +913,14 @@ def manager_requisitions(request):
         status=InventoryRequisition.Status.SUBMITTED
     )
     page_obj, querystring = paginate(request, queryset, per_page=20)
+    history, history_querystring = paginate(
+        request,
+        InventoryRequisition.objects.select_related("requested_by", "item", "reviewed_by").filter(
+            status__in=[InventoryRequisition.Status.APPROVED, InventoryRequisition.Status.REJECTED]
+        ),
+        per_page=20,
+        page_param="history_page",
+    )
     return render(
         request,
         "manager_requisitions.html",
@@ -905,6 +928,8 @@ def manager_requisitions(request):
             "requests": page_obj,
             "page_obj": page_obj,
             "querystring": querystring,
+            "history": history,
+            "history_querystring": history_querystring,
         },
     )
 
@@ -941,7 +966,12 @@ def manager_review_requisition(request, pk):
     return redirect("manager_requisitions")
 
 
-@manager_required
+@roles_required(
+    "SUPERVISOR",
+    "MANAGER",
+    "OWNER",
+    message="Access denied: Store access only.",
+)
 def store_out(request):
     store = ensure_inventory_defaults()
     inventory_rows = _build_inventory_rows(store)
