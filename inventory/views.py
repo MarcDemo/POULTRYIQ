@@ -337,6 +337,7 @@ def tin_lookup(request):
 def suppliers(request):
     edit_id = request.POST.get("supplier_id", "").strip() or request.GET.get("edit", "").strip()
     editing_supplier = None
+    submitted_other_product_rows = []
     if edit_id:
         editing_supplier = (
             Supplier.objects.filter(pk=edit_id, is_active=True)
@@ -375,9 +376,9 @@ def suppliers(request):
         phone = request.POST.get("phone", "").strip()
         location = request.POST.get("location", "").strip()
         use_other_supplied_product = request.POST.get("use_other_supplied_product") == "on"
-        other_product_account_id = request.POST.get("other_product_account", "").strip()
-        other_product_name = request.POST.get("other_product_name", "").strip()
-        other_product_unit = request.POST.get("other_product_unit", "unit").strip() or "unit"
+        other_product_account_ids = request.POST.getlist("other_product_account")
+        other_product_names = request.POST.getlist("other_product_name")
+        other_product_units = request.POST.getlist("other_product_unit")
         preferred_payment_method = request.POST.get(
             "preferred_payment_method",
             Supplier.PaymentMethod.CASH,
@@ -395,11 +396,63 @@ def suppliers(request):
             )
         )
         product_names = sorted(item.name for item in supplied_products)
-        other_product_account = None
+        other_products_to_create = []
+        other_product_error = ""
         if use_other_supplied_product:
-            other_product_account = supplier_visible_accounts().filter(pk=other_product_account_id).first()
-            if other_product_name:
-                product_names.append(other_product_name)
+            row_count = max(
+                len(other_product_account_ids),
+                len(other_product_names),
+                len(other_product_units),
+                1,
+            )
+            for index in range(row_count):
+                account_id = other_product_account_ids[index].strip() if index < len(other_product_account_ids) else ""
+                product_name = other_product_names[index].strip() if index < len(other_product_names) else ""
+                unit = other_product_units[index].strip() if index < len(other_product_units) else "unit"
+                submitted_other_product_rows.append({
+                    "account_id": account_id,
+                    "name": product_name,
+                    "unit": unit or "unit",
+                })
+
+            submitted_other_product_rows = [
+                row for row in submitted_other_product_rows
+                if row["account_id"] or row["name"] or row["unit"] != "unit"
+            ]
+            if not submitted_other_product_rows:
+                other_product_error = "Add at least one other supplied product."
+            else:
+                account_map = {
+                    str(account.pk): account
+                    for account in supplier_visible_accounts().filter(
+                        pk__in=[row["account_id"] for row in submitted_other_product_rows]
+                    )
+                }
+                submitted_names = set()
+                for index, row in enumerate(submitted_other_product_rows, start=1):
+                    account = account_map.get(row["account_id"])
+                    normalised_name = row["name"].casefold()
+                    if not account:
+                        other_product_error = f"Select a category for other product {index}."
+                        break
+                    if not row["name"]:
+                        other_product_error = f"Enter a name for other product {index}."
+                        break
+                    if normalised_name in submitted_names:
+                        other_product_error = f"Other product {index} duplicates another product in this form."
+                        break
+                    if SupplierProduct.objects.filter(name__iexact=row["name"]).exists():
+                        other_product_error = (
+                            f"{row['name']} already exists. Select it from the product list instead."
+                        )
+                        break
+                    submitted_names.add(normalised_name)
+                    other_products_to_create.append({
+                        "account": account,
+                        "name": row["name"],
+                        "unit": row["unit"],
+                    })
+                    product_names.append(row["name"])
         product = ", ".join(product_names)
         valid_payment_methods = {value for value, _label in Supplier.PaymentMethod.choices}
         credit_paid_upfront = None
@@ -422,12 +475,8 @@ def suppliers(request):
             messages.error(request, "Invalid TIN number. A Uganda TIN should be 10 digits.")
         elif not supplied_products and not use_other_supplied_product:
             messages.error(request, "Select at least one supplied product or choose Other.")
-        elif use_other_supplied_product and not other_product_account:
-            messages.error(request, "Select the category for the other supplied product.")
-        elif use_other_supplied_product and not other_product_name:
-            messages.error(request, "Specify the other supplied product.")
-        elif use_other_supplied_product and SupplierProduct.objects.filter(name__iexact=other_product_name).exists():
-            messages.error(request, "That product name already exists. Please select it from the list instead.")
+        elif use_other_supplied_product and other_product_error:
+            messages.error(request, other_product_error)
         elif preferred_payment_method not in valid_payment_methods:
             messages.error(request, "Select a valid preferred payment method.")
         elif preferred_payment_method == Supplier.PaymentMethod.BANK and not bank_account_number:
@@ -454,11 +503,9 @@ def suppliers(request):
                 credit_grace_period_days = None
                 credit_period = ""
             with transaction.atomic():
-                if use_other_supplied_product:
+                for other_product_data in other_products_to_create:
                     other_product = SupplierProduct.objects.create(
-                        account=other_product_account,
-                        name=other_product_name,
-                        unit=other_product_unit,
+                        **other_product_data,
                         is_active=True,
                     )
                     supplied_products.append(other_product)
@@ -511,6 +558,9 @@ def suppliers(request):
     if request.method == "POST":
         form_values = request.POST
         selected_product_ids = request.POST.getlist("supplied_products")
+        other_product_rows = submitted_other_product_rows or [
+            {"account_id": "", "name": "", "unit": "unit"}
+        ]
     elif editing_supplier:
         form_values = {
             "name": editing_supplier.name,
@@ -526,9 +576,11 @@ def suppliers(request):
             "credit_period": editing_supplier.credit_period,
         }
         selected_product_ids = [str(pk) for pk in editing_supplier.supplied_products.values_list("pk", flat=True)]
+        other_product_rows = [{"account_id": "", "name": "", "unit": "unit"}]
     else:
         form_values = {}
         selected_product_ids = []
+        other_product_rows = [{"account_id": "", "name": "", "unit": "unit"}]
     page_obj, querystring = paginate(request, suppliers_qs, per_page=20)
     return render(
         request,
@@ -542,6 +594,7 @@ def suppliers(request):
             "editing_supplier": editing_supplier,
             "form_values": form_values,
             "selected_product_ids": selected_product_ids,
+            "other_product_rows": other_product_rows,
         },
     )
 
