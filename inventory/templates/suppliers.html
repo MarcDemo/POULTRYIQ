@@ -140,28 +140,64 @@
         <label class="form-check-label" for="use_other_supplied_product">Other</label>
     </div>
     <div class="mt-2" id="otherSuppliedProductWrapper" style="display:none;">
-        <div class="row g-2">
-            <div class="col-md-5">
-                <label class="form-label small" for="other_product_account">Category</label>
-                <select class="form-select" id="other_product_account" name="other_product_account">
-                    <option value="">-- Select category --</option>
-                    {% for account in product_accounts %}
-                        <option value="{{ account.id }}" {% if form_values.other_product_account == account.id|stringformat:"s" %}selected{% endif %}>
-                            {{ account.account_name }}
-                        </option>
-                    {% endfor %}
-                </select>
+        <div id="otherProductRows" class="d-grid gap-2">
+            {% for row in other_product_rows %}
+            <div class="other-product-row border rounded-3 p-2">
+                <div class="row g-2 align-items-end">
+                    <div class="col-md-4">
+                        <label class="form-label small">Category</label>
+                        <select class="form-select other-product-input" name="other_product_account">
+                            <option value="">-- Select category --</option>
+                            {% for account in product_accounts %}
+                                <option value="{{ account.id }}" {% if row.account_id == account.id|stringformat:"s" %}selected{% endif %}>{{ account.account_name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small">Product</label>
+                        <input class="form-control other-product-input" name="other_product_name" value="{{ row.name }}" placeholder="Enter product name">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small">Unit</label>
+                        <input class="form-control other-product-input" name="other_product_unit" value="{{ row.unit|default:'unit' }}">
+                    </div>
+                    <div class="col-md-2 d-grid">
+                        <button class="btn btn-outline-danger remove-other-product" type="button">
+                            <i class="bi bi-trash me-1"></i>Remove
+                        </button>
+                    </div>
+                </div>
             </div>
-            <div class="col-md-5">
-                <label class="form-label small" for="other_product_name">Product</label>
-                <input class="form-control" id="other_product_name" name="other_product_name" value="{{ form_values.other_product_name|default:'' }}" placeholder="Enter product name">
-            </div>
-            <div class="col-md-2">
-                <label class="form-label small" for="other_product_unit">Unit</label>
-                <input class="form-control" id="other_product_unit" name="other_product_unit" value="{{ form_values.other_product_unit|default:'unit' }}">
+            {% endfor %}
+        </div>
+        <button class="btn btn-sm btn-outline-primary mt-2" id="addOtherProduct" type="button">
+            <i class="bi bi-plus-circle me-1"></i>Add another product
+        </button>
+    </div>
+    <template id="otherProductRowTemplate">
+        <div class="other-product-row border rounded-3 p-2">
+            <div class="row g-2 align-items-end">
+                <div class="col-md-4">
+                    <label class="form-label small">Category</label>
+                    <select class="form-select other-product-input" name="other_product_account">
+                        <option value="">-- Select category --</option>
+                        {% for account in product_accounts %}<option value="{{ account.id }}">{{ account.account_name }}</option>{% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small">Product</label>
+                    <input class="form-control other-product-input" name="other_product_name" placeholder="Enter product name">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">Unit</label>
+                    <input class="form-control other-product-input" name="other_product_unit" value="unit">
+                </div>
+                <div class="col-md-2 d-grid">
+                    <button class="btn btn-outline-danger remove-other-product" type="button"><i class="bi bi-trash me-1"></i>Remove</button>
+                </div>
             </div>
         </div>
-    </div>
+    </template>
     <div class="form-text">Selected products control what appears for this supplier during purchases.</div>
 </div>
 
@@ -276,9 +312,9 @@
     const productGroups = Array.from(document.querySelectorAll('.supplier-product-group'));
     const otherProductCheck = document.getElementById('use_other_supplied_product');
     const otherProductWrapper = document.getElementById('otherSuppliedProductWrapper');
-    const otherProductAccount = document.getElementById('other_product_account');
-    const otherProductName = document.getElementById('other_product_name');
-    const otherProductUnit = document.getElementById('other_product_unit');
+    const otherProductRows = document.getElementById('otherProductRows');
+    const otherProductRowTemplate = document.getElementById('otherProductRowTemplate');
+    const addOtherProductButton = document.getElementById('addOtherProduct');
     const paymentSelect = document.getElementById('preferred_payment_method');
     const creditTerms = document.getElementById('supplier_credit_terms');
     const bankTerms = document.getElementById('supplier_bank_terms');
@@ -321,23 +357,39 @@
     function toggleOtherProductInput() {
         const isOther = otherProductCheck && otherProductCheck.checked;
         if (otherProductWrapper) otherProductWrapper.style.display = isOther ? '' : 'none';
-        if (otherProductAccount) {
-            otherProductAccount.required = !!isOther;
-            if (!isOther) otherProductAccount.value = '';
-        }
-        if (otherProductName) {
-            otherProductName.required = !!isOther;
-            if (!isOther) otherProductName.value = '';
-        }
-        if (otherProductUnit) {
-            otherProductUnit.required = !!isOther;
-            if (!isOther) otherProductUnit.value = 'unit';
-        }
+        document.querySelectorAll('.other-product-input').forEach(function (input) {
+            input.disabled = !isOther;
+            input.required = !!isOther;
+        });
+    }
+
+    function updateOtherProductRemoveButtons() {
+        if (!otherProductRows) return;
+        const rows = otherProductRows.querySelectorAll('.other-product-row');
+        rows.forEach(function (row) {
+            const removeButton = row.querySelector('.remove-other-product');
+            if (removeButton) removeButton.classList.toggle('d-none', rows.length === 1);
+        });
     }
 
     if (otherProductCheck) {
         otherProductCheck.addEventListener('change', toggleOtherProductInput);
         toggleOtherProductInput();
+    }
+
+    if (addOtherProductButton && otherProductRows && otherProductRowTemplate) {
+        addOtherProductButton.addEventListener('click', function () {
+            otherProductRows.appendChild(otherProductRowTemplate.content.cloneNode(true));
+            updateOtherProductRemoveButtons();
+            toggleOtherProductInput();
+        });
+        otherProductRows.addEventListener('click', function (event) {
+            const removeButton = event.target.closest('.remove-other-product');
+            if (!removeButton) return;
+            removeButton.closest('.other-product-row').remove();
+            updateOtherProductRemoveButtons();
+        });
+        updateOtherProductRemoveButtons();
     }
 
     if (productSearch) {

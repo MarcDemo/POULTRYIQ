@@ -410,6 +410,55 @@ class SupplierPageTests(TestCase):
         self.assertContains(response, 'name="supplied_products"', html=False)
         self.assertContains(response, "Maize bran")
         self.assertContains(response, "Concentrate")
+        self.assertContains(response, "Add another product")
+
+    def test_supplier_form_saves_multiple_other_products(self):
+        response = self.client.post(
+            reverse("suppliers"),
+            {
+                "name": "Mixed Farm Supplies",
+                "phone": "0700000006",
+                "preferred_payment_method": "Cash",
+                "use_other_supplied_product": "on",
+                "other_product_account": [
+                    str(self.supplier_account.pk),
+                    str(self.supplier_account.pk),
+                ],
+                "other_product_name": ["Sunflower cake", "Cotton seed cake"],
+                "other_product_unit": ["kg", "bag"],
+            },
+        )
+
+        self.assertRedirects(response, reverse("suppliers"))
+        supplier = Supplier.objects.get(name="Mixed Farm Supplies")
+        products = list(supplier.supplied_products.order_by("name"))
+        self.assertEqual([product.name for product in products], ["Cotton seed cake", "Sunflower cake"])
+        self.assertEqual({product.name: product.unit for product in products}, {
+            "Cotton seed cake": "bag",
+            "Sunflower cake": "kg",
+        })
+
+    def test_duplicate_other_products_reject_entire_supplier_submission(self):
+        response = self.client.post(
+            reverse("suppliers"),
+            {
+                "name": "Duplicate Supplies",
+                "phone": "0700000007",
+                "preferred_payment_method": "Cash",
+                "use_other_supplied_product": "on",
+                "other_product_account": [
+                    str(self.supplier_account.pk),
+                    str(self.supplier_account.pk),
+                ],
+                "other_product_name": ["Rice bran", "rice BRAN"],
+                "other_product_unit": ["kg", "bag"],
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "duplicates another product in this form")
+        self.assertFalse(Supplier.objects.filter(name="Duplicate Supplies").exists())
+        self.assertFalse(SupplierProduct.objects.filter(name__iexact="Rice bran").exists())
 
     def test_supplier_list_edit_button_prefills_existing_supplier(self):
         supplier = Supplier.objects.create(
