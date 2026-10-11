@@ -528,6 +528,24 @@ class AddBatchAccountingTests(TestCase):
         )
         self.assertEqual(get_pl_data()["totals"]["cost_of_revenue"], Decimal("1250000.00"))
 
+    def test_add_batch_lists_every_active_supplier(self):
+        Supplier.objects.create(
+            name="New Supplier Interface Entry",
+            product="Layers",
+            is_active=True,
+        )
+        Supplier.objects.create(
+            name="Inactive Supplier",
+            product="Day-old chicks",
+            is_active=False,
+        )
+
+        response = self.client.get(reverse("add_batch"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "New Supplier Interface Entry")
+        self.assertNotContains(response, "Inactive Supplier")
+
 
 class SupervisorHouseScopeTests(TestCase):
     def setUp(self):
