@@ -1,11 +1,11 @@
 {% extends "base.html" %}
-{% load poultry_units %}
+{% load poultry_units static %}
 {% block content %}
 
 <div class="container mt-4 worker-field-page">
 
     <div class="worker-hero mb-4">
-        <h3 class="mb-1"><i class="bi bi-basket me-2 text-primary"></i>Eggs collected</h3>
+        <h3 class="mb-1 field-heading"><img class="field-realistic-icon field-realistic-icon--hero" src="{% static 'icons/worker/eggs.png' %}" alt="" width="40" height="40">Eggs collected</h3>
         <div class="worker-subtitle">Write the eggs collected today. <span class="luganda">Wandiika amagi agakuŋŋanyiziddwa leero.</span></div>
     </div>
 
@@ -13,7 +13,7 @@
         <div class="col-lg-6">
             <div class="card field-card">
                 <div class="card-header">
-                    <i class="bi bi-basket me-2"></i>Egg form
+                    <img class="field-realistic-icon" src="{% static 'icons/worker/eggs.png' %}" alt="" width="24" height="24">Egg form
                     <span class="luganda">Foomu y'amagi</span>
                 </div>
 
