@@ -334,6 +334,15 @@ def tin_lookup(request):
 
 @manager_required
 def suppliers(request):
+    edit_id = request.POST.get("supplier_id", "").strip() or request.GET.get("edit", "").strip()
+    editing_supplier = None
+    if edit_id:
+        editing_supplier = (
+            Supplier.objects.filter(pk=edit_id, is_active=True)
+            .prefetch_related("supplied_products", "supplied_accounts")
+            .first()
+        )
+
     if request.method == "POST":
         action = request.POST.get("action", "save_supplier").strip()
         if action == "add_supplier_product":
@@ -400,8 +409,14 @@ def suppliers(request):
             credit_paid_upfront, percentage_error = _parse_paid_upfront(credit_paid_upfront_raw)
             credit_grace_period_days, grace_error = _parse_grace_period_days(credit_grace_period_days_raw)
 
-        if not name:
+        if edit_id and not editing_supplier:
+            messages.error(request, "The supplier you tried to edit no longer exists.")
+        elif not name:
             messages.error(request, "Supplier name is required.")
+        elif Supplier.objects.filter(name__iexact=name).exclude(
+            pk=editing_supplier.pk if editing_supplier else None
+        ).exists():
+            messages.error(request, "A supplier with this name already exists.")
         elif tin_number and not re.fullmatch(r"\d{10}", _normalise_tin(tin_number)):
             messages.error(request, "Invalid TIN number. A Uganda TIN should be 10 digits.")
         elif not supplied_products and not use_other_supplied_product:
@@ -447,25 +462,23 @@ def suppliers(request):
                     )
                     supplied_products.append(other_product)
 
-                supplier, created = Supplier.objects.update_or_create(
-                    name__iexact=name,
-                    defaults={
-                        "name": name,
-                        "tin_number": tin_number,
-                        "phone": phone,
-                        "location": location,
-                        "product": product,
-                        "other_supplied_products": "",
-                        "preferred_payment_method": preferred_payment_method,
-                        "bank_account_number": bank_account_number,
-                        "momo_receiving_number": momo_receiving_number,
-                        "credit_repayment_plan": credit_repayment_plan,
-                        "credit_paid_upfront": credit_paid_upfront,
-                        "credit_grace_period_days": credit_grace_period_days,
-                        "credit_period": credit_period,
-                        "is_active": True,
-                    },
-                )
+                created = editing_supplier is None
+                supplier = editing_supplier or Supplier()
+                supplier.name = name
+                supplier.tin_number = tin_number
+                supplier.phone = phone
+                supplier.location = location
+                supplier.product = product
+                supplier.other_supplied_products = ""
+                supplier.preferred_payment_method = preferred_payment_method
+                supplier.bank_account_number = bank_account_number
+                supplier.momo_receiving_number = momo_receiving_number
+                supplier.credit_repayment_plan = credit_repayment_plan
+                supplier.credit_paid_upfront = credit_paid_upfront
+                supplier.credit_grace_period_days = credit_grace_period_days
+                supplier.credit_period = credit_period
+                supplier.is_active = True
+                supplier.save()
                 supplier.supplied_products.set(supplied_products)
                 supplier.supplied_accounts.set([item.account for item in supplied_products])
             if created:
@@ -494,6 +507,27 @@ def suppliers(request):
         products = list(account.supplier_products.filter(is_active=True).order_by("name"))
         if products:
             product_groups.append({"account": account, "products": products})
+    if request.method == "POST":
+        form_values = request.POST
+        selected_product_ids = request.POST.getlist("supplied_products")
+    elif editing_supplier:
+        form_values = {
+            "name": editing_supplier.name,
+            "phone": editing_supplier.phone,
+            "tin_number": editing_supplier.tin_number,
+            "location": editing_supplier.location,
+            "preferred_payment_method": editing_supplier.preferred_payment_method,
+            "bank_account_number": editing_supplier.bank_account_number,
+            "momo_receiving_number": editing_supplier.momo_receiving_number,
+            "credit_repayment_plan": editing_supplier.credit_repayment_plan,
+            "credit_paid_upfront": editing_supplier.credit_paid_upfront,
+            "credit_grace_period_days": editing_supplier.credit_grace_period_days,
+            "credit_period": editing_supplier.credit_period,
+        }
+        selected_product_ids = [str(pk) for pk in editing_supplier.supplied_products.values_list("pk", flat=True)]
+    else:
+        form_values = {}
+        selected_product_ids = []
     page_obj, querystring = paginate(request, suppliers_qs, per_page=20)
     return render(
         request,
@@ -504,6 +538,9 @@ def suppliers(request):
             "querystring": querystring,
             "product_groups": product_groups,
             "product_accounts": accounts,
+            "editing_supplier": editing_supplier,
+            "form_values": form_values,
+            "selected_product_ids": selected_product_ids,
         },
     )
 
