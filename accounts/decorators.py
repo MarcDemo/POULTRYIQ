@@ -51,6 +51,12 @@ sales_access_required = roles_required(
     message="Access denied: Sales team only.",
 )
 
+field_operations_required = roles_required(
+    "WORKER",
+    "SUPERVISOR",
+    message="Access denied: Field operations staff only.",
+)
+
 
 def worker_required(view_func):
     """

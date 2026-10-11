@@ -14,7 +14,12 @@ from datetime import date, timedelta
 from datetime import datetime
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
-from accounts.decorators import manager_required, supervisor_required, worker_required
+from accounts.decorators import (
+    field_operations_required,
+    manager_required,
+    supervisor_required,
+    worker_required,
+)
 from accounts.models import InvestorCapitalTransaction, User
 from accounting.models import AccountingCode
 from accounting.services import post_expense
@@ -1710,7 +1715,7 @@ def _build_investor_financial_context(start_date, end_date, group_by):
     }
 
 
-@worker_required
+@field_operations_required
 def record_feed(request):
     batches = _get_worker_active_batches(request.user)
     available_mixtures = _mixtures_for_worker_batches(batches)
@@ -1787,7 +1792,7 @@ def record_feed(request):
                 recorded_by=request.user,
             )
             messages.success(request, "Feed record saved successfully.")
-            return redirect("workersdash")
+            return redirect("supdash" if request.user.is_supervisor else "workersdash")
 
     recent_feed_records = FeedRecord.objects.filter(
         recorded_by=request.user,
@@ -1806,7 +1811,7 @@ def record_feed(request):
         },
     )
 
-@worker_required
+@field_operations_required
 def record_egg(request):
     batches = _get_worker_active_batches(request.user)
 
@@ -1896,7 +1901,7 @@ def record_egg(request):
                 f"Egg collection saved: {eggs_collected} eggs — "
                 f"{format_eggs_as_trays(eggs_collected)}. Awaiting supervisor review.",
             )
-            return redirect("workersdash")
+            return redirect("supdash" if request.user.is_supervisor else "workersdash")
 
     recent_egg_records = egg_collection.objects.filter(
         collected_by=request.user,
@@ -2255,7 +2260,7 @@ def archive_feed_formula(request, pk):
     return redirect("feed_mixtures")
 
 
-@worker_required
+@field_operations_required
 def record_cleaning(request):
     batches = _get_worker_active_batches(request.user)
     cleaning_tasks = [
@@ -2323,7 +2328,7 @@ def record_cleaning(request):
 
             
             messages.success(request, "Cleaning routine record saved successfully.")
-            return redirect("workersdash")
+            return redirect("supdash" if request.user.is_supervisor else "workersdash")
 
     recent_cleaning_records = CleaningRecord.objects.filter(
         recorded_by=request.user,
