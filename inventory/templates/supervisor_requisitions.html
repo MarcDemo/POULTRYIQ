@@ -41,6 +41,10 @@
                             </div>
                         </div>
                         <div class="mb-3">
+                            <label class="form-label">Unit Price</label>
+                            <input class="form-control" name="unit_price" type="number" min="0" step="0.01" required>
+                        </div>
+                        <div class="mb-3">
                             <label class="form-label">Needed By</label>
                             <input class="form-control" name="needed_by" type="date">
                         </div>
@@ -61,7 +65,7 @@
                 <div class="card-body p-0">
                     <div class="table-responsive">
                         <table class="table table-hover mb-0 align-middle">
-                            <thead><tr><th>Date</th><th>Item</th><th>Qty</th><th>Status</th><th>Manager Notes</th></tr></thead>
+                            <thead><tr><th>Date</th><th>Item</th><th>Qty</th><th>Unit Price</th><th>Total</th><th>Status</th><th>Manager Notes</th></tr></thead>
                             <tbody>
                                 {% for req in requisitions %}
                                 <tr>
@@ -71,16 +75,19 @@
                                         <small class="text-muted">{{ req.reason|truncatechars:45 }}</small>
                                     </td>
                                     <td>{{ req.quantity|floatformat:3 }} {{ req.unit }}</td>
+                                    <td>{% if req.unit_price != None %}{{ req.unit_price|floatformat:2 }}{% else %}-{% endif %}</td>
+                                    <td>{% if req.total_amount != None %}{{ req.total_amount|floatformat:2 }}{% else %}-{% endif %}</td>
                                     <td><span class="badge bg-secondary">{{ req.get_status_display }}</span></td>
                                     <td><small class="text-muted">{{ req.review_notes|default:"-"|truncatechars:40 }}</small></td>
                                 </tr>
                                 {% empty %}
-                                <tr><td colspan="5" class="text-center text-muted py-4">No requisitions yet.</td></tr>
+                                <tr><td colspan="7" class="text-center text-muted py-4">No requisitions yet.</td></tr>
                                 {% endfor %}
                             </tbody>
                         </table>
                     </div>
                 </div>
+                {% include "partials/pagination.html" with page_obj=requisitions querystring=history_querystring page_param="history_page" %}
             </div>
         </div>
     </div>

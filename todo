@@ -1,0 +1,13 @@
+todo 1:
+        add a brooder function and transfer to another house 
+        add all worker functionalities to the supervisor
+
+
+Manager to supervisor transers:
+        add store issue(change name to store-requests)---------done
+        add requisition history, add amount column
+        abstarct the manager dash
+
+
+Batch management:
+    Add batch average weight over time (every week)

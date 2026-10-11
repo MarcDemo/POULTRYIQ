@@ -5,6 +5,7 @@ urlpatterns = [
     path('customers/<int:pk>/', views.customer_profile, name='customer_profile'),
     path('receivables/', views.receivables, name='receivables'),
     path('receivables/<int:receivable_id>/payment/', views.record_receivable_payment, name='record_receivable_payment'),
+    path('sales/<int:invoice_id>/receipt/', views.download_sale_receipt, name='sale_receipt'),
     path('sales/', views.sales, name='sales'),
     path('orders/view/', views.orderview, name='orderview'),
     path('orders/', views.orders, name='orders'),
