@@ -1,13 +1,32 @@
-todo 1:
-        add a brooder function and transfer to another house 
-        add all worker functionalities to the supervisor
 
 
-Manager to supervisor transers:
-        add store issue(change name to store-requests)---------done
-        add requisition history, add amount column
-        abstarct the manager dash
 
 
-Batch management:
-    Add batch average weight over time (every week)
+ui/ux
+- re-design the dark mode theme 
+- correct the forms to align the industry standard
+- generally check all the dropdowns
+- generally allow notifications
+
+worker
+- add recording on all the forms
+- on the workers forms, instead of choose file, add take pic
+- add recording on the welfare
+- import all data using excel 
+
+
+supervisor
+- add the supervisor some more manager rights 
+- add the known vaccines for the supervisor, and the dropdown on feeds should come from feeds
+- send message should be able to generally send messages
+- have a meeting to revise his view 
+- change the mixtures page and add the"add" button and remove 
+- add the ingridients in products 
+
+Manager
+- add the reports 
+- have a meeting to revise the manager and supervisor rites
+
+investor 
+- revoke access to the admins
+- review his interface asap 
