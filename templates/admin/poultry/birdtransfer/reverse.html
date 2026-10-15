@@ -1,0 +1,19 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+<div id="content-main">
+    <h1>Reverse transfer {{ original.pk }}</h1>
+    <p>This creates compensating ledger movements. The original transfer and movements will remain unchanged.</p>
+    <p><strong>Source:</strong> {{ original.source_batch }}<br><strong>Date:</strong> {{ original.transfer_date }}</p>
+    <form method="post">
+        {% csrf_token %}
+        <div class="form-row">
+            <label class="required" for="id_reason">Reversal reason</label>
+            <textarea id="id_reason" name="reason" rows="4" required style="width: 100%; max-width: 760px;"></textarea>
+        </div>
+        <div class="submit-row">
+            <input type="submit" value="Create reversal" class="deletelink">
+            <a href="{% url 'admin:poultry_birdtransfer_change' original.pk %}" class="button cancel-link">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

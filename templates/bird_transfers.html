@@ -1,0 +1,153 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Transfer birds · PoultryIQ{% endblock %}
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
+        <div>
+            <p class="text-uppercase text-muted small fw-semibold mb-1">Flock movement</p>
+            <h1 class="h3 mb-1">Transfer birds between houses</h1>
+            <p class="text-muted mb-0">Split one flock across several houses while keeping a complete movement history.</p>
+        </div>
+        <a href="{% url 'supdash' %}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left me-1"></i>Supervisor dashboard</a>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-xl-7">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body p-4">
+                    <form method="post" id="bird-transfer-form" novalidate>
+                        {% csrf_token %}
+                        <div class="row g-3 mb-4">
+                            <div class="col-md-8">
+                                <label for="source_batch" class="form-label fw-semibold">Source house and flock</label>
+                                <select id="source_batch" name="source_batch" class="form-select" required>
+                                    <option value="">Select a source flock</option>
+                                    {% for batch in source_batches %}
+                                    <option value="{{ batch.pk }}" data-house="{{ batch.house_id }}" data-available="{{ batch.available_birds }}">
+                                        {{ batch.house.house_code }}{% if batch.house.name %} — {{ batch.house.name }}{% endif %} / {{ batch.batch_code }} ({{ batch.available_birds }} birds)
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                                {% if not source_batches %}<div class="form-text text-danger">No active flock with an available bird balance exists in your assigned houses.</div>{% endif %}
+                            </div>
+                            <div class="col-md-4">
+                                <label for="transfer_date" class="form-label fw-semibold">Transfer date</label>
+                                <input id="transfer_date" type="date" name="transfer_date" value="{{ today|date:'Y-m-d' }}" max="{{ today|date:'Y-m-d' }}" class="form-control" required>
+                            </div>
+                        </div>
+
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <div><h2 class="h5 mb-0">Destinations</h2><small class="text-muted">Add every house receiving birds in this movement.</small></div>
+                            <button type="button" class="btn btn-outline-primary btn-sm" id="add-destination"><i class="bi bi-plus-lg me-1"></i>Add house</button>
+                        </div>
+                        <div id="destination-rows" class="vstack gap-2 mb-3"></div>
+                        <template id="destination-template">
+                            <div class="row g-2 align-items-end destination-row border rounded-3 p-2 bg-light">
+                                <div class="col-md-7">
+                                    <label class="form-label small fw-semibold">Destination house</label>
+                                    <select name="destination_house" class="form-select destination-house" required>
+                                        <option value="">Select a house</option>
+                                        {% for house in houses %}
+                                        <option value="{{ house.pk }}" data-current="{{ house.current_birds }}" data-capacity="{{ house.capacity }}">
+                                            {{ house.house_code }}{% if house.name %} — {{ house.name }}{% endif %} · {{ house.current_birds }}/{{ house.capacity }} birds
+                                        </option>
+                                        {% endfor %}
+                                    </select>
+                                    <div class="form-text projection"></div>
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label small fw-semibold">Birds</label>
+                                    <input name="quantity" type="number" min="1" step="1" class="form-control destination-quantity" required>
+                                </div>
+                                <div class="col-md-2 d-grid"><button type="button" class="btn btn-outline-danger remove-destination" aria-label="Remove destination"><i class="bi bi-trash"></i></button></div>
+                            </div>
+                        </template>
+
+                        <div class="alert alert-light border d-flex justify-content-between align-items-center">
+                            <span>Source birds remaining</span><strong id="remaining-birds">Select a source flock</strong>
+                        </div>
+                        <div class="form-check mb-3" id="capacity-ack-wrap" hidden>
+                            <input class="form-check-input" type="checkbox" value="1" id="ack_capacity_warning" name="ack_capacity_warning">
+                            <label class="form-check-label text-danger fw-semibold" for="ack_capacity_warning">I acknowledge that one or more destination houses will exceed configured capacity.</label>
+                        </div>
+                        <div class="mb-4">
+                            <label for="notes" class="form-label fw-semibold">Notes</label>
+                            <textarea id="notes" name="notes" rows="3" class="form-control" placeholder="Reason or handling instructions"></textarea>
+                        </div>
+                        <button type="submit" class="btn btn-primary btn-lg" {% if not source_batches %}disabled{% endif %}><i class="bi bi-arrow-left-right me-2"></i>Complete transfer</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-5">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white border-0 pt-4 px-4"><h2 class="h5 mb-1">Recent transfers</h2><p class="small text-muted mb-0">Read-only audit history for your source houses.</p></div>
+                <div class="card-body px-4">
+                    <div class="vstack gap-3">
+                        {% for transfer in recent_transfers %}
+                        <article class="border rounded-3 p-3">
+                            <div class="d-flex justify-content-between gap-2"><strong>#{{ transfer.pk }} · {{ transfer.source_batch.batch_code }}</strong><span class="badge {% if transfer.status == 'REVERSED' %}bg-secondary{% else %}bg-success{% endif %}">{{ transfer.get_status_display }}</span></div>
+                            <div class="small text-muted mt-1">{{ transfer.source_batch.house.house_code }} · {{ transfer.transfer_date }} · {{ transfer.created_by.get_full_name|default:transfer.created_by.username }}</div>
+                            <ul class="small mb-0 mt-2 ps-3">{% for allocation in transfer.allocations.all %}<li>{{ allocation.quantity }} to {{ allocation.destination_house.house_code }}{% if allocation.exceeded_capacity %} <span class="text-danger">(capacity warning)</span>{% endif %}</li>{% endfor %}</ul>
+                        </article>
+                        {% empty %}<p class="text-muted mb-0">No transfers recorded yet.</p>{% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+(() => {
+    const rows = document.getElementById('destination-rows');
+    const template = document.getElementById('destination-template');
+    const source = document.getElementById('source_batch');
+    const remaining = document.getElementById('remaining-birds');
+    const ackWrap = document.getElementById('capacity-ack-wrap');
+    const ack = document.getElementById('ack_capacity_warning');
+
+    function recalculate() {
+        const available = Number(source.selectedOptions[0]?.dataset.available || 0);
+        const sourceHouse = source.selectedOptions[0]?.dataset.house || '';
+        let allocated = 0;
+        let capacityExceeded = false;
+        rows.querySelectorAll('.destination-row').forEach(row => {
+            const select = row.querySelector('.destination-house');
+            const quantity = Number(row.querySelector('.destination-quantity').value || 0);
+            const option = select.selectedOptions[0];
+            const current = Number(option?.dataset.current || 0);
+            const capacity = Number(option?.dataset.capacity || 0);
+            const projected = current + quantity;
+            allocated += quantity;
+            select.setCustomValidity(select.value && select.value === sourceHouse ? 'Choose a different house.' : '');
+            row.querySelector('.projection').textContent = select.value ? `Projected: ${projected} / ${capacity} birds` : '';
+            row.querySelector('.projection').classList.toggle('text-danger', select.value && projected > capacity);
+            capacityExceeded = capacityExceeded || Boolean(select.value && projected > capacity);
+        });
+        remaining.textContent = source.value ? `${available - allocated} birds` : 'Select a source flock';
+        remaining.classList.toggle('text-danger', allocated > available);
+        ackWrap.hidden = !capacityExceeded;
+        ack.required = capacityExceeded;
+        if (!capacityExceeded) ack.checked = false;
+    }
+
+    function addRow() {
+        rows.appendChild(template.content.cloneNode(true));
+        recalculate();
+    }
+    document.getElementById('add-destination').addEventListener('click', addRow);
+    rows.addEventListener('click', event => {
+        if (event.target.closest('.remove-destination')) {
+            event.target.closest('.destination-row').remove();
+            if (!rows.children.length) addRow();
+            recalculate();
+        }
+    });
+    rows.addEventListener('input', recalculate);
+    source.addEventListener('change', recalculate);
+    addRow();
+})();
+</script>
+{% endblock %}

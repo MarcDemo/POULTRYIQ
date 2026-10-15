@@ -12,35 +12,36 @@
 <div class="row g-4">
 
 <!-- FORM -->
-<div class="col-12">
+<div class="col-12" id="supplier-form">
 <div class="card">
 <div class="card-header">
-    <i class="bi bi-plus-circle me-2"></i>Add Supplier
+    <i class="bi bi-{% if editing_supplier %}pencil-square{% else %}plus-circle{% endif %} me-2"></i>{% if editing_supplier %}Edit Supplier{% else %}Add Supplier{% endif %}
 </div>
 
 <div class="card-body">
 <form method="POST" novalidate>
 {% csrf_token %}
+{% if editing_supplier %}<input type="hidden" name="supplier_id" value="{{ editing_supplier.pk }}">{% endif %}
 
 <div class="mb-3">
     <label for="name" class="form-label">
         <i class="bi bi-person me-1"></i>Supplier Name
     </label>
-    <input class="form-control" id="name" name="name" placeholder="Company name" required>
+    <input class="form-control" id="name" name="name" value="{{ form_values.name|default:'' }}" placeholder="Company name" required>
 </div>
 
 <div class="mb-3">
     <label for="phone" class="form-label">
         <i class="bi bi-telephone me-1"></i>Phone
     </label>
-    <input class="form-control" id="phone" name="phone" placeholder="+256..." required>
+    <input class="form-control" id="phone" name="phone" value="{{ form_values.phone|default:'' }}" placeholder="+256..." required>
 </div>
 
 <div class="mb-3">
     <label for="tin_number" class="form-label">
         <i class="bi bi-receipt me-1"></i>TIN Number
     </label>
-    <input class="form-control" id="tin_number" name="tin_number" placeholder="Tax identification number" data-tin-lookup-url="{% url 'tin_lookup' %}" inputmode="numeric" autocomplete="off" pattern="\d{10}">
+    <input class="form-control" id="tin_number" name="tin_number" value="{{ form_values.tin_number|default:'' }}" placeholder="Tax identification number" data-tin-lookup-url="{% url 'tin_lookup' %}" inputmode="numeric" autocomplete="off" pattern="\d{10}">
     <div class="form-text" id="tin_lookup_status"></div>
 </div>
 
@@ -48,7 +49,7 @@
     <label for="location" class="form-label">
         <i class="bi bi-geo-alt me-1"></i>Location
     </label>
-    <input class="form-control" id="location" name="location" placeholder="City or address">
+    <input class="form-control" id="location" name="location" value="{{ form_values.location|default:'' }}" placeholder="City or address">
 </div>
 
 <div class="mb-3">
@@ -56,32 +57,38 @@
         <i class="bi bi-wallet2 me-1"></i>Preferred Mode of Payment
     </label>
     <select class="form-select" id="preferred_payment_method" name="preferred_payment_method" required>
-        <option value="Cash" {% if request.POST.preferred_payment_method == "Cash" or not request.POST.preferred_payment_method %}selected{% endif %}>Cash</option>
-        <option value="Mobile Money" {% if request.POST.preferred_payment_method == "Mobile Money" %}selected{% endif %}>MoMo</option>
-        <option value="Bank" {% if request.POST.preferred_payment_method == "Bank" %}selected{% endif %}>Bank</option>
-        <option value="Credit" {% if request.POST.preferred_payment_method == "Credit" %}selected{% endif %}>Credit</option>
+        <option value="Cash" {% if form_values.preferred_payment_method == "Cash" or not form_values.preferred_payment_method %}selected{% endif %}>Cash</option>
+        <option value="Mobile Money" {% if form_values.preferred_payment_method == "Mobile Money" %}selected{% endif %}>MoMo</option>
+        <option value="Bank" {% if form_values.preferred_payment_method == "Bank" %}selected{% endif %}>Bank</option>
+        <option value="Credit" {% if form_values.preferred_payment_method == "Credit" %}selected{% endif %}>Credit</option>
     </select>
 </div>
 
 <div class="row g-3 mb-3" id="supplier_credit_terms" style="display:none;">
+    <div class="col-12">
+        <label for="credit_repayment_plan" class="form-label">
+            <i class="bi bi-list-check me-1"></i>Repayment Plan
+        </label>
+        <textarea class="form-control" id="credit_repayment_plan" name="credit_repayment_plan" rows="2" placeholder="Describe how the balance will be paid">{{ form_values.credit_repayment_plan|default:'' }}</textarea>
+    </div>
    
     <div class="col-md-4">
         <label for="credit_paid_upfront" class="form-label">
             <i class="bi bi-percent me-1"></i>Paid Upfront (%)
         </label>
-        <input class="form-control" id="credit_paid_upfront" name="credit_paid_upfront" value="{{ request.POST.credit_paid_upfront|default:'' }}" type="number" min="0" max="100" step="0.01" placeholder="e.g., 50">
+        <input class="form-control" id="credit_paid_upfront" name="credit_paid_upfront" value="{{ form_values.credit_paid_upfront|default:'' }}" type="number" min="0" max="100" step="0.01" placeholder="e.g., 50">
     </div>
     <div class="col-md-4">
         <label for="credit_grace_period_days" class="form-label">
             <i class="bi bi-hourglass-split me-1"></i>Grace Period
         </label>
-        <input class="form-control" id="credit_grace_period_days" name="credit_grace_period_days" value="{{ request.POST.credit_grace_period_days|default:'' }}" type="number" min="0" step="1" placeholder="Days">
+        <input class="form-control" id="credit_grace_period_days" name="credit_grace_period_days" value="{{ form_values.credit_grace_period_days|default:'' }}" type="number" min="0" step="1" placeholder="Days">
     </div>
     <div class="col-md-4">
         <label for="credit_period" class="form-label">
             <i class="bi bi-calendar-range me-1"></i>Credit Period
         </label>
-        <input class="form-control" id="credit_period" name="credit_period" value="{{ request.POST.credit_period|default:'' }}" placeholder="e.g., 30 days">
+        <input class="form-control" id="credit_period" name="credit_period" value="{{ form_values.credit_period|default:'' }}" placeholder="e.g., 30 days">
     </div>
 </div>
 
@@ -89,14 +96,14 @@
     <label for="bank_account_number" class="form-label">
         <i class="bi bi-bank me-1"></i>Bank Account Number
     </label>
-    <input class="form-control" id="bank_account_number" name="bank_account_number" value="{{ request.POST.bank_account_number|default:'' }}" placeholder="Account number">
+    <input class="form-control" id="bank_account_number" name="bank_account_number" value="{{ form_values.bank_account_number|default:'' }}" placeholder="Account number">
 </div>
 
 <div class="mb-3" id="supplier_momo_terms" style="display:none;">
     <label for="momo_receiving_number" class="form-label">
         <i class="bi bi-phone me-1"></i>MoMo Receiving Number
     </label>
-    <input class="form-control" id="momo_receiving_number" name="momo_receiving_number" value="{{ request.POST.momo_receiving_number|default:'' }}" placeholder="+256...">
+    <input class="form-control" id="momo_receiving_number" name="momo_receiving_number" value="{{ form_values.momo_receiving_number|default:'' }}" placeholder="+256...">
 </div>
 
 <div class="mb-3">
@@ -115,7 +122,7 @@
                 </div>
                 {% for product in group.products %}
                     <div class="form-check supplier-product-option" data-product="{{ product.name|lower }}" data-category="{{ group.account.account_name|lower }}">
-                        <input class="form-check-input" type="checkbox" name="supplied_products" value="{{ product.id }}" id="product_{{ group.account.id }}_{{ product.id }}" {% if product.id|stringformat:"s" in request.POST.supplied_products %}checked{% endif %}>
+                        <input class="form-check-input" type="checkbox" name="supplied_products" value="{{ product.id }}" id="product_{{ group.account.id }}_{{ product.id }}" {% if product.id|stringformat:"s" in selected_product_ids %}checked{% endif %}>
                         <label class="form-check-label" for="product_{{ group.account.id }}_{{ product.id }}">
                             {{ product.name }} <span class="text-muted">({{ product.unit }})</span>
                         </label>
@@ -129,39 +136,76 @@
         <div class="border rounded-3 p-2 text-muted small">No supplier categories have been enabled by admin yet.</div>
     {% endif %}
     <div class="form-check mt-2">
-        <input class="form-check-input" type="checkbox" name="use_other_supplied_product" id="use_other_supplied_product" {% if request.POST.use_other_supplied_product %}checked{% endif %}>
+        <input class="form-check-input" type="checkbox" name="use_other_supplied_product" id="use_other_supplied_product" {% if form_values.use_other_supplied_product %}checked{% endif %}>
         <label class="form-check-label" for="use_other_supplied_product">Other</label>
     </div>
     <div class="mt-2" id="otherSuppliedProductWrapper" style="display:none;">
-        <div class="row g-2">
-            <div class="col-md-5">
-                <label class="form-label small" for="other_product_account">Category</label>
-                <select class="form-select" id="other_product_account" name="other_product_account">
-                    <option value="">-- Select category --</option>
-                    {% for account in product_accounts %}
-                        <option value="{{ account.id }}" {% if request.POST.other_product_account == account.id|stringformat:"s" %}selected{% endif %}>
-                            {{ account.account_name }}
-                        </option>
-                    {% endfor %}
-                </select>
+        <div id="otherProductRows" class="d-grid gap-2">
+            {% for row in other_product_rows %}
+            <div class="other-product-row border rounded-3 p-2">
+                <div class="row g-2 align-items-end">
+                    <div class="col-md-4">
+                        <label class="form-label small">Category</label>
+                        <select class="form-select other-product-input" name="other_product_account">
+                            <option value="">-- Select category --</option>
+                            {% for account in product_accounts %}
+                                <option value="{{ account.id }}" {% if row.account_id == account.id|stringformat:"s" %}selected{% endif %}>{{ account.account_name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small">Product</label>
+                        <input class="form-control other-product-input" name="other_product_name" value="{{ row.name }}" placeholder="Enter product name">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small">Unit</label>
+                        <input class="form-control other-product-input" name="other_product_unit" value="{{ row.unit|default:'unit' }}">
+                    </div>
+                    <div class="col-md-2 d-grid">
+                        <button class="btn btn-outline-danger remove-other-product" type="button">
+                            <i class="bi bi-trash me-1"></i>Remove
+                        </button>
+                    </div>
+                </div>
             </div>
-            <div class="col-md-5">
-                <label class="form-label small" for="other_product_name">Product</label>
-                <input class="form-control" id="other_product_name" name="other_product_name" value="{{ request.POST.other_product_name|default:'' }}" placeholder="Enter product name">
-            </div>
-            <div class="col-md-2">
-                <label class="form-label small" for="other_product_unit">Unit</label>
-                <input class="form-control" id="other_product_unit" name="other_product_unit" value="{{ request.POST.other_product_unit|default:'unit' }}">
+            {% endfor %}
+        </div>
+        <button class="btn btn-sm btn-outline-primary mt-2" id="addOtherProduct" type="button">
+            <i class="bi bi-plus-circle me-1"></i>Add another product
+        </button>
+    </div>
+    <template id="otherProductRowTemplate">
+        <div class="other-product-row border rounded-3 p-2">
+            <div class="row g-2 align-items-end">
+                <div class="col-md-4">
+                    <label class="form-label small">Category</label>
+                    <select class="form-select other-product-input" name="other_product_account">
+                        <option value="">-- Select category --</option>
+                        {% for account in product_accounts %}<option value="{{ account.id }}">{{ account.account_name }}</option>{% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small">Product</label>
+                    <input class="form-control other-product-input" name="other_product_name" placeholder="Enter product name">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">Unit</label>
+                    <input class="form-control other-product-input" name="other_product_unit" value="unit">
+                </div>
+                <div class="col-md-2 d-grid">
+                    <button class="btn btn-outline-danger remove-other-product" type="button"><i class="bi bi-trash me-1"></i>Remove</button>
+                </div>
             </div>
         </div>
-    </div>
+    </template>
     <div class="form-text">Selected products control what appears for this supplier during purchases.</div>
 </div>
 
-<div class="d-grid">
+<div class="d-flex flex-wrap gap-2">
     <button class="btn btn-primary" type="submit">
-        <i class="bi bi-check-circle me-2"></i>Save
+        <i class="bi bi-check-circle me-2"></i>{% if editing_supplier %}Update Supplier{% else %}Save{% endif %}
     </button>
+    {% if editing_supplier %}<a class="btn btn-outline-secondary" href="{% url 'suppliers' %}">Cancel</a>{% endif %}
 </div>
 
 </form>
@@ -230,7 +274,11 @@
         -
     {% endif %}
 </td>
-<td><span class="badge bg-success">Active</span></td>
+<td>
+    <a class="btn btn-sm btn-outline-primary" href="{% url 'suppliers' %}?edit={{ supplier.pk }}#supplier-form">
+        <i class="bi bi-pencil-square me-1"></i>Edit
+    </a>
+</td>
 </tr>
 {% empty %}
 <tr>
@@ -264,9 +312,9 @@
     const productGroups = Array.from(document.querySelectorAll('.supplier-product-group'));
     const otherProductCheck = document.getElementById('use_other_supplied_product');
     const otherProductWrapper = document.getElementById('otherSuppliedProductWrapper');
-    const otherProductAccount = document.getElementById('other_product_account');
-    const otherProductName = document.getElementById('other_product_name');
-    const otherProductUnit = document.getElementById('other_product_unit');
+    const otherProductRows = document.getElementById('otherProductRows');
+    const otherProductRowTemplate = document.getElementById('otherProductRowTemplate');
+    const addOtherProductButton = document.getElementById('addOtherProduct');
     const paymentSelect = document.getElementById('preferred_payment_method');
     const creditTerms = document.getElementById('supplier_credit_terms');
     const bankTerms = document.getElementById('supplier_bank_terms');
@@ -309,23 +357,39 @@
     function toggleOtherProductInput() {
         const isOther = otherProductCheck && otherProductCheck.checked;
         if (otherProductWrapper) otherProductWrapper.style.display = isOther ? '' : 'none';
-        if (otherProductAccount) {
-            otherProductAccount.required = !!isOther;
-            if (!isOther) otherProductAccount.value = '';
-        }
-        if (otherProductName) {
-            otherProductName.required = !!isOther;
-            if (!isOther) otherProductName.value = '';
-        }
-        if (otherProductUnit) {
-            otherProductUnit.required = !!isOther;
-            if (!isOther) otherProductUnit.value = 'unit';
-        }
+        document.querySelectorAll('.other-product-input').forEach(function (input) {
+            input.disabled = !isOther;
+            input.required = !!isOther;
+        });
+    }
+
+    function updateOtherProductRemoveButtons() {
+        if (!otherProductRows) return;
+        const rows = otherProductRows.querySelectorAll('.other-product-row');
+        rows.forEach(function (row) {
+            const removeButton = row.querySelector('.remove-other-product');
+            if (removeButton) removeButton.classList.toggle('d-none', rows.length === 1);
+        });
     }
 
     if (otherProductCheck) {
         otherProductCheck.addEventListener('change', toggleOtherProductInput);
         toggleOtherProductInput();
+    }
+
+    if (addOtherProductButton && otherProductRows && otherProductRowTemplate) {
+        addOtherProductButton.addEventListener('click', function () {
+            otherProductRows.appendChild(otherProductRowTemplate.content.cloneNode(true));
+            updateOtherProductRemoveButtons();
+            toggleOtherProductInput();
+        });
+        otherProductRows.addEventListener('click', function (event) {
+            const removeButton = event.target.closest('.remove-other-product');
+            if (!removeButton) return;
+            removeButton.closest('.other-product-row').remove();
+            updateOtherProductRemoveButtons();
+        });
+        updateOtherProductRemoveButtons();
     }
 
     if (productSearch) {

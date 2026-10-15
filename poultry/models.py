@@ -71,6 +71,15 @@ class PoultryBatch(models.Model):
 
     created_at = models.DateTimeField(auto_now_add=True)
 
+    origin_batch = models.ForeignKey(
+        "self",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="transfer_descendants",
+        help_text="Original stocked batch when this batch was created by a bird transfer.",
+    )
+
     def __str__(self):
         return f"{self.batch_code} ({self.house.house_code})"
 
@@ -248,6 +257,179 @@ class PoultryHouse(models.Model):
 
     def __str__(self):
         return self.name
+
+
+class BirdTransfer(models.Model):
+    class Status(models.TextChoices):
+        COMPLETED = "COMPLETED", "Completed"
+        REVERSED = "REVERSED", "Reversed"
+
+    transfer_id = models.BigAutoField(primary_key=True)
+    source_batch = models.ForeignKey(
+        PoultryBatch,
+        on_delete=models.PROTECT,
+        related_name="bird_transfers_out",
+    )
+    transfer_date = models.DateField(db_index=True)
+    notes = models.TextField(blank=True)
+    capacity_warning_acknowledged = models.BooleanField(default=False)
+    status = models.CharField(
+        max_length=12,
+        choices=Status.choices,
+        default=Status.COMPLETED,
+        db_index=True,
+    )
+    reversal_of = models.ForeignKey(
+        "self",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="reversals",
+    )
+    reversal_reason = models.TextField(blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="bird_transfers_created",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-transfer_date", "-transfer_id"]
+        indexes = [
+            models.Index(fields=["source_batch", "transfer_date"], name="poultry_bt_source_date_idx"),
+            models.Index(fields=["status", "transfer_date"], name="poultry_bt_status_date_idx"),
+        ]
+
+    def __str__(self):
+        return f"Transfer {self.transfer_id}: {self.source_batch.batch_code} on {self.transfer_date}"
+
+
+class BirdTransferAllocation(models.Model):
+    allocation_id = models.BigAutoField(primary_key=True)
+    transfer = models.ForeignKey(BirdTransfer, on_delete=models.PROTECT, related_name="allocations")
+    destination_house = models.ForeignKey(
+        PoultryHouse,
+        on_delete=models.PROTECT,
+        related_name="bird_transfer_allocations_in",
+    )
+    quantity = models.PositiveIntegerField(validators=[MinValueValidator(1)])
+    destination_batch = models.OneToOneField(
+        PoultryBatch,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="source_transfer_allocation",
+    )
+    projected_house_birds = models.PositiveIntegerField(default=0)
+    exceeded_capacity = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ["allocation_id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["transfer", "destination_house"],
+                name="uniq_transfer_destination_house",
+            ),
+            models.CheckConstraint(condition=models.Q(quantity__gt=0), name="bird_transfer_quantity_positive"),
+        ]
+
+    def __str__(self):
+        return f"{self.transfer} -> {self.destination_house.house_code}: {self.quantity}"
+
+
+class HouseBirdMovement(models.Model):
+    class Direction(models.TextChoices):
+        IN = "IN", "In"
+        OUT = "OUT", "Out"
+
+    class MovementType(models.TextChoices):
+        OPENING_STOCK = "OPENING", "Opening stock"
+        STOCK_IN = "STOCK_IN", "New stocking"
+        TRANSFER_IN = "TRANSFER_IN", "Transfer in"
+        TRANSFER_OUT = "TRANSFER_OUT", "Transfer out"
+        MORTALITY = "MORTALITY", "Approved mortality"
+        SALE = "SALE", "Delivered bird sale"
+        LEGACY_CLOSE = "LEGACY_CLOSE", "Legacy closed-batch reconciliation"
+        REVERSAL_IN = "REVERSAL_IN", "Reversal in"
+        REVERSAL_OUT = "REVERSAL_OUT", "Reversal out"
+
+    movement_id = models.BigAutoField(primary_key=True)
+    house = models.ForeignKey(PoultryHouse, on_delete=models.PROTECT, related_name="bird_movements")
+    batch = models.ForeignKey(PoultryBatch, on_delete=models.PROTECT, related_name="bird_movements")
+    occurred_on = models.DateField(db_index=True)
+    direction = models.CharField(max_length=3, choices=Direction.choices)
+    movement_type = models.CharField(max_length=20, choices=MovementType.choices, db_index=True)
+    quantity = models.PositiveIntegerField(validators=[MinValueValidator(1)])
+    operator = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="bird_movements_created",
+    )
+    transfer_allocation = models.ForeignKey(
+        BirdTransferAllocation,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="movements",
+    )
+    mortality_record = models.OneToOneField(
+        MortalityRecord,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="bird_movement",
+    )
+    sale_item = models.OneToOneField(
+        "sales.SaleItem",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="bird_movement",
+    )
+    reversal_of = models.OneToOneField(
+        "self",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="reversed_by",
+    )
+    notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-occurred_on", "-movement_id"]
+        indexes = [
+            models.Index(fields=["house", "occurred_on"], name="poultry_hbm_house_date_idx"),
+            models.Index(fields=["batch", "occurred_on"], name="poultry_hbm_batch_date_idx"),
+            models.Index(fields=["movement_type", "occurred_on"], name="poultry_hbm_type_date_idx"),
+        ]
+        constraints = [
+            models.CheckConstraint(condition=models.Q(quantity__gt=0), name="house_bird_movement_qty_positive"),
+            models.UniqueConstraint(
+                fields=["transfer_allocation", "movement_type"],
+                condition=models.Q(transfer_allocation__isnull=False),
+                name="uniq_transfer_allocation_movement_type",
+            ),
+        ]
+
+    def save(self, *args, **kwargs):
+        if self.pk and type(self).objects.filter(pk=self.pk).exists():
+            raise ValueError("Bird movement ledger entries are immutable.")
+        return super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise ValueError("Bird movement ledger entries cannot be deleted.")
+
+    @property
+    def signed_quantity(self):
+        return self.quantity if self.direction == self.Direction.IN else -self.quantity
+
+    def __str__(self):
+        sign = "+" if self.direction == self.Direction.IN else "-"
+        return f"{self.house.house_code} {sign}{self.quantity} ({self.get_movement_type_display()})"
     
 
 

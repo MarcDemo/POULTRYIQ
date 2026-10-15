@@ -338,6 +338,27 @@
     letter-spacing: -0.025em;
 }
 
+.field-heading {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.field-realistic-icon {
+    width: 1.5rem !important;
+    height: 1.5rem !important;
+    flex: 0 0 auto;
+    margin-right: 0.4rem;
+    vertical-align: middle;
+    object-fit: contain;
+}
+
+.field-realistic-icon--hero {
+    width: 2.5rem !important;
+    height: 2.5rem !important;
+    margin-right: 0;
+}
+
 .worker-subtitle {
     color: var(--worker-muted);
     font-size: 0.98rem;

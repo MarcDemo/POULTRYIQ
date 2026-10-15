@@ -309,6 +309,22 @@ class SupervisorSicknessWorkflowTests(TestCase):
         self.assertContains(response, "BIRD-A")
         self.assertNotContains(response, "BIRD-B")
 
+    def test_supervisor_can_open_shared_field_health_forms(self):
+        self.client.force_login(self.supervisor)
+
+        for url_name in (
+            "mortality",
+            "sickbay",
+            "record_sickbay_cleaning",
+            "sick_record_egg",
+            "sick_record_feed",
+            "sick_record_cleaning",
+            "sick_mortality",
+        ):
+            with self.subTest(url_name=url_name):
+                response = self.client.get(reverse(url_name))
+                self.assertEqual(response.status_code, 200)
+
     def test_worker_can_record_sickbay_cleaning_from_sickbay_report(self):
         today = date.today()
         report = SicknessReport.objects.create(

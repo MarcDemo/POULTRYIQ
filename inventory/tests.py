@@ -5,9 +5,18 @@ from django.test import TestCase
 from django.urls import reverse
 
 from accounts.models import Role, User
+from accounting.models import AccountType, ChartOfAccount
 from alerts.models import Alert
 from expenses.models import ExpenseTransaction
-from .models import InventoryRequisition, InventoryTransaction, Item, ItemCategory, Store, Supplier
+from .models import (
+    InventoryRequisition,
+    InventoryTransaction,
+    Item,
+    ItemCategory,
+    Store,
+    Supplier,
+    SupplierProduct,
+)
 
 
 class StoreOutTests(TestCase):
@@ -317,6 +326,26 @@ class SupplierPageTests(TestCase):
             role=role,
         )
         self.client.force_login(self.user)
+        account_type = AccountType.objects.create(
+            name="Supplier Purchases",
+            account_nature=AccountType.AccountNature.EXPENSE,
+            show_on_suppliers=True,
+        )
+        self.supplier_account = ChartOfAccount.objects.create(
+            account_name="Feed Purchases",
+            account_type=account_type,
+            show_on_suppliers=True,
+        )
+        self.maize_bran = SupplierProduct.objects.create(
+            account=self.supplier_account,
+            name="Maize bran",
+            unit="kg",
+        )
+        self.concentrate = SupplierProduct.objects.create(
+            account=self.supplier_account,
+            name="Concentrate",
+            unit="kg",
+        )
 
     def test_supplier_form_saves_selected_supplied_items(self):
         response = self.client.post(
@@ -324,7 +353,7 @@ class SupplierPageTests(TestCase):
             {
                 "name": "Kafika",
                 "phone": "0700000000",
-                "products": ["Maize bran", "Concentrate"],
+                "supplied_products": [str(self.maize_bran.pk), str(self.concentrate.pk)],
             },
         )
 
@@ -343,7 +372,7 @@ class SupplierPageTests(TestCase):
                 "credit_paid_upfront": "50",
                 "credit_grace_period_days": "45",
                 "credit_period": "45 days",
-                "products": ["Concentrate"],
+                "supplied_products": [str(self.concentrate.pk)],
             },
         )
 
@@ -363,7 +392,7 @@ class SupplierPageTests(TestCase):
                 "phone": "0700000003",
                 "preferred_payment_method": "Bank",
                 "bank_account_number": "1234567890",
-                "products": ["Concentrate"],
+                "supplied_products": [str(self.concentrate.pk)],
             },
         )
 
@@ -378,6 +407,104 @@ class SupplierPageTests(TestCase):
         response = self.client.get(reverse("suppliers"))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'name="products"', html=False)
+        self.assertContains(response, 'name="supplied_products"', html=False)
         self.assertContains(response, "Maize bran")
         self.assertContains(response, "Concentrate")
+        self.assertContains(response, "Add another product")
+
+    def test_supplier_form_saves_multiple_other_products(self):
+        response = self.client.post(
+            reverse("suppliers"),
+            {
+                "name": "Mixed Farm Supplies",
+                "phone": "0700000006",
+                "preferred_payment_method": "Cash",
+                "use_other_supplied_product": "on",
+                "other_product_account": [
+                    str(self.supplier_account.pk),
+                    str(self.supplier_account.pk),
+                ],
+                "other_product_name": ["Sunflower cake", "Cotton seed cake"],
+                "other_product_unit": ["kg", "bag"],
+            },
+        )
+
+        self.assertRedirects(response, reverse("suppliers"))
+        supplier = Supplier.objects.get(name="Mixed Farm Supplies")
+        products = list(supplier.supplied_products.order_by("name"))
+        self.assertEqual([product.name for product in products], ["Cotton seed cake", "Sunflower cake"])
+        self.assertEqual({product.name: product.unit for product in products}, {
+            "Cotton seed cake": "bag",
+            "Sunflower cake": "kg",
+        })
+
+    def test_duplicate_other_products_reject_entire_supplier_submission(self):
+        response = self.client.post(
+            reverse("suppliers"),
+            {
+                "name": "Duplicate Supplies",
+                "phone": "0700000007",
+                "preferred_payment_method": "Cash",
+                "use_other_supplied_product": "on",
+                "other_product_account": [
+                    str(self.supplier_account.pk),
+                    str(self.supplier_account.pk),
+                ],
+                "other_product_name": ["Rice bran", "rice BRAN"],
+                "other_product_unit": ["kg", "bag"],
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "duplicates another product in this form")
+        self.assertFalse(Supplier.objects.filter(name="Duplicate Supplies").exists())
+        self.assertFalse(SupplierProduct.objects.filter(name__iexact="Rice bran").exists())
+
+    def test_supplier_list_edit_button_prefills_existing_supplier(self):
+        supplier = Supplier.objects.create(
+            name="Kampala Feeds",
+            phone="0700000004",
+            location="Kampala",
+            preferred_payment_method=Supplier.PaymentMethod.BANK,
+            bank_account_number="BANK-123",
+        )
+        supplier.supplied_products.add(self.maize_bran)
+
+        response = self.client.get(reverse("suppliers"), {"edit": supplier.pk})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Edit Supplier")
+        self.assertContains(response, f'name="supplier_id" value="{supplier.pk}"', html=False)
+        self.assertContains(response, 'value="Kampala Feeds"', html=False)
+        self.assertContains(response, 'value="BANK-123"', html=False)
+        self.assertContains(response, f"?edit={supplier.pk}#supplier-form", html=False)
+
+    def test_manager_can_update_supplier_by_id(self):
+        supplier = Supplier.objects.create(
+            name="Old Supplier Name",
+            phone="0700000005",
+            preferred_payment_method=Supplier.PaymentMethod.CASH,
+        )
+        supplier.supplied_products.add(self.maize_bran)
+
+        response = self.client.post(
+            reverse("suppliers"),
+            {
+                "supplier_id": str(supplier.pk),
+                "name": "Updated Supplier Name",
+                "phone": "0777000000",
+                "location": "Wakiso",
+                "preferred_payment_method": "Mobile Money",
+                "momo_receiving_number": "0777000000",
+                "supplied_products": [str(self.concentrate.pk)],
+            },
+        )
+
+        self.assertRedirects(response, reverse("suppliers"))
+        supplier.refresh_from_db()
+        self.assertEqual(supplier.name, "Updated Supplier Name")
+        self.assertEqual(supplier.phone, "0777000000")
+        self.assertEqual(supplier.location, "Wakiso")
+        self.assertEqual(supplier.preferred_payment_method, Supplier.PaymentMethod.MOBILE_MONEY)
+        self.assertEqual(supplier.momo_receiving_number, "0777000000")
+        self.assertEqual(list(supplier.supplied_products.all()), [self.concentrate])
